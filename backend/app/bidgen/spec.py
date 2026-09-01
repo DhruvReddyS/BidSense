@@ -65,6 +65,11 @@ class VendorSpec:
     quoted_words: str
     omitted_documents: tuple[str, ...] = ()
     is_blacklisted: bool = False
+    # Sits exactly on a threshold (Section 9.2.2). An off-by-one comparison --
+    # ">" where the tender says "not less than" -- flips precisely these, and
+    # nothing else in the set would catch it. Declared rather than inferred from
+    # the notes, so a reworded note cannot silently drop the coverage.
+    is_borderline: bool = False
     notes: str = ""
     extra_declarations: list[str] = field(default_factory=list)
 

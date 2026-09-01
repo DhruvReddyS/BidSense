@@ -22,6 +22,40 @@ from app.bidgen.render import render_pdf  # noqa: E402
 from app.bidgen.tenders import PROFILES  # noqa: E402
 from app.bidgen.vendors import ALL_VENDORS  # noqa: E402
 
+
+def extracted_requirements(notification_id: str) -> list[str] | None:
+    """The deduplicated document list the pipeline read from this notification.
+
+    Generating a bid's enclosure checklist from what the system actually
+    extracted keeps the two in step. Otherwise a "compliant" vendor is compliant
+    only against a hand-written list, and the evaluation measures the fixture
+    rather than the pipeline.
+    """
+    try:
+        from app.compliance.gap import _collect_requirements
+        from app.db.repository import list_notifications, to_notification_schema
+        from app.db.session import session_scope
+        from app.compliance.requirements import Applicability
+    except Exception:
+        return None
+
+    try:
+        with session_scope() as session:
+            for row in list_notifications(session, limit=200):
+                if not row.source_file or Path(row.source_file).stem != notification_id:
+                    continue
+                requirements = _collect_requirements(to_notification_schema(row))
+                # Only the unconditional ones: a sole bidder does not enclose a
+                # JV agreement, and a bid that did would be unrealistic.
+                return [
+                    r.primary.doc_name
+                    for r in requirements
+                    if r.applicability is Applicability.ALWAYS
+                ]
+    except Exception:
+        return None
+    return None
+
 TRACKING_HEADER = [
     "vendor_id", "notification_id", "intended_status", "intended_reason",
     "intended_failed_clause", "is_blacklisted", "technical_writeup_quality",
@@ -47,16 +81,24 @@ def main() -> int:
         print(f"No vendors defined for {args.tender!r}")
         return 1
 
+    requirement_cache: dict[str, list[str] | None] = {}
     current = ""
     for spec in selected:
         tender = PROFILES[spec.notification_id]
         if spec.notification_id != current:
             current = spec.notification_id
             print(f"\n{current}  ({tender.authority})")
-        path = render_pdf(spec, tender, out_dir)
+        required = requirement_cache.setdefault(
+            spec.notification_id, extracted_requirements(spec.notification_id)
+        )
+        path = render_pdf(spec, tender, out_dir, required_documents=required)
         size = path.stat().st_size / 1024
         flag = "PASS     " if spec.intended_status == "pass" else "ELIMINATE"
-        print(f"  {flag}  {spec.vendor_id:26} {size:6.0f}KB  {spec.intended_reason[:44]}")
+        source = f"{len(required)} extracted" if required else "profile list"
+        print(
+            f"  {flag}  {spec.vendor_id:26} {size:6.0f}KB  {source:14} "
+            f"{spec.intended_reason[:38]}"
+        )
 
     tracking = Path(args.tracking)
     with tracking.open("w", newline="") as handle:

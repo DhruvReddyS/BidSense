@@ -162,6 +162,7 @@ GHMC_VENDORS = [
         certifications=[("ISO 9001:2015", "31.10.2026")],
         quoted_price="Rs. 28,20,00,000",
         quoted_words="Rupees Twenty Eight Crore Twenty Lakh only",
+        is_borderline=True,
         notes="Borderline: turnover and experience sit exactly on the thresholds. "
               "An off-by-one comparison flips this vendor's outcome.",
     ),
@@ -308,6 +309,7 @@ IITISM_VENDORS = [
                         ("EPFO Registration", "—"), ("ESIC Registration", "—")],
         quoted_price="Rs. 12,30,000",
         quoted_words="Rupees Twelve Lakh Thirty Thousand only",
+        is_borderline=True,
         notes="Borderline on BOTH relative thresholds simultaneously, and a weak "
               "write-up: must still pass. Guards against fluency bias (Section 5.4).",
     ),
@@ -468,6 +470,7 @@ HGCL_VENDORS = [
         certifications=[("ISO 9001:2015", "31.08.2026"), ("ISO 45001:2018", "31.08.2026")],
         quoted_price="Rs. 95,60,00,000",
         quoted_words="Rupees Ninety Five Crore Sixty Lakh only",
+        is_borderline=True,
         notes="Liquidity exactly at Rs. 49.855 Cr and capacity exactly at 13 MW, with "
               "a weak write-up. Must pass on both counts.",
     ),

@@ -97,9 +97,16 @@ _LEADING_VERB = re.compile(
 )
 # Trailing boilerplate that varies between restatements of the same requirement.
 _TRAILING_NOISE = re.compile(
-    r"\s*(?:as (?:specified|per|mentioned|given|detailed)\b.*|"
+    r"\s*(?:,\s*)?(?:as (?:specified|per|mentioned|given|detailed)\b.*|"
     r"in support of\b.*|which (?:have|has) been\b.*|"
-    r"duly (?:signed|attested|filled)\b.*|\(.*?\)\s*$)",
+    r"duly (?:signed|attested|filled)\b.*|"
+    # Conditional qualifiers are stripped for IDENTITY only. "Power of Attorney"
+    # and "Power of Attorney, if applicable" are the same document stated twice,
+    # and must collapse to one row. Applicability is still computed from the
+    # original text, so the qualifier is not lost -- and a requirement stated
+    # unconditionally anywhere still binds.
+    r"(?:if|wherever|where|as)\s+(?:applicable|required|any|claimed)\b.*|"
+    r"\(.*?\)\s*$)",
     re.IGNORECASE,
 )
 
