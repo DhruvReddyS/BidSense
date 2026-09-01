@@ -52,7 +52,7 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
         Index("ix_vendor_submissions_status", "notification_id", "status"),
     )
 
-    vendor_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    vendor_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     vendor_name: Mapped[str] = mapped_column(Text, nullable=False)
     notification_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tender_notifications.id", ondelete="CASCADE"), index=True
@@ -60,7 +60,7 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
 
     years_in_business: Mapped[float | None] = mapped_column(Float)
     pricing_summary: Mapped[str | None] = mapped_column(Text)
-    quoted_price_raw: Mapped[str | None] = mapped_column(String(120))
+    quoted_price_raw: Mapped[str | None] = mapped_column(Text)
     quoted_price_inr: Mapped[Decimal | None] = mapped_column(Money)
 
     # Section 5.8 -- manually set / seeded, hard-fail in the rule engine.
@@ -110,7 +110,7 @@ class VendorTurnoverRow(Base, UUIDPrimaryKey, Timestamps, ProvenanceColumns):
         ForeignKey("vendor_submissions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     year: Mapped[int] = mapped_column(nullable=False)
-    amount_raw: Mapped[str | None] = mapped_column(String(120))
+    amount_raw: Mapped[str | None] = mapped_column(Text)
     # NULL means "seen but not parseable" -- must surface as needs-manual-check,
     # never be coerced to 0 by a downstream comparison.
     amount_inr: Mapped[Decimal | None] = mapped_column(Money)
@@ -138,7 +138,7 @@ class VendorPastProjectRow(Base, UUIDPrimaryKey, Timestamps, ProvenanceColumns):
         ForeignKey("vendor_submissions.id", ondelete="CASCADE"), nullable=False, index=True
     )
     client: Mapped[str | None] = mapped_column(Text)
-    value_raw: Mapped[str | None] = mapped_column(String(120))
+    value_raw: Mapped[str | None] = mapped_column(Text)
     value_inr: Mapped[Decimal | None] = mapped_column(Money)
     year: Mapped[int | None] = mapped_column()
     # Kept in SQL for display; also chunked into Qdrant for the qualitative path.

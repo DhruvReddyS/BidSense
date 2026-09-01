@@ -14,11 +14,11 @@ from app.db.base import Base, ProvenanceColumns, Timestamps, UUIDPrimaryKey
 class CorrigendumRow(Base, UUIDPrimaryKey, Timestamps):
     __tablename__ = "corrigenda"
 
-    corrigendum_id: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    corrigendum_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     notification_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("tender_notifications.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    parent_tender_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    parent_tender_id: Mapped[str] = mapped_column(String(255), nullable=False)
     issued_date: Mapped[date | None] = mapped_column(Date)
     source_file: Mapped[str | None] = mapped_column(Text)
     # Set once the diff has been propagated to affected vendor evaluations (5.6).

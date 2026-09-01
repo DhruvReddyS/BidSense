@@ -152,3 +152,38 @@ def test_sources_are_numbered_and_labelled_in_the_prompt():
     assert "[1] (NOTIF_01.pdf, page 1, clause 3.1)" in prompt
     assert "[2] (NOTIF_01.pdf, page 2, clause 4.2)" in prompt
     assert "Rs. 2,00,000" in prompt
+
+
+# --------------------------------------------------------------------------- #
+# Leaked reasoning
+# --------------------------------------------------------------------------- #
+def test_reasoning_preamble_is_stripped():
+    """Reasoning-capable models narrate before answering even when told not to.
+    A vendor reading this before a deadline should see the answer, not the
+    model's monologue."""
+    llm = ScriptedLLM(
+        "Okay, let me tackle this step by step. First, looking at source [1]. "
+        "The EMD is Rs. 2,00,000 [1]."
+    )
+    result = answer_question("What is the EMD?", SOURCES, llm=llm)
+    assert result.answer.startswith("The EMD is Rs. 2,00,000")
+    assert "let me tackle" not in result.answer
+    assert [c.index for c in result.citations] == [1]
+
+
+def test_stripping_never_eats_a_short_answer():
+    """The strip is bounded -- a runaway would delete the answer itself."""
+    from app.rag.answer import strip_reasoning_preamble
+
+    assert strip_reasoning_preamble("Rs. 2,00,000 [1].") == "Rs. 2,00,000 [1]."
+    # "Rs." must not be read as a sentence end, or the amount is stripped away
+    # with the narration.
+    assert strip_reasoning_preamble("So it is Rs. 5 Cr [1].") == "So it is Rs. 5 Cr [1]."
+    # Even an answer that is nothing but narration must not vanish.
+    assert strip_reasoning_preamble("Okay. Let me think. So.").strip() != ""
+
+
+def test_a_normal_answer_is_left_alone():
+    llm = ScriptedLLM("The EMD is Rs. 2,00,000 [1] and bids close on 15 March 2026 [1].")
+    result = answer_question("What is the EMD?", SOURCES, llm=llm)
+    assert result.answer.startswith("The EMD is Rs. 2,00,000")

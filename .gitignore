@@ -6,5 +6,10 @@ venv/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
-data/
+# Source documents are large binaries (~9MB) and are public downloads --
+# tracked metadata, not the files themselves.
+data/**/*.pdf
+data/**/*.docx
+!data/README.md
+!data/*.csv
 .DS_Store

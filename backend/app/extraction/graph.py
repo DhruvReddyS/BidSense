@@ -28,6 +28,7 @@ from langgraph.graph import END, START, StateGraph
 from app.extraction import llm_schemas as raw
 from app.extraction import prompts
 from app.extraction.convert import to_notification, to_submission
+from app.extraction.selection import select_pages
 from app.ingest.models import ParsedDocument
 from app.llm import LLMError, LLMProvider, get_llm
 from app.schemas.notification import TenderNotification
@@ -62,7 +63,7 @@ class ExtractionState(TypedDict, total=False):
 
 
 def _run(state: ExtractionState, node: str, prompt_template: str, schema):
-    """Shared node body: prompt the model, validate, record timing and errors.
+    """Shared node body: select pages, prompt the model, validate, record timing.
 
     A failing extractor degrades to an empty result plus a recorded error rather
     than killing the run -- partial extraction that names its gaps is more useful
@@ -70,18 +71,25 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
     """
     llm: LLMProvider = state["llm"]
     started = time.perf_counter()
+
+    # Each extractor reads only the pages likely to hold its field group. On a
+    # 382-page tender, sending the whole document either truncates silently or
+    # buries three relevant clauses in 380 pages of contract boilerplate.
+    text, pages = select_pages(state["document"], node)
+    logger.debug("%s: reading pages %s", node, pages)
+
     try:
         # The gate matches the fan-out to what the backend can actually absorb.
         # Against a local model this serializes the extractors; against a hosted
         # API it is effectively a no-op.
         with llm:
             result = llm.generate_structured(
-                prompt_template.format(text=state["text"]),
+                prompt_template.format(text=text),
                 schema,
                 system=prompts.SYSTEM_PROMPT,
             )
         elapsed = time.perf_counter() - started
-        logger.info("%s: ok in %.2fs", node, elapsed)
+        logger.info("%s: ok in %.2fs (%d pages)", node, elapsed, len(pages))
         return result, [], [(node, elapsed)]
     except (LLMError, Exception) as exc:  # noqa: BLE001 - deliberately broad
         elapsed = time.perf_counter() - started

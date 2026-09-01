@@ -203,3 +203,32 @@ def test_prose_pages_do_not_yield_phantom_tables(parsed_pdf):
     pure prose -- if the guard leaks, every clause page grows a fake grid."""
     assert parsed_pdf.page(1).tables == []
     assert parsed_pdf.page(3).tables == []
+
+
+def test_near_empty_page_with_real_text_is_not_reported_as_missing(tmp_path):
+    """Real tenders pad sections with "THIS PAGE IS LEFT INTENTIONALLY BLANK".
+    That page has genuine text and is genuinely blank -- reporting it as content
+    MISSING from extraction is a false alarm, and a 380-page tender produces
+    dozens of them, burying the warnings that matter."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+
+    path = tmp_path / "padded.pdf"
+    pdf = canvas.Canvas(str(path), pagesize=A4)
+    pdf.drawString(72, 720, "THIS PAGE IS LEFT INTENTIONALLY BLANK")
+    pdf.showPage()
+    pdf.save()
+
+    parsed = parse_document(path, DocumentKind.NOTIFICATION)
+    page = parsed.page(1)
+    assert page.method is ExtractionMethod.NATIVE
+    assert "INTENTIONALLY BLANK" in page.text
+    assert parsed.parse_warnings == []
+
+
+def test_truly_blank_page_still_warns(tmp_path):
+    """The genuine case must keep warning -- the fix must not silence it."""
+    parsed = parse_document(make_blank_pdf(tmp_path / "blank.pdf", pages=1))
+    assert parsed.page(1).method is ExtractionMethod.EMPTY
+    assert len(parsed.parse_warnings) == 1
+    assert "MISSING from extraction" in parsed.parse_warnings[0]

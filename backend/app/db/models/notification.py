@@ -48,7 +48,7 @@ class TenderNotificationRow(Base, UUIDPrimaryKey, Timestamps):
         Index("ix_tender_notifications_tender_id", "tender_id", unique=True),
     )
 
-    tender_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    tender_id: Mapped[str] = mapped_column(String(255), nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     issuing_authority: Mapped[str | None] = mapped_column(String(300))
     sector: Mapped[str | None] = mapped_column(String(120), index=True)
@@ -56,9 +56,14 @@ class TenderNotificationRow(Base, UUIDPrimaryKey, Timestamps):
     submission_deadline: Mapped[date | None] = mapped_column(Date)
     pre_bid_query_deadline: Mapped[date | None] = mapped_column(Date)
 
-    emd_amount_raw: Mapped[str | None] = mapped_column(String(120))
+    # Text, not a bounded VARCHAR: these hold whatever the extractor read off
+    # the page. A model that over-captures ("Rs. 12,50,00,000 (Rupees Twelve
+    # Crore only). Bids shall remain valid for 180 days...") is an extraction
+    # quality problem -- it must not also be an insert failure that discards the
+    # whole document.
+    emd_amount_raw: Mapped[str | None] = mapped_column(Text)
     emd_amount_inr: Mapped[Decimal | None] = mapped_column(Money)
-    contract_value_raw: Mapped[str | None] = mapped_column(String(120))
+    contract_value_raw: Mapped[str | None] = mapped_column(Text)
     contract_value_inr: Mapped[Decimal | None] = mapped_column(Money)
 
     # JSONB half of the hybrid: not filtered on, rendered or fed to RAG as-is.
@@ -108,7 +113,7 @@ class EligibilityCriterionRow(Base, UUIDPrimaryKey, Timestamps, ProvenanceColumn
     )
     criterion: Mapped[str] = mapped_column(Text, nullable=False)
     type: Mapped[CriterionType] = mapped_column(criterion_type_enum, nullable=False)
-    threshold_raw: Mapped[str | None] = mapped_column(String(200))
+    threshold_raw: Mapped[str | None] = mapped_column(Text)
     threshold_amount_inr: Mapped[Decimal | None] = mapped_column(Money)
     threshold_number: Mapped[float | None] = mapped_column()
     unit: Mapped[str | None] = mapped_column(String(60))

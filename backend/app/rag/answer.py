@@ -42,16 +42,75 @@ Rules:
    convert or round them.
 5. Be brief and direct. A vendor is reading this to make a decision, not to
    admire the prose.
-6. If the sources conflict, say so and cite both."""
+6. If the sources conflict, say so and cite both.
+7. Output the answer only. No preamble, no restatement of the question, no
+   narration of your reasoning ("Okay, let me check the sources...", "First,
+   looking at source [1]..."). Start with the answer itself. A vendor is
+   reading this under time pressure before a submission deadline."""
 
 ANSWER_PROMPT = """Question: {question}
 
 Sources:
 {sources}
 
-Answer the question using only these sources, citing each claim with [n]."""
+Answer using only these sources, citing each claim with [n]. Give the answer
+directly -- do not narrate your reasoning or restate the question."""
 
 _CITATION = re.compile(r"\[(\d+)\]")
+
+# Some models narrate before answering despite instruction. Reasoning-style
+# openers are stripped so a vendor sees the answer, not the model's monologue.
+_REASONING_OPENER = re.compile(
+    r"^\s*(?:okay|ok|alright|so|well|hmm|let me|let's|lets|first|firstly|next|"
+    r"now|i need to|i'll|i will|looking at|checking|the user|to answer)\b",
+    re.IGNORECASE,
+)
+
+# Abbreviations whose full stop does not end a sentence. "Rs." is the one that
+# matters here: splitting on it turns "Rs. 5 Cr" into a new sentence and the
+# amount gets stripped away with the narration.
+_ABBREVIATIONS = {"rs", "no", "nos", "sl", "mr", "mrs", "dr", "ltd", "pvt", "viz", "etc", "vs", "sec"}
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_DIGIT = re.compile(r"\d")
+
+
+def _sentences(text: str) -> list[str]:
+    """Split into sentences without breaking on Indian-tender abbreviations."""
+    parts = _SENTENCE_SPLIT.split(text)
+    merged: list[str] = []
+    for part in parts:
+        if merged:
+            tail = merged[-1].rstrip(".").rsplit(" ", 1)[-1].lower()
+            if tail in _ABBREVIATIONS:
+                merged[-1] = f"{merged[-1]} {part}"
+                continue
+        merged.append(part)
+    return merged
+
+
+def strip_reasoning_preamble(text: str) -> str:
+    """Drop leading narration sentences.
+
+    A sentence is only dropped when it opens like narration AND carries no
+    substantive content -- no digits once citation markers are removed. That
+    keeps "So it is Rs. 5 Cr [1]." intact while removing "First, looking at
+    source [1]."; stripping by shape alone deletes real answers.
+
+    Never returns empty: an answer that is entirely narration is handed back
+    unchanged rather than blanked.
+    """
+    sentences = _sentences(text.strip())
+    index = 0
+    while index < len(sentences):
+        candidate = sentences[index]
+        without_citations = _CITATION.sub("", candidate)
+        if _REASONING_OPENER.match(candidate) and not _DIGIT.search(without_citations):
+            index += 1
+            continue
+        break
+
+    remainder = " ".join(sentences[index:]).strip()
+    return remainder if remainder else text.strip()
 
 
 class Citation(BaseModel):
@@ -144,7 +203,7 @@ def answer_question(
             retrieved=retrieved,
         )
 
-    return _verify_citations(question, raw.strip(), retrieved)
+    return _verify_citations(question, strip_reasoning_preamble(raw), retrieved)
 
 
 def _verify_citations(question: str, answer: str, retrieved: list[Citation]) -> GroundedAnswer:

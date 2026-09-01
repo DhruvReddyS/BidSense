@@ -102,29 +102,36 @@ def parse_pdf(
 
             method = ExtractionMethod.NATIVE
             if len(text) < MIN_NATIVE_CHARS and not tables:
+                # Short text is ambiguous: it is either a scanned page whose
+                # text layer is a stray artefact, or a genuinely near-empty page
+                # ("THIS PAGE IS LEFT INTENTIONALLY BLANK"). OCR settles it.
                 if use_ocr and ocr_available():
                     try:
                         ocr_text = ocr_pdf_page(path, index)
-                        if ocr_text:
+                        # Only prefer OCR when it actually recovered more than
+                        # the text layer held -- otherwise the page really is
+                        # near-empty and the native text is the better record.
+                        if len(ocr_text) > len(text):
                             text, method = ocr_text, ExtractionMethod.OCR
-                        else:
-                            method = ExtractionMethod.EMPTY
                     except Exception as exc:
-                        method = ExtractionMethod.EMPTY
                         warnings.append(f"page {index}: OCR failed ({exc})")
-                else:
-                    # Loud, not silent: an empty page reads downstream as
-                    # "this clause isn't in the tender", which is a wrong answer.
+
+                if not text:
+                    # Nothing at all. Loud, not silent: an empty page reads
+                    # downstream as "this clause isn't in the tender", which is
+                    # a wrong answer rather than a missing feature.
                     method = ExtractionMethod.EMPTY
-                    reason = (
-                        f"OCR unavailable ({', '.join(missing_dependencies())})"
-                        if use_ocr
-                        else "OCR disabled"
-                    )
-                    warnings.append(
-                        f"page {index}: no extractable text and {reason} -- "
-                        "page content is MISSING from extraction"
-                    )
+                    if use_ocr and not ocr_available():
+                        warnings.append(
+                            f"page {index}: no extractable text and OCR unavailable "
+                            f"({', '.join(missing_dependencies())}) -- page content "
+                            "is MISSING from extraction"
+                        )
+                    else:
+                        warnings.append(
+                            f"page {index}: no extractable text found -- page "
+                            "content is MISSING from extraction"
+                        )
 
             pages.append(
                 PageText(page_number=index, text=text, method=method, tables=tables)
