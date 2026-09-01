@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime
+from decimal import Decimal
 
 from app.extraction import llm_schemas as raw
 from app.normalize.money import try_normalize_amount
@@ -47,6 +48,19 @@ _DATE_FORMATS = (
 )
 
 _NUMBER_IN_TEXT = re.compile(r"(\d+(?:\.\d+)?)")
+
+# Indian works tenders routinely express eligibility as a share of the estimated
+# cost rather than an absolute figure -- "Average Annual Financial Turnover
+# should be at least 30% of the estimated cost". Read naively, that yields a
+# threshold of 30, which every bidder on earth clears. Same failure class as a
+# project count being read as a rupee amount.
+_RELATIVE_THRESHOLD = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:%|per\s*cent|percent)\s*(?:of|to)?", re.IGNORECASE
+)
+_ESTIMATE_REFERENCE = re.compile(
+    r"estimated\s+cost|ecpt|estimated\s+value|put\s+to\s+tender|contract\s+value",
+    re.IGNORECASE,
+)
 
 # Word-boundary matched, NOT substring: "years" contains "rs", so a plain
 # `"rs" in text` check reads "5 (five) years" as five rupees and compares a
@@ -93,7 +107,25 @@ def _bare_number(text: str | None) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def to_eligibility(item: raw.RawEligibilityCriterion) -> EligibilityCriterion:
+def relative_share(threshold_raw: str | None) -> float | None:
+    """Return the percentage if the threshold is a share of the estimated cost.
+
+    Requires both a percentage AND a reference to the estimate: "80% marks" in a
+    scoring criterion is a percentage but not a share of contract value.
+    """
+    if not threshold_raw:
+        return None
+    match = _RELATIVE_THRESHOLD.search(threshold_raw)
+    if not match:
+        return None
+    if not _ESTIMATE_REFERENCE.search(threshold_raw):
+        return None
+    return float(match.group(1))
+
+
+def to_eligibility(
+    item: raw.RawEligibilityCriterion, *, contract_value_inr=None
+) -> EligibilityCriterion:
     """Route the printed threshold into the money slot or the plain-number slot.
 
     A numeric criterion whose threshold cannot be resolved either way still gets
@@ -102,6 +134,30 @@ def to_eligibility(item: raw.RawEligibilityCriterion) -> EligibilityCriterion:
     """
     threshold_amount = None
     threshold_number = None
+
+    # A share of the estimated cost is resolved here, in code, using the
+    # contract value extracted from the same document -- deterministic
+    # arithmetic, not the model's. If the estimate is unknown the criterion
+    # keeps only its raw text and surfaces as needs-manual-check, which is the
+    # honest outcome; inventing an absolute figure would be worse.
+    percentage = relative_share(item.threshold_raw)
+    if item.type is CriterionType.NUMERIC and percentage is not None:
+        if contract_value_inr is not None:
+            threshold_amount = MoneyAmount(
+                raw_text=item.threshold_raw,
+                amount_inr=(contract_value_inr * Decimal(str(percentage)) / Decimal(100)
+                            ).quantize(Decimal("0.01")),
+            )
+        return EligibilityCriterion(
+            criterion=item.criterion,
+            type=item.type,
+            threshold_raw=item.threshold_raw,
+            threshold_amount=threshold_amount,
+            threshold_number=None,      # never the bare percentage
+            unit=item.unit,
+            is_mandatory=item.is_mandatory,
+            provenance=to_provenance(item),
+        )
 
     if item.type is CriterionType.NUMERIC and item.threshold_raw:
         if _looks_monetary(item.threshold_raw, item.unit):
@@ -136,6 +192,9 @@ def to_notification(
     fallback_tender_id: str,
     fallback_title: str,
 ) -> TenderNotification:
+    contract_value = MoneyAmount.parse(header.contract_value_raw)
+    _contract_value_inr = contract_value.amount_inr if contract_value else None
+
     return TenderNotification(
         # tender_id and title are required by the schema; a document that fails
         # to yield them still has to be storable and reviewable, so fall back to
@@ -146,7 +205,10 @@ def to_notification(
         sector=header.sector,
         submission_deadline=parse_date(header.submission_deadline),
         pre_bid_query_deadline=parse_date(header.pre_bid_query_deadline),
-        eligibility_criteria=[to_eligibility(i) for i in eligibility],
+        eligibility_criteria=[
+            to_eligibility(i, contract_value_inr=_contract_value_inr)
+            for i in eligibility
+        ],
         mandatory_documents=[
             MandatoryDocument(doc_name=i.doc_name, provenance=to_provenance(i))
             for i in documents
@@ -168,7 +230,7 @@ def to_notification(
             for i in format_rules
         ],
         emd_amount=MoneyAmount.parse(header.emd_amount_raw),
-        contract_value_estimate=MoneyAmount.parse(header.contract_value_raw),
+        contract_value_estimate=contract_value,
     )
 
 

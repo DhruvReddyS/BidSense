@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -63,14 +63,25 @@ def save_notification(
     merging: a partial merge would leave criteria from a previous, possibly
     wrong, extraction silently in force.
     """
-    existing = session.scalar(
-        select(TenderNotificationRow).where(
-            TenderNotificationRow.tender_id == notification.tender_id
+    # Replace by tender_id AND by source file. The second clause matters: when
+    # header extraction fails, tender_id falls back to the filename, so a failed
+    # run followed by a successful one would otherwise leave two rows for the
+    # same document -- one real, one an empty shell that still looks like a
+    # tender in the listing.
+    conditions = [TenderNotificationRow.tender_id == notification.tender_id]
+    if source_file:
+        conditions.append(TenderNotificationRow.source_file == source_file)
+    stale = session.scalars(
+        select(TenderNotificationRow).where(or_(*conditions))
+    ).all()
+    for existing in stale:
+        logger.info(
+            "Replacing existing extraction for tender %s (%s)",
+            existing.tender_id,
+            existing.source_file,
         )
-    )
-    if existing is not None:
-        logger.info("Replacing existing extraction for tender %s", notification.tender_id)
         session.delete(existing)
+    if stale:
         session.flush()
 
     row = TenderNotificationRow(

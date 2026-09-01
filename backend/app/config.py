@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     llm_provider: Literal["gemini", "ollama"] = "gemini"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
+    # Free-tier quota, requests per minute per model. Raise on a paid key.
+    # Each model has its own daily free-tier quota, so exhausting one is
+    # recoverable: fail over to the next rather than stopping the run.
+    gemini_fallback_models: str = "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash"
+    gemini_rpm: int = 5
+    gemini_retries: int = 4
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3-14b-40k:latest"
     # Qwen3 reasons before answering. Thinking roughly quadruples latency but
@@ -45,7 +51,10 @@ class Settings(BaseSettings):
     # them, which looks like a model that "missed" clauses on later pages.
     ollama_num_ctx: int = 40960
     llm_temperature: float = 0.0
-    llm_max_output_tokens: int = 8192
+    # Real tenders yield long lists -- a 382-page notification can produce
+    # dozens of eligibility criteria, each with a verbatim snippet. 8k truncates
+    # those mid-JSON; gemini-2.5-flash allows far more.
+    llm_max_output_tokens: int = 32768
 
     @computed_field  # type: ignore[prop-decorator]
     @property

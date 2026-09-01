@@ -18,7 +18,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 187 tests
+../.venv/bin/python -m pytest -q           # 219 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -45,12 +45,13 @@ data/                collected tenders + Section 9.4 tracking sheets
 
 ## Running the app
 
-```bash
-# terminal 1 — API
-cd backend && ../.venv/bin/python -m uvicorn app.api.main:app --port 8100
+See **[RUNNING.md](RUNNING.md)** for setup, configuration, the CLI and
+troubleshooting. The short version:
 
-# terminal 2 — frontend
-cd frontend && npm install && npm run dev    # http://localhost:3000
+```bash
+docker compose up -d
+cd backend && ../.venv/bin/python -m uvicorn app.api.main:app --port 8100
+cd frontend && npm run dev    # http://localhost:3000
 ```
 
 ## Ingesting documents (Phase 1)
@@ -133,30 +134,66 @@ document checklist must each be selected.
 
 ## LLM status
 
-Section 8.1 specifies Gemini 2.5 Flash as primary with Ollama as fallback. As of
-this build:
+Gemini works. The binding constraint is **quota, not capability**:
 
-| Option | State |
-|---|---|
-| `gemini-2.5-flash` | **Retired** — 404 for new API keys |
-| `gemini-3.x` (any) | **403 "Your project has been denied access"** — a project-level block, not a model issue |
-| `qwen3:14b` local | Works, good extraction quality, but minutes per call on this hardware |
-| `qwen3:4b` local | ~6s per call, but misses fields and narrates its reasoning into answers |
+| Limit | Value | Consequence |
+|---|---|---|
+| Requests/minute | 5 (free tier) | Paced by `RateLimiter`; ~65s per document |
+| Requests/**day** | **20 per model** (`gemini-2.5-flash`) | 6 calls/document → **3 documents/day per model** |
 
-The provider abstraction did its job — every swap above was a `.env` change, no
-code. But **the primary path needs a working Gemini key**: create a fresh Google
-Cloud project and generate a new key, or use a different account.
+The daily cap is the real problem, and it cannot be waited out. Each model
+carries its *own* daily quota, so the provider fails over automatically:
+
+```bash
+GEMINI_MODEL=gemini-3.6-flash
+GEMINI_FALLBACK_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash
+```
+
+A per-minute breach is retried (it clears in seconds); a per-day cap is not
+(it does not), so the provider retires that model and moves to the next.
+Transient `503 "high demand"` responses are retried too — the shared free tier
+emits them regularly.
+
+Ollama remains the offline fallback, unchanged. Measured on this machine:
+`qwen3:14b` gives good extraction but takes minutes per call under memory
+pressure; `qwen3:4b` answers in ~6s but misses fields and narrates its reasoning.
+
+## Verified on real tenders
+
+All three collected notifications extract cleanly — **3/3, zero errors**:
+
+| Document | Pages | Chunks | Time | Extracted reference |
+|---|---|---|---|---|
+| IIT (ISM) Dhanbad | 101 | 212 | 195s | `CMU-12011/17/2026-CMU` |
+| HGCL solar EPC | 382 | 796 | 196s | `BID NOTICE No.178/CGM(T)/HGCL/…` |
+| GHMC LED lights | 68 | 129 | 120s | `TENDER No.01/SE(Electrical)/GHMC/2024-25` |
+
+Wall-clock is dominated by free-tier pacing, not by document size — the
+382-page tender took the same time as the 101-page one.
+
+### Relative thresholds
+
+Indian works tenders express eligibility as a *share of the estimated cost*
+rather than an absolute figure: IIT (ISM) requires turnover of "30% of the
+estimated cost". Read naively that is a threshold of ₹30, which every bidder
+clears. Such thresholds are now resolved against the contract value extracted
+from the same document (₹12,56,561 × 30% = ₹3,76,968.30), in code rather than by
+the model. When the estimate is unknown the criterion stays unresolved and
+surfaces as needs-manual-check — inventing an absolute figure from an unknown
+base would be worse than admitting it cannot be computed.
 
 ## What's still needed
 
-1. **A working Gemini API key.** The current one's project is denied access.
-2. **`brew install tesseract poppler`** — until then, scanned pages are reported
+1. **`brew install tesseract poppler`** — until then, scanned pages are reported
    as missing (loudly, by design). All three collected tenders are native text,
    so this is not yet blocking.
-3. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
+2. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
    three sectors. IT services and at least one scanned document are missing.
-4. **`portal_source` in `data/tracking_notifications.csv`** — only the collector
+3. **`portal_source` in `data/tracking_notifications.csv`** — only the collector
    knows which portal each document came from.
+4. **Synthetic vendor bids** (Section 9.2) — none yet, so the gap report has
+   only been exercised against fixtures. Ground truth goes in
+   `data/tracking_vendors.csv` **before** generating each document.
 
 ## Not yet built
 

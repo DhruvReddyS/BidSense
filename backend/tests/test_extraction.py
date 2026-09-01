@@ -304,3 +304,85 @@ def test_digits_alongside_words_still_resolve():
         )
     )
     assert criterion.threshold_amount.amount_inr == Decimal("50000000.00")
+
+
+# --------------------------------------------------------------------------- #
+# Relative thresholds (Indian works tenders express eligibility as a share of
+# the estimated cost, not an absolute figure)
+# --------------------------------------------------------------------------- #
+from decimal import Decimal as _D  # noqa: E402
+
+from app.extraction.convert import relative_share  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("30% of the estimated cost", 30.0),
+        ("80% of Estimated Cost", 80.0),
+        ("not less than 40 percent of the estimated value", 40.0),
+        ("50% of ECPT", 50.0),
+        ("100% of the contract value", 100.0),
+        # A percentage that is not a share of the estimate.
+        ("80% marks in the technical evaluation", None),
+        ("minimum 60% attendance", None),
+        # Not a percentage at all.
+        ("Rs. 5 Cr", None),
+        ("5 (five) years", None),
+        (None, None),
+    ],
+)
+def test_relative_threshold_detection(text, expected):
+    assert relative_share(text) == expected
+
+
+def test_percentage_threshold_resolves_against_the_estimated_cost():
+    """IIT (ISM) Dhanbad states "Average Annual Financial Turnover ... 30% of
+    the estimated cost". Read naively that is a threshold of 30 rupees, which
+    every bidder clears -- the same failure class as a project count being read
+    as an amount."""
+    criterion = to_eligibility(
+        raw.RawEligibilityCriterion(
+            criterion="Average Annual Financial Turnover",
+            type=CriterionType.NUMERIC,
+            threshold_raw="30% of the estimated cost",
+        ),
+        contract_value_inr=_D("1256561.00"),
+    )
+    assert criterion.threshold_amount.amount_inr == _D("376968.30")
+    assert criterion.threshold_number is None, "the bare percentage must never be a threshold"
+
+
+def test_percentage_threshold_without_an_estimate_is_left_unresolved():
+    """Honest outcome: needs-manual-check. Inventing an absolute figure from an
+    unknown base would be worse than admitting we cannot compute it."""
+    criterion = to_eligibility(
+        raw.RawEligibilityCriterion(
+            criterion="Average Annual Financial Turnover",
+            type=CriterionType.NUMERIC,
+            threshold_raw="30% of the estimated cost",
+        )
+    )
+    assert criterion.threshold_amount is None
+    assert criterion.threshold_number is None
+    assert criterion.threshold_raw == "30% of the estimated cost"
+
+
+def test_notification_assembly_wires_the_estimate_into_relative_thresholds():
+    from app.extraction.convert import to_notification
+
+    notification = to_notification(
+        raw.RawHeader(tender_id="T-1", title="Boundary wall", contract_value_raw="Rs. 12,56,561/-"),
+        [
+            raw.RawEligibilityCriterion(
+                criterion="Average Annual Financial Turnover",
+                type=CriterionType.NUMERIC,
+                threshold_raw="30% of the estimated cost",
+            )
+        ],
+        [], [], [], [],
+        fallback_tender_id="f", fallback_title="f",
+    )
+    criterion = notification.eligibility_criteria[0]
+    assert notification.contract_value_estimate.amount_inr == _D("1256561.00")
+    assert criterion.threshold_amount.amount_inr == _D("376968.30")

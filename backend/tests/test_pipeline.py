@@ -217,3 +217,28 @@ def test_shrinking_reextraction_strands_no_orphan_chunks(pdf, clean):
         limit=200,
     )
     assert len(found) == shrunk < full.chunks_indexed
+
+
+@live
+@embed
+def test_failed_then_successful_run_leaves_one_row(pdf, clean):
+    """When header extraction fails, tender_id falls back to the filename. A
+    later successful run must replace that shell, not sit beside it -- otherwise
+    the listing shows a phantom tender with no criteria."""
+    from sqlalchemy import func
+
+    broken = ingest_notification(pdf, llm=StubLLM(fail_on={"RawHeader"}))
+    assert broken.identifier == "NOTIF_ITservices_01.pdf"  # the fallback
+
+    good = ingest_notification(pdf, llm=StubLLM())
+    assert good.identifier == TENDER_ID
+
+    with session_scope() as session:
+        rows = session.scalars(
+            select(TenderNotificationRow).where(
+                TenderNotificationRow.source_file.like("%NOTIF_ITservices_01.pdf")
+            )
+        ).all()
+        assert len(rows) == 1, "the shell row from the failed run must be replaced"
+        assert rows[0].tender_id == TENDER_ID
+        assert len(rows[0].eligibility_criteria) == 3
