@@ -64,3 +64,32 @@ def test_unparseable_raises_and_try_variant_returns_none() -> None:
 def test_format_inr_round_trip() -> None:
     assert format_inr(Decimal("50000000.00")) == "₹5 Cr"
     assert format_inr(Decimal("5000000.00")) == "₹50 Lakh"
+
+
+# --------------------------------------------------------------------------- #
+# Multi-number strings (regression: a count stolen in place of the amount)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # The bug: "2" (a project count) was returned as the rupee threshold.
+        ("At least 2, Rs. 2 Cr each", "20000000.00"),
+        ("At least two projects of Rs. 2 Cr each", "20000000.00"),
+        ("Minimum 3 works of Rs. 50 lakh each", "5000000.00"),
+        ("2 contracts valued at 1.5 crore", "15000000.00"),
+        # Digits and words together: the digits win, no unit is attached to them.
+        ("Rs. 5,00,00,000 (Rupees Five Crore only)", "50000000.00"),
+        # Single number with a unit still works.
+        ("Rs. 5 Cr", "50000000.00"),
+        # Single number, no unit at all.
+        ("5,00,00,000", "50000000.00"),
+    ],
+)
+def test_the_numeral_carrying_the_unit_wins(raw: str, expected: str) -> None:
+    assert normalize_amount(raw) == Decimal(expected)
+
+
+def test_a_bare_count_never_becomes_a_rupee_threshold() -> None:
+    """A threshold of Rs. 2 would pass every bidder alive -- the exact failure
+    Section 6 warns about when it says elimination rules silently misfire."""
+    assert normalize_amount("At least 2, Rs. 2 Cr each") > Decimal("1000000")

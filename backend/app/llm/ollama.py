@@ -12,10 +12,19 @@ from app.llm.base import LLMError, LLMProvider, TModel
 
 class OllamaProvider(LLMProvider):
     name = "ollama"
+    # One local GPU: run the extractors one at a time. Overriding this above 1
+    # does not make Ollama faster, it just moves the queueing into HTTP timeouts.
+    max_concurrency = 1
 
     def __init__(self) -> None:
         self._url = settings.ollama_base_url.rstrip("/")
         self._model = settings.ollama_model
+
+    def _options(self) -> dict:
+        return {
+            "temperature": settings.llm_temperature,
+            "num_ctx": settings.ollama_num_ctx,
+        }
 
     def _post(self, payload: dict) -> dict:
         try:
@@ -36,7 +45,8 @@ class OllamaProvider(LLMProvider):
                 "model": self._model,
                 "messages": self._messages(prompt, system),
                 "stream": False,
-                "options": {"temperature": settings.llm_temperature},
+                "think": settings.ollama_think,
+                "options": self._options(),
             }
         )
         return data.get("message", {}).get("content", "").strip()
@@ -44,15 +54,16 @@ class OllamaProvider(LLMProvider):
     def generate_structured(
         self, prompt: str, schema: type[TModel], *, system: str | None = None
     ) -> TModel:
-        # Ollama constrains decoding to a JSON Schema when `format` is a schema
-        # object -- the local equivalent of Gemini's response_schema.
         data = self._post(
             {
                 "model": self._model,
                 "messages": self._messages(prompt, system),
                 "stream": False,
+                # Ollama constrains decoding to this JSON Schema -- the local
+                # equivalent of Gemini's response_schema (Section 8.1).
                 "format": schema.model_json_schema(),
-                "options": {"temperature": settings.llm_temperature},
+                "think": settings.ollama_think,
+                "options": self._options(),
             }
         )
         raw = data.get("message", {}).get("content", "")

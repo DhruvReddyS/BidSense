@@ -71,11 +71,15 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
     llm: LLMProvider = state["llm"]
     started = time.perf_counter()
     try:
-        result = llm.generate_structured(
-            prompt_template.format(text=state["text"]),
-            schema,
-            system=prompts.SYSTEM_PROMPT,
-        )
+        # The gate matches the fan-out to what the backend can actually absorb.
+        # Against a local model this serializes the extractors; against a hosted
+        # API it is effectively a no-op.
+        with llm:
+            result = llm.generate_structured(
+                prompt_template.format(text=state["text"]),
+                schema,
+                system=prompts.SYSTEM_PROMPT,
+            )
         elapsed = time.perf_counter() - started
         logger.info("%s: ok in %.2fs", node, elapsed)
         return result, [], [(node, elapsed)]

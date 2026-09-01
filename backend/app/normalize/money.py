@@ -76,19 +76,30 @@ def normalize_amount(raw: str | int | float | Decimal) -> Decimal:
         raise MoneyParseError("cannot normalize None")
 
     cleaned = _CURRENCY_NOISE.sub(" ", str(raw)).strip()
-    match = _NUMBER.search(cleaned)
-    if not match:
+    candidates = list(_NUMBER.finditer(cleaned))
+    if not candidates:
         raise MoneyParseError(f"no numeral found in {raw!r}")
 
-    # Indian digit grouping (5,00,00,000) carries no magnitude information once
-    # the separators are removed -- strip and read the digits literally.
-    digits = match.group(1).replace(",", "")
+    # A string may hold several numbers -- "At least 2 projects of Rs. 2 Cr each"
+    # has a count and an amount. Taking the first numeral blindly yields a
+    # threshold of Rs. 2, which every bidder on earth clears. Prefer the numeral
+    # that a magnitude unit is actually attached to; fall back to the first only
+    # when no numeral carries a unit.
+    chosen, multiplier = None, Decimal(1)
+    for match in candidates:
+        factor = _find_multiplier(cleaned[match.end() :])
+        if factor > 1:
+            chosen, multiplier = match, factor
+            break
+    if chosen is None:
+        chosen = candidates[0]
+
+    digits = chosen.group(1).replace(",", "")
     try:
         value = Decimal(digits)
     except InvalidOperation as exc:  # pragma: no cover - guarded by the regex
         raise MoneyParseError(f"unparseable numeral in {raw!r}") from exc
 
-    multiplier = _find_multiplier(cleaned[match.end() :])
     return (value * multiplier).quantize(Decimal("0.01"))
 
 

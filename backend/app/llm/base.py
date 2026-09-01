@@ -12,7 +12,9 @@ JSON mode with a response schema, a grammar for the Ollama path).
 
 from __future__ import annotations
 
+import threading
 from abc import ABC, abstractmethod
+from functools import cached_property
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -28,6 +30,24 @@ class LLMProvider(ABC):
     """Implement this to add a provider. Nothing else should need to change."""
 
     name: str
+
+    #: How many requests this backend can usefully handle at once. A hosted API
+    #: absorbs a fan-out; a single local GPU does not -- it serializes the
+    #: requests internally while every caller's clock runs, so firing six
+    #: extractors at once there produces six timeouts instead of six results.
+    max_concurrency: int = 1
+
+    @cached_property
+    def _gate(self) -> threading.Semaphore:
+        return threading.Semaphore(self.max_concurrency)
+
+    def __enter__(self):  # pragma: no cover - trivial
+        self._gate.acquire()
+        return self
+
+    def __exit__(self, *exc):  # pragma: no cover - trivial
+        self._gate.release()
+        return False
 
     @abstractmethod
     def generate_text(self, prompt: str, *, system: str | None = None) -> str:

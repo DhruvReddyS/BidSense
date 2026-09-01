@@ -10,6 +10,8 @@ from app.llm.base import LLMError, LLMProvider, TModel
 
 class GeminiProvider(LLMProvider):
     name = "gemini"
+    # A hosted API handles the extractor fan-out concurrently.
+    max_concurrency = 6
 
     def __init__(self) -> None:
         if not settings.gemini_api_key:

@@ -35,7 +35,15 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b-instruct"
+    ollama_model: str = "qwen3-14b-40k:latest"
+    # Qwen3 reasons before answering. Thinking roughly quadruples latency but
+    # measurably improves verbatim fidelity (it keeps "Rs. 2,00,000" rather than
+    # returning "2,00,000"), which is what source_snippet citations depend on.
+    # Off for fast iteration, on for the runs whose accuracy gets reported.
+    ollama_think: bool = False
+    # Tender notifications run long; the default 4k context silently truncates
+    # them, which looks like a model that "missed" clauses on later pages.
+    ollama_num_ctx: int = 40960
     llm_temperature: float = 0.0
     llm_max_output_tokens: int = 8192
 
