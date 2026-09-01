@@ -1,0 +1,40 @@
+# --- core ---
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.0.1
+
+# --- structured store ---
+SQLAlchemy==2.0.52
+alembic==1.19.1
+psycopg[binary]==3.3.5
+
+# --- document ingestion (Phase 1) ---
+pypdf==6.16.2
+pdfplumber==0.11.10
+python-docx==1.2.0
+pytesseract==0.3.13
+pdf2image==1.17.0
+Pillow==12.3.0
+# System packages required for OCR: brew install tesseract poppler
+
+# --- orchestration (Phase 1) ---
+langgraph==1.2.11
+langchain-core==1.6.1
+
+# --- vector store ---
+qdrant-client==1.19.0
+
+# --- embeddings (Section 8: BGE, local) ---
+sentence-transformers==6.0.1
+
+# --- LLM providers (Section 8.1) ---
+google-genai==2.21.0
+httpx==0.28.1
+
+# --- api (used from Phase 2 onward; pinned here so the env is stable) ---
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# --- dev ---
+pytest==9.1.1
+reportlab==5.0.1        # generates test fixture PDFs
