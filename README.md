@@ -18,7 +18,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 219 tests
+../.venv/bin/python -m pytest -q           # 226 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -171,6 +171,19 @@ All three collected notifications extract cleanly — **3/3, zero errors**:
 Wall-clock is dominated by free-tier pacing, not by document size — the
 382-page tender took the same time as the 101-page one.
 
+### OCR
+
+Tesseract 5.5.3 and poppler are installed, and the OCR path is verified against
+a genuine pixel-only scan: `tests/test_ocr.py` renders a clause to an image,
+wraps it in a PDF, and asserts that "Rs. 5 Cr" and "2,00,000" come back and
+normalize to the same rupee values as native text would. Pages that already
+carry a text layer skip OCR entirely — on a 382-page tender that is the
+difference between minutes and hours.
+
+Both branches stay covered regardless of the developer machine: the
+"OCR unavailable" degradation path is forced off with a monkeypatch rather than
+skipped, because that is what a fresh checkout gets.
+
 ### Relative thresholds
 
 Indian works tenders express eligibility as a *share of the estimated cost*
@@ -184,14 +197,11 @@ base would be worse than admitting it cannot be computed.
 
 ## What's still needed
 
-1. **`brew install tesseract poppler`** — until then, scanned pages are reported
-   as missing (loudly, by design). All three collected tenders are native text,
-   so this is not yet blocking.
-2. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
+1. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
    three sectors. IT services and at least one scanned document are missing.
-3. **`portal_source` in `data/tracking_notifications.csv`** — only the collector
+2. **`portal_source` in `data/tracking_notifications.csv`** — only the collector
    knows which portal each document came from.
-4. **Synthetic vendor bids** (Section 9.2) — none yet, so the gap report has
+3. **Synthetic vendor bids** (Section 9.2) — none yet, so the gap report has
    only been exercised against fixtures. Ground truth goes in
    `data/tracking_vendors.csv` **before** generating each document.
 

@@ -81,19 +81,64 @@ def test_full_text_carries_page_markers(parsed_pdf):
     assert text.index("[PAGE 1]") < text.index("[PAGE 2]") < text.index("[PAGE 3]")
 
 
-def test_scanned_pdf_without_ocr_warns_loudly(tmp_path):
+def test_scanned_pdf_without_ocr_warns_loudly(tmp_path, monkeypatch):
     """A page that yielded nothing must be reported. Silently returning empty
     reads downstream as 'the clause is not in this tender' -- a wrong answer,
-    not a missing feature."""
+    not a missing feature.
+
+    OCR availability is forced off rather than skipped when Tesseract happens to
+    be installed: this is the behaviour a fresh machine gets, and it must stay
+    covered on developer machines that have OCR.
+    """
+    monkeypatch.setattr("app.ingest.pdf.ocr_available", lambda: False)
+    monkeypatch.setattr(
+        "app.ingest.pdf.missing_dependencies", lambda: ["tesseract", "poppler (pdftoppm)"]
+    )
+
     blank = make_blank_pdf(tmp_path / "scan.pdf", pages=2)
     parsed = parse_document(blank, DocumentKind.NOTIFICATION)
 
     assert parsed.total_chars == 0
-    if ocr_available():
-        pytest.skip("OCR installed; the degradation path is not exercised")
     assert len(parsed.parse_warnings) == 2
     assert all("MISSING from extraction" in w for w in parsed.parse_warnings)
+    assert all("tesseract" in w for w in parsed.parse_warnings)
     assert all(p.method is ExtractionMethod.EMPTY for p in parsed.pages)
+
+
+def test_scanned_page_falls_back_to_ocr_when_available(tmp_path, monkeypatch):
+    """The opposite branch, forced on: a page with no text layer must be routed
+    to OCR rather than reported as empty."""
+    calls: list[int] = []
+
+    monkeypatch.setattr("app.ingest.pdf.ocr_available", lambda: True)
+    monkeypatch.setattr(
+        "app.ingest.pdf.ocr_pdf_page",
+        lambda path, index, **kw: calls.append(index) or "4.2 Turnover of Rs. 5 Cr.",
+    )
+
+    parsed = parse_document(make_blank_pdf(tmp_path / "scan.pdf", pages=2))
+    assert calls == [1, 2], "every text-less page should be sent to OCR"
+    assert parsed.ocr_page_count == 2
+    assert parsed.is_scanned is True
+    assert "Rs. 5 Cr" in parsed.page(1).text
+    assert parsed.parse_warnings == []
+
+
+def test_ocr_failure_on_one_page_does_not_abort_the_document(tmp_path, monkeypatch):
+    """A single unreadable page must not lose the other 380."""
+    def flaky_ocr(path, index, **kw):
+        if index == 1:
+            raise RuntimeError("tesseract crashed")
+        return "4.2 Turnover of Rs. 5 Cr."
+
+    monkeypatch.setattr("app.ingest.pdf.ocr_available", lambda: True)
+    monkeypatch.setattr("app.ingest.pdf.ocr_pdf_page", flaky_ocr)
+
+    parsed = parse_document(make_blank_pdf(tmp_path / "scan.pdf", pages=2))
+    assert parsed.page(1).method is ExtractionMethod.EMPTY
+    assert parsed.page(2).method is ExtractionMethod.OCR
+    assert any("OCR failed" in w for w in parsed.parse_warnings)
+    assert any("MISSING from extraction" in w for w in parsed.parse_warnings)
 
 
 # --------------------------------------------------------------------------- #
