@@ -3,25 +3,27 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
-import { FileField, UploadResult } from "@/components/UploadCard";
-import type { IngestResponse } from "@/lib/types";
+import { FileDrop } from "@/components/FileDrop";
+import { JobProgress } from "@/components/JobProgress";
+import { Card, ErrorNote } from "@/components/ui";
 
 export default function UploadPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<IngestResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tenderId, setTenderId] = useState<string | null>(null);
 
   async function submit() {
     if (!file) return;
     setBusy(true);
     setError(null);
-    setResult(null);
+    setJobId(null);
+    setTenderId(null);
     try {
-      const response = await api.uploadNotification(file);
-      setResult(response);
-      router.refresh();
+      const accepted = await api.uploadNotification(file);
+      setJobId(accepted.job_id);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Upload failed.");
     } finally {
@@ -30,46 +32,72 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold tracking-tight">
-        Upload a tender notification
-      </h1>
-      <p className="mt-1 text-sm text-neutral-600">
-        The official tender document (PDF or DOCX). Everything your bid is
-        checked against comes from this file.
-      </p>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Add a tender</h1>
+        <p className="mt-1 text-sm text-fg-muted">
+          Upload the official tender notification. Every check we run is measured
+          against this document, so use the version the authority published.
+        </p>
+      </div>
 
-      <div className="mt-6 rounded-lg border border-neutral-200 bg-white p-6">
-        <FileField
-          label="Tender notification"
-          hint="PDF or DOCX, up to 50MB. Large tenders take a minute or two to extract."
-          onSelect={setFile}
-          disabled={busy}
+      <Card className="p-6">
+        <FileDrop
+          onSelect={(f) => {
+            setFile(f);
+            setJobId(null);
+            setError(null);
+          }}
+          disabled={busy || (!!jobId && !tenderId)}
+          hint="PDF or DOCX, up to 50 MB. Scanned documents are read with OCR."
         />
 
-        <button
-          onClick={submit}
-          disabled={!file || busy}
-          className="mt-5 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? "Extracting…" : "Upload and extract"}
-        </button>
-
-        {busy && (
-          <p className="mt-3 text-xs text-neutral-500">
-            Parsing the document and extracting eligibility criteria, required
-            documents and deadlines. This runs several passes over the text.
-          </p>
+        {!jobId && (
+          <button
+            onClick={submit}
+            disabled={!file || busy}
+            className="btn btn-primary mt-5 w-full sm:w-auto"
+          >
+            {busy ? "Uploading…" : "Upload and read"}
+          </button>
         )}
 
-        {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-            {error}
+        {error && <div className="mt-4"><ErrorNote>{error}</ErrorNote></div>}
+
+        {jobId && (
+          <div className="mt-6 border-t pt-5">
+            <JobProgress
+              jobId={jobId}
+              onDone={(job) => {
+                if (job.tender_id) setTenderId(job.tender_id);
+                router.refresh();
+              }}
+            />
+            {tenderId && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    router.push(`/tenders/${encodeURIComponent(tenderId)}`)
+                  }
+                  className="btn btn-primary"
+                >
+                  Open this tender
+                </button>
+                <button
+                  onClick={() => {
+                    setJobId(null);
+                    setFile(null);
+                    setTenderId(null);
+                  }}
+                  className="btn btn-ghost"
+                >
+                  Add another
+                </button>
+              </div>
+            )}
           </div>
         )}
-
-        {result && <UploadResult result={result} />}
-      </div>
+      </Card>
     </div>
   );
 }

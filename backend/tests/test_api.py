@@ -362,3 +362,38 @@ def test_ask_with_no_relevant_content_declines_rather_than_inventing(
 def test_ask_validates_the_question(client):
     response = client.post("/api/ask", json={"question": "hi", "tender_id": "T-1"})
     assert response.status_code == 422
+
+
+# --------------------------------------------------------------------------- #
+# Tender ids containing slashes (regression)
+# --------------------------------------------------------------------------- #
+@live
+def test_slashed_tender_id_resolves_on_every_route(client, pdf, clean, stubbed):
+    """Every real tender id in this project contains slashes -- "TENDER
+    No.01/SE(Electrical)/GHMC/2024-25". The path converter needed for that is
+    greedy, so a bare /{tender_id:path} route declared first swallows the
+    "/submissions" suffix into the id and the sub-route 404s."""
+    _await_job(client, _upload(client, pdf))
+    _await_job(client, _upload_bid(client, pdf))
+
+    encoded = TENDER_ID.replace("/", "%2F")
+
+    detail = client.get(f"/api/notifications/{encoded}")
+    assert detail.status_code == 200
+    assert detail.json()["tender_id"] == TENDER_ID
+
+    subs = client.get(f"/api/notifications/{encoded}/submissions")
+    assert subs.status_code == 200, subs.text
+    assert [s["vendor_id"] for s in subs.json()] == ["V-04"]
+
+
+@live
+def test_unencoded_slashes_also_resolve(client, pdf, clean, stubbed):
+    """Browsers and fetch() do not always percent-encode the slashes in a path
+    segment, so the raw form has to work too."""
+    _await_job(client, _upload(client, pdf))
+    _await_job(client, _upload_bid(client, pdf))
+
+    subs = client.get(f"/api/notifications/{TENDER_ID}/submissions")
+    assert subs.status_code == 200, subs.text
+    assert [s["vendor_id"] for s in subs.json()] == ["V-04"]

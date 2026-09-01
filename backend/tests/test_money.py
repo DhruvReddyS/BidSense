@@ -133,3 +133,46 @@ def test_a_crore_requirement_never_collapses_to_single_rupees() -> None:
 )
 def test_bare_spaces_do_not_merge_unrelated_numbers(raw: str, expected: str) -> None:
     assert normalize_amount(raw) == Decimal(expected)
+
+
+# --------------------------------------------------------------------------- #
+# Percentages are rates, not amounts (regression: HGCL EMD "1% OF THE ECV")
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "1% OF THE ECV",
+        "30% of the estimated cost",
+        "2.5 percent of ECV",
+        "5 per cent of the contract value",
+        "80% of Estimated Cost",
+    ],
+)
+def test_a_bare_percentage_is_not_an_amount(raw: str) -> None:
+    """The HGCL tender states its EMD as "1% OF THE ECV". Read as an absolute
+    figure that becomes Rs. 1 — an EMD every bidder on earth can furnish."""
+    assert try_normalize_amount(raw) is None
+    with pytest.raises(MoneyParseError, match="percentage"):
+        normalize_amount(raw)
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # A percentage stated alongside the absolute figure: the figure wins.
+        ("EMD @ 1% Rs. 2,98,720.00", "298720.00"),
+        ("Rs. 2,98,720/- (1% of ECV)", "298720.00"),
+        ("5% of contract value or Rs. 2,00,000 whichever is higher", "200000.00"),
+        ("1% of ECV, i.e. Rs. 99,71,000", "9971000.00"),
+    ],
+)
+def test_an_absolute_figure_beside_a_percentage_still_resolves(
+    raw: str, expected: str
+) -> None:
+    assert normalize_amount(raw) == Decimal(expected)
+
+
+def test_percentages_never_leak_into_thresholds() -> None:
+    """Belt and braces across the three shapes seen in real documents."""
+    for raw in ("1%", "1 %", "1 percent"):
+        assert try_normalize_amount(raw) is None

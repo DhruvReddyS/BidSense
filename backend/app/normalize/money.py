@@ -49,6 +49,16 @@ _CURRENCY_NOISE = re.compile(
 _NUMBER = re.compile(r"(\d+(?:,\s*\d{2,3})*(?:\.\d+)?)")
 
 
+# A numeral immediately followed by a percent sign is a rate, not an amount.
+# Tenders write "EMD @ 1% of the ECV" and "turnover of 30% of the estimated
+# cost"; read as absolute figures those become Rs. 1 and Rs. 30, which every
+# bidder clears. Percentages are resolved against a base elsewhere, by code that
+# knows what the base is -- here they are simply not amounts.
+# The word boundary applies only to the spelled-out forms: "%" is already a
+# non-word character, so "%\b" never matches before a space.
+_PERCENT_SUFFIX = re.compile(r"^\s*(?:%|(?:per\s*cent|percent)\b)", re.IGNORECASE)
+
+
 class MoneyParseError(ValueError):
     """Raised when a string cannot be resolved to an unambiguous rupee amount."""
 
@@ -93,14 +103,25 @@ def normalize_amount(raw: str | int | float | Decimal) -> Decimal:
     # threshold of Rs. 2, which every bidder on earth clears. Prefer the numeral
     # that a magnitude unit is actually attached to; fall back to the first only
     # when no numeral carries a unit.
+    # Drop percentages before choosing: "1% of the ECV" holds a numeral but no
+    # amount, and returning Rs. 1 would be worse than returning nothing.
+    absolute = [
+        match for match in candidates
+        if not _PERCENT_SUFFIX.match(cleaned[match.end() :])
+    ]
+    if not absolute:
+        raise MoneyParseError(
+            f"{raw!r} states a percentage, not an absolute amount"
+        )
+
     chosen, multiplier = None, Decimal(1)
-    for match in candidates:
+    for match in absolute:
         factor = _find_multiplier(cleaned[match.end() :])
         if factor > 1:
             chosen, multiplier = match, factor
             break
     if chosen is None:
-        chosen = candidates[0]
+        chosen = absolute[0]
 
     # Separators carry no magnitude once removed -- the digits themselves do.
     digits = chosen.group(1).replace(",", "").replace(" ", "")

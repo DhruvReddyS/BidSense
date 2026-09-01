@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { AskPanel } from "@/components/AskPanel";
-import { BidPanel } from "@/components/BidPanel";
+import { TenderWorkspace } from "@/components/TenderWorkspace";
+import { ErrorNote, formatDate, formatInr } from "@/components/ui";
+import type { TenderDetail } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -12,125 +13,122 @@ export default async function TenderPage({
 }) {
   const tenderId = decodeURIComponent(params.tenderId);
 
-  let tender: any = null;
-  let bids: { vendor_id: string; vendor_name: string; status: string }[] = [];
+  let tender: TenderDetail | null = null;
+  let bids: Awaited<ReturnType<typeof api.submissions>> = [];
   let error: string | null = null;
 
   try {
-    [tender, bids] = await Promise.all([
-      fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8100"}/api/notifications/${encodeURIComponent(tenderId)}`,
-        { cache: "no-store" },
-      ).then((r) => {
-        if (!r.ok) throw new ApiError("Tender not found", r.status);
-        return r.json();
-      }),
-      api.submissions(tenderId).catch(() => []),
-    ]);
+    tender = await api.notification(tenderId);
+    bids = await api.submissions(tenderId).catch(() => []);
   } catch (e) {
     error = e instanceof ApiError ? e.message : "Could not load this tender.";
   }
 
-  if (error) {
+  if (error || !tender) {
     return (
-      <div>
-        <Link href="/" className="text-sm text-indigo-600 hover:underline">
+      <div className="space-y-4">
+        <Link href="/" className="text-sm text-[hsl(var(--accent))] hover:underline">
           ← All tenders
         </Link>
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          {error}
-        </div>
+        <ErrorNote>{error ?? "Tender not found."}</ErrorNote>
       </div>
     );
   }
 
+  const deadline = tender.submission_deadline;
+  const daysLeft = deadline
+    ? Math.ceil(
+        (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+      )
+    : null;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-7">
       <div>
-        <Link href="/" className="text-sm text-indigo-600 hover:underline">
+        <Link
+          href="/"
+          className="text-sm text-[hsl(var(--accent))] hover:underline"
+        >
           ← All tenders
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+        <h1 className="mt-3 break-anywhere text-2xl font-semibold leading-tight tracking-tight">
           {tender.title}
         </h1>
-        <p className="mt-1 text-sm text-neutral-600">
+        <p className="mt-1.5 text-sm text-fg-muted">
           {tender.issuing_authority ?? "Issuing authority not stated"}
         </p>
-        <p className="mt-1 font-mono text-xs text-neutral-500">{tenderId}</p>
+        <p className="mt-1 break-anywhere font-mono text-[11px] text-fg-subtle">
+          {tender.tender_id}
+        </p>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
-          <p className="text-xs text-neutral-500">Submission deadline</p>
-          <p className="mt-1 font-medium">
-            {tender.submission_deadline ?? "not stated"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
-          <p className="text-xs text-neutral-500">Pre-bid queries by</p>
-          <p className="mt-1 font-medium">
-            {tender.pre_bid_query_deadline ?? "not stated"}
-          </p>
-        </div>
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
-          <p className="text-xs text-neutral-500">EMD</p>
-          <p className="mt-1 font-medium">
-            {tender.emd_amount?.raw_text ?? "not stated"}
-          </p>
-        </div>
-      </section>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Stat
+          label="Bids close"
+          value={formatDate(deadline)}
+          note={
+            daysLeft === null
+              ? "not stated in the document"
+              : daysLeft < 0
+                ? "closed"
+                : `${daysLeft} day${daysLeft === 1 ? "" : "s"} left`
+          }
+          urgent={daysLeft !== null && daysLeft >= 0 && daysLeft <= 7}
+        />
+        <Stat
+          label="Pre-bid queries by"
+          value={formatDate(tender.pre_bid_query_deadline)}
+        />
+        <Stat
+          label="EMD"
+          value={
+            tender.emd_amount?.amount_inr
+              ? formatInr(tender.emd_amount.amount_inr)
+              : (tender.emd_amount?.raw_text ?? "—")
+          }
+          note={tender.emd_amount?.raw_text ?? undefined}
+        />
+        <Stat
+          label="Estimated value"
+          value={
+            tender.contract_value_estimate?.amount_inr
+              ? formatInr(tender.contract_value_estimate.amount_inr)
+              : (tender.contract_value_estimate?.raw_text ?? "—")
+          }
+        />
+      </div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
-          <h3 className="font-medium">
-            Eligibility criteria ({tender.eligibility_criteria.length})
-          </h3>
-          <ul className="mt-3 space-y-3">
-            {tender.eligibility_criteria.map((c: any, i: number) => (
-              <li key={i} className="text-sm">
-                <p className="text-neutral-900">{c.criterion}</p>
-                <p className="mt-0.5 text-xs text-neutral-500">
-                  {c.threshold_raw ?? "no threshold stated"}
-                  {c.provenance?.clause_ref && ` · clause ${c.provenance.clause_ref}`}
-                  {c.provenance?.source_page && `, page ${c.provenance.source_page}`}
-                </p>
-              </li>
-            ))}
-            {tender.eligibility_criteria.length === 0 && (
-              <li className="text-sm text-neutral-500">
-                No eligibility criteria were extracted from this document.
-              </li>
-            )}
-          </ul>
-        </div>
+      <TenderWorkspace tender={tender} bids={bids} />
+    </div>
+  );
+}
 
-        <div className="rounded-lg border border-neutral-200 bg-white p-5">
-          <h3 className="font-medium">
-            Required documents ({tender.mandatory_documents.length})
-          </h3>
-          <ul className="mt-3 space-y-2">
-            {tender.mandatory_documents.map((d: any, i: number) => (
-              <li key={i} className="text-sm">
-                <span className="text-neutral-900">{d.doc_name}</span>
-                {d.provenance?.clause_ref && (
-                  <span className="ml-2 text-xs text-neutral-500">
-                    clause {d.provenance.clause_ref}
-                  </span>
-                )}
-              </li>
-            ))}
-            {tender.mandatory_documents.length === 0 && (
-              <li className="text-sm text-neutral-500">
-                No document list was extracted from this document.
-              </li>
-            )}
-          </ul>
-        </div>
-      </section>
-
-      <BidPanel tenderId={tenderId} bids={bids} />
-
-      <AskPanel tenderId={tenderId} />
+function Stat({
+  label,
+  value,
+  note,
+  urgent,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  urgent?: boolean;
+}) {
+  return (
+    <div className="card p-4">
+      <p className="label">{label}</p>
+      <p
+        className={`tnum mt-1 break-anywhere text-lg font-semibold leading-tight ${
+          urgent ? "text-[hsl(var(--warn))]" : ""
+        }`}
+      >
+        {value}
+      </p>
+      {note && (
+        <p className="mt-0.5 truncate text-xs text-fg-subtle" title={note}>
+          {note}
+        </p>
+      )}
     </div>
   );
 }

@@ -257,12 +257,10 @@ def get_notifications(
     )
 
 
-@router.get("/notifications/{tender_id:path}")
-def get_notification(tender_id: str, session: Session = Depends(get_db)):
-    """Full extracted Section 6 notification, provenance included."""
-    return to_notification_schema(require_notification(session, tender_id))
-
-
+# NOTE: this route MUST be declared before the bare /{tender_id:path} route
+# below. Real tender ids contain slashes -- "TENDER No.01/SE(Electrical)/GHMC/
+# 2024-25" -- so the path converter is required, and a greedy converter matched
+# first would swallow the "/submissions" suffix into the id.
 @router.get("/notifications/{tender_id:path}/submissions")
 def get_submissions(tender_id: str, session: Session = Depends(get_db)):
     row = require_notification(session, tender_id)
@@ -276,6 +274,14 @@ def get_submissions(tender_id: str, session: Session = Depends(get_db)):
         }
         for s in list_submissions(session, row.id)
     ]
+
+
+# Declared last: {tender_id:path} matches anything, including the paths of the
+# more specific routes above.
+@router.get("/notifications/{tender_id:path}")
+def get_notification(tender_id: str, session: Session = Depends(get_db)):
+    """Full extracted Section 6 notification, provenance included."""
+    return to_notification_schema(require_notification(session, tender_id))
 
 
 # --------------------------------------------------------------------------- #

@@ -28,6 +28,7 @@ from app.compliance.matching import (
 )
 from app.compliance.requirements import Applicability, Requirement, deduplicate
 from app.compliance.models import (
+    ActionGroup,
     ActionItem,
     CheckStatus,
     GapItem,
@@ -535,6 +536,29 @@ _SEVERITY_ORDER = {
     Severity.INFO: 3,
 }
 
+# Within one severity band, order by what the vendor can do about it. Every
+# unmet mandatory requirement is "disqualifying", so severity alone leaves the
+# ordering to extraction order -- which on a real tender buried the one
+# unfixable failure at position 39 of 39.
+_GROUP_ORDER = {
+    ActionGroup.HARD_FAIL: 0,
+    ActionGroup.UPLOAD: 1,
+    ActionGroup.CLARIFY: 2,
+    ActionGroup.VERIFY: 3,
+}
+
+
+def _classify_action(item: GapItem) -> ActionGroup:
+    if item.status is CheckStatus.NOT_ASSESSABLE:
+        return ActionGroup.CLARIFY
+    if item.status in (CheckStatus.MANUAL_CHECK, CheckStatus.PARTIAL):
+        return ActionGroup.VERIFY
+    # MISSING. A document gap is fixable by attaching the document; a failed
+    # threshold or condition is not.
+    if item.kind is RequirementKind.DOCUMENT:
+        return ActionGroup.UPLOAD
+    return ActionGroup.HARD_FAIL
+
 
 def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
     actions: list[ActionItem] = []
@@ -542,21 +566,27 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
         if item.status is CheckStatus.MATCH:
             continue
 
-        if item.kind is RequirementKind.DOCUMENT and item.status is CheckStatus.MISSING:
-            action = f"Upload {item.required_value}"
-        elif item.status is CheckStatus.MISSING:
+        group = _classify_action(item)
+        if group is ActionGroup.UPLOAD:
+            action = f"Upload {item.required_value or item.requirement}"
+        elif group is ActionGroup.HARD_FAIL:
+            # The explanation already names both figures, which is the whole
+            # point -- the vendor needs to see the gap, not just be told to act.
             action = item.explanation
-        elif item.status is CheckStatus.NOT_ASSESSABLE:
-            action = f"Clarify in your bid: {item.requirement}"
-        elif item.status is CheckStatus.PARTIAL:
-            action = f"Confirm that “{item.found_value}” satisfies: {item.requirement}"
+        elif group is ActionGroup.CLARIFY:
+            action = f"State clearly in your bid: {item.requirement}"
         else:
-            action = f"Check manually: {item.requirement}"
+            action = (
+                f"Confirm \u201c{item.found_value}\u201d satisfies: {item.requirement}"
+                if item.status is CheckStatus.PARTIAL and item.found_value
+                else f"Check yourself: {item.requirement}"
+            )
 
         actions.append(
             ActionItem(
                 action=action,
                 severity=item.severity,
+                group=group,
                 requirement=item.requirement,
                 clause_ref=(
                     item.notification_provenance.clause_ref
@@ -566,7 +596,7 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
             )
         )
 
-    actions.sort(key=lambda a: _SEVERITY_ORDER[a.severity])
+    actions.sort(key=lambda a: (_SEVERITY_ORDER[a.severity], _GROUP_ORDER[a.group]))
     return actions
 
 

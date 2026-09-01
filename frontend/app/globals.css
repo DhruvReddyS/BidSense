@@ -2,10 +2,177 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
+/*
+ * Design tokens.
+ *
+ * One accent colour, a wide neutral ramp, and semantic status colours that mean
+ * the same thing everywhere in the product. A compliance tool earns trust
+ * partly through consistency: if "missing" is red in the table it must be red
+ * in the summary, the filter chip and the action list, or the reader has to
+ * re-learn the legend on every screen.
+ */
+@layer base {
+  :root {
+    --bg: 0 0% 99%;
+    --surface: 0 0% 100%;
+    --surface-2: 240 6% 97%;
+    --border: 240 6% 90%;
+    --border-strong: 240 5% 84%;
+
+    --fg: 240 10% 12%;
+    --fg-muted: 240 4% 46%;
+    --fg-subtle: 240 4% 60%;
+
+    --accent: 243 75% 59%;
+    --accent-fg: 0 0% 100%;
+    --accent-soft: 243 100% 97%;
+    --accent-border: 243 75% 88%;
+
+    --ok: 142 70% 32%;
+    --ok-soft: 138 76% 96%;
+    --ok-border: 141 60% 84%;
+
+    --warn: 32 90% 40%;
+    --warn-soft: 48 96% 95%;
+    --warn-border: 45 90% 80%;
+
+    --bad: 0 72% 46%;
+    --bad-soft: 0 86% 97%;
+    --bad-border: 0 80% 89%;
+
+    --info: 234 89% 55%;
+    --info-soft: 226 100% 97%;
+    --info-border: 228 90% 88%;
+
+    --neutral-soft: 240 5% 96%;
+    --neutral-border: 240 5% 88%;
+
+    --radius: 0.625rem;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background: hsl(var(--bg));
+    color: hsl(var(--fg));
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Tabular figures everywhere numbers are compared -- rupee amounts in a
+     column must line up, or the reader cannot scan them. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-body {
-  @apply bg-neutral-50 text-neutral-900 antialiased;
+@layer components {
+  .card {
+    @apply rounded-xl border bg-[hsl(var(--surface))];
+    box-shadow:
+      0 1px 2px -1px rgb(0 0 0 / 0.06),
+      0 1px 3px 0 rgb(0 0 0 / 0.04);
+  }
+
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    border-color: hsl(var(--border-strong));
+    box-shadow:
+      0 2px 4px -2px rgb(0 0 0 / 0.08),
+      0 6px 16px -4px rgb(0 0 0 / 0.08);
+    transform: translateY(-1px);
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
+           text-sm font-medium transition-colors
+           disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-fg));
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: hsl(243 75% 53%);
+  }
+  .btn-ghost {
+    @apply border bg-[hsl(var(--surface))];
+    color: hsl(var(--fg));
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: hsl(var(--surface-2));
+  }
+
+  .input {
+    @apply w-full rounded-lg border bg-[hsl(var(--surface))] px-3 py-2 text-sm
+           outline-none transition-shadow placeholder:text-[hsl(var(--fg-subtle))];
+  }
+  .input:focus {
+    border-color: hsl(var(--accent));
+    box-shadow: 0 0 0 3px hsl(var(--accent) / 0.12);
+  }
+
+  .label {
+    @apply text-xs font-medium uppercase tracking-wide text-[hsl(var(--fg-muted))];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border
+           px-2 py-0.5 text-xs font-medium;
+  }
+}
+
+@layer utilities {
+  /* Long clause text and vendor names must be able to wrap mid-token, or a
+     67-character reference blows out the table. */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  @keyframes shimmer {
+    100% { transform: translateX(100%); }
+  }
+  .skeleton {
+    @apply relative overflow-hidden rounded bg-[hsl(var(--surface-2))];
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgb(255 255 255 / 0.6),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-rise {
+    animation: rise 0.24s ease-out both;
+  }
+}
+
+/* Respect a reader who has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

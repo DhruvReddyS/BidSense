@@ -94,6 +94,27 @@ class ScorePreview(BaseModel):
     unavailable_reason: str | None = None
 
 
+class ActionGroup(StrEnum):
+    """What kind of problem this is, which decides what a vendor does about it.
+
+    The distinction that matters is fixability. A missing certificate is a
+    morning's work. Turnover below the floor cannot be fixed before the deadline
+    at all -- it means "do not bid, or bid as a joint venture". Sorting purely by
+    severity buries the second kind underneath forty of the first, because every
+    unmet mandatory requirement is equally "disqualifying".
+    """
+
+    # Cannot be fixed by uploading anything: a threshold you do not meet, or a
+    # disqualifying condition.
+    HARD_FAIL = "hard_fail"
+    # Fixable before the deadline: attach the document.
+    UPLOAD = "upload"
+    # We could not read a value; the vendor must state it clearly.
+    CLARIFY = "clarify"
+    # Needs a human eye: formatting, signing, conditional applicability.
+    VERIFY = "verify"
+
+
 class ActionItem(BaseModel):
     """Section 4.6 -- a plain-language to-do for a non-technical vendor."""
 
@@ -101,6 +122,7 @@ class ActionItem(BaseModel):
 
     action: str
     severity: Severity
+    group: ActionGroup
     requirement: str
     clause_ref: str | None = None
 

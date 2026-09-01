@@ -515,3 +515,104 @@ def test_an_unrelated_certification_still_satisfies_its_own_requirement():
     )
     assert next(i for i in report.items if "ISO" in i.requirement).status is CheckStatus.MISSING
     assert next(i for i in report.items if "GST" in i.requirement).status is CheckStatus.MATCH
+
+
+# --------------------------------------------------------------------------- #
+# Action ranking by fixability (regression: the one real failure ranked 39/39)
+# --------------------------------------------------------------------------- #
+from app.compliance.models import ActionGroup  # noqa: E402
+
+
+def _many_missing_documents(count: int):
+    return [MandatoryDocument(doc_name=f"Annexure {i} declaration") for i in range(count)]
+
+
+def test_an_unfixable_failure_outranks_a_pile_of_missing_documents():
+    """On the real GHMC tender this ordering put "your turnover is below the
+    floor" at position 39 of 39, under 38 document uploads. Every unmet
+    mandatory requirement is "disqualifying", so severity alone cannot separate
+    them -- what differs is whether the vendor can do anything about it."""
+    report = build_gap_report(
+        notification(mandatory_documents=_many_missing_documents(30)),
+        submission(
+            documents_submitted=[],
+            turnover=[YearlyTurnover(year=2023, amount=MoneyAmount(raw_text="Rs. 1 Cr"))],
+        ),
+        **NO_EMBED,
+    )
+
+    assert len(report.action_list) > 30
+    first = report.action_list[0]
+    assert first.group is ActionGroup.HARD_FAIL
+    assert "turnover" in first.action.lower()
+    assert "₹5 Cr" in first.action, "the vendor must see both figures, not just a verdict"
+
+
+def test_action_groups_are_ordered_hard_fail_upload_clarify_verify():
+    report = build_gap_report(
+        notification(
+            mandatory_documents=_many_missing_documents(3),
+            submission_format_rules=[SubmissionFormatRule(rule="Sign every page")],
+        ),
+        submission(
+            documents_submitted=[],
+            years_in_business=None,   # -> clarify
+            turnover=[YearlyTurnover(year=2023, amount=MoneyAmount(raw_text="Rs. 1 Cr"))],
+        ),
+        **NO_EMBED,
+    )
+    order = [a.group for a in report.action_list]
+    rank = {
+        ActionGroup.HARD_FAIL: 0,
+        ActionGroup.UPLOAD: 1,
+        ActionGroup.CLARIFY: 2,
+        ActionGroup.VERIFY: 3,
+    }
+    assert [rank[g] for g in order] == sorted(rank[g] for g in order)
+
+
+def test_a_missing_document_is_upload_not_hard_fail():
+    """Fixable before the deadline: it must not sit beside "you do not qualify"."""
+    report = build_gap_report(
+        notification(),
+        submission(documents_submitted=[]),
+        **NO_EMBED,
+    )
+    doc_actions = [
+        a for a in report.action_list if a.action.startswith("Upload ")
+    ]
+    assert doc_actions
+    assert all(a.group is ActionGroup.UPLOAD for a in doc_actions)
+
+
+def test_unreadable_values_are_clarify_not_upload():
+    report = build_gap_report(
+        notification(),
+        submission(
+            turnover=[
+                YearlyTurnover(year=2023, amount=MoneyAmount(raw_text="see annexure"))
+            ]
+        ),
+        **NO_EMBED,
+    )
+    clarify = [a for a in report.action_list if a.group is ActionGroup.CLARIFY]
+    assert clarify
+    assert any("state clearly" in a.action.lower() for a in clarify)
+
+
+def test_conditional_requirements_are_verify_not_upload():
+    """A JV agreement is not something a sole bidder should be told to upload."""
+    report = build_gap_report(
+        notification(
+            mandatory_documents=[
+                MandatoryDocument(doc_name="JV / Consortium Agreement"),
+                MandatoryDocument(doc_name="GST Registration Certificate"),
+            ]
+        ),
+        submission(documents_submitted=[]),
+        **NO_EMBED,
+    )
+    jv = next(a for a in report.action_list if "JV" in a.requirement)
+    gst = next(a for a in report.action_list if "GST" in a.requirement)
+    assert jv.group is ActionGroup.VERIFY
+    assert gst.group is ActionGroup.UPLOAD

@@ -5,16 +5,33 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Status colours are used consistently across the gap report; defining
-        // them once keeps "missing" from meaning one thing in the table and
-        // another in the action list.
-        status: {
-          match: "#15803d",
-          partial: "#b45309",
-          missing: "#b91c1c",
-          manual: "#4338ca",
-          unknown: "#525252",
+        bg: "hsl(var(--bg))",
+        surface: "hsl(var(--surface))",
+        "surface-2": "hsl(var(--surface-2))",
+        border: "hsl(var(--border))",
+        fg: {
+          DEFAULT: "hsl(var(--fg))",
+          muted: "hsl(var(--fg-muted))",
+          subtle: "hsl(var(--fg-subtle))",
         },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          fg: "hsl(var(--accent-fg))",
+          soft: "hsl(var(--accent-soft))",
+        },
+      },
+      fontFamily: {
+        sans: [
+          "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI",
+          "Inter", "Roboto", "Helvetica Neue", "Arial", "sans-serif",
+        ],
+        mono: [
+          "ui-monospace", "SFMono-Regular", "Menlo", "Monaco",
+          "Consolas", "monospace",
+        ],
+      },
+      borderRadius: {
+        xl: "var(--radius)",
       },
     },
   },
