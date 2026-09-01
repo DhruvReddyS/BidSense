@@ -57,71 +57,91 @@ def save_notification(
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
 ) -> TenderNotificationRow:
-    """Insert or replace a notification by its tender_id.
+    """Insert or update a notification, preserving the bids filed against it.
 
-    Re-extracting the same tender replaces its children wholesale rather than
-    merging: a partial merge would leave criteria from a previous, possibly
-    wrong, extraction silently in force.
+    Re-extraction UPDATES the existing row in place; it must never delete and
+    recreate it. `vendor_submissions` cascades from this row, so delete/recreate
+    silently destroys every bid filed against the tender -- on a Part 2 pool
+    that is a hundred evaluations lost to re-running an extraction, or to
+    uploading a corrigendum (5.6).
+
+    Matching is by tender_id OR source file. When header extraction fails,
+    tender_id falls back to the filename, so a failed run followed by a
+    successful one would otherwise leave two rows for one document.
     """
-    # Replace by tender_id AND by source file. The second clause matters: when
-    # header extraction fails, tender_id falls back to the filename, so a failed
-    # run followed by a successful one would otherwise leave two rows for the
-    # same document -- one real, one an empty shell that still looks like a
-    # tender in the listing.
     conditions = [TenderNotificationRow.tender_id == notification.tender_id]
     if source_file:
         conditions.append(TenderNotificationRow.source_file == source_file)
-    stale = session.scalars(
-        select(TenderNotificationRow).where(or_(*conditions))
+    matches = session.scalars(
+        select(TenderNotificationRow)
+        .where(or_(*conditions))
+        .order_by(TenderNotificationRow.created_at)
     ).all()
-    for existing in stale:
-        logger.info(
-            "Replacing existing extraction for tender %s (%s)",
-            existing.tender_id,
-            existing.source_file,
-        )
-        session.delete(existing)
-    if stale:
-        session.flush()
 
-    row = TenderNotificationRow(
-        tender_id=notification.tender_id,
-        title=notification.title,
-        issuing_authority=notification.issuing_authority,
-        sector=notification.sector,
-        submission_deadline=notification.submission_deadline,
-        pre_bid_query_deadline=notification.pre_bid_query_deadline,
-        emd_amount_raw=notification.emd_amount.raw_text if notification.emd_amount else None,
-        emd_amount_inr=notification.emd_amount.amount_inr if notification.emd_amount else None,
-        contract_value_raw=(
-            notification.contract_value_estimate.raw_text
-            if notification.contract_value_estimate
-            else None
-        ),
-        contract_value_inr=(
-            notification.contract_value_estimate.amount_inr
-            if notification.contract_value_estimate
-            else None
-        ),
-        evaluation_criteria=[
-            {
-                "factor": c.factor,
-                "weightage_if_stated": c.weightage_if_stated,
-                **_prov(c.provenance),
-            }
-            for c in notification.evaluation_criteria
-        ],
-        technical_requirements=[
-            {"requirement": c.requirement, **_prov(c.provenance)}
-            for c in notification.technical_requirements
-        ],
-        submission_format_rules=[
-            {"rule": c.rule, **_prov(c.provenance)}
-            for c in notification.submission_format_rules
-        ],
-        source_file=source_file,
-        owner_user_id=owner_user_id,
+    if matches:
+        row = matches[0]
+        logger.info(
+            "Updating extraction for tender %s (%d submission(s) preserved)",
+            row.tender_id,
+            len(row.submissions),
+        )
+        # Additional matches are genuine duplicates (typically a shell row from
+        # a failed run). Re-home their submissions before removing them so no
+        # bid is lost to the cleanup either.
+        for duplicate in matches[1:]:
+            logger.info("Merging duplicate row %s", duplicate.source_file)
+            for submission in list(duplicate.submissions):
+                submission.notification_id = row.id
+            session.flush()
+            session.delete(duplicate)
+    else:
+        row = TenderNotificationRow()
+        session.add(row)
+
+    row.tender_id = notification.tender_id
+    row.title = notification.title
+    row.issuing_authority = notification.issuing_authority
+    row.sector = notification.sector
+    row.submission_deadline = notification.submission_deadline
+    row.pre_bid_query_deadline = notification.pre_bid_query_deadline
+    row.emd_amount_raw = notification.emd_amount.raw_text if notification.emd_amount else None
+    row.emd_amount_inr = notification.emd_amount.amount_inr if notification.emd_amount else None
+    row.contract_value_raw = (
+        notification.contract_value_estimate.raw_text
+        if notification.contract_value_estimate
+        else None
     )
+    row.contract_value_inr = (
+        notification.contract_value_estimate.amount_inr
+        if notification.contract_value_estimate
+        else None
+    )
+    row.evaluation_criteria = [
+        {
+            "factor": c.factor,
+            "weightage_if_stated": c.weightage_if_stated,
+            **_prov(c.provenance),
+        }
+        for c in notification.evaluation_criteria
+    ]
+    row.technical_requirements = [
+        {"requirement": c.requirement, **_prov(c.provenance)}
+        for c in notification.technical_requirements
+    ]
+    row.submission_format_rules = [
+        {"rule": c.rule, **_prov(c.provenance)}
+        for c in notification.submission_format_rules
+    ]
+    if source_file:
+        row.source_file = source_file
+    if owner_user_id:
+        row.owner_user_id = owner_user_id
+
+    # Children are replaced wholesale, not merged: a partial merge would leave
+    # criteria from a previous, possibly wrong, extraction silently in force.
+    row.eligibility_criteria.clear()
+    row.mandatory_documents.clear()
+    session.flush()
 
     for criterion in notification.eligibility_criteria:
         row.eligibility_criteria.append(
@@ -150,7 +170,6 @@ def save_notification(
             )
         )
 
-    session.add(row)
     session.flush()
     return row
 

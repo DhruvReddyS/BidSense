@@ -93,3 +93,43 @@ def test_a_bare_count_never_becomes_a_rupee_threshold() -> None:
     """A threshold of Rs. 2 would pass every bidder alive -- the exact failure
     Section 6 warns about when it says elimination rules silently misfire."""
     assert normalize_amount("At least 2, Rs. 2 Cr each") > Decimal("1000000")
+
+
+# --------------------------------------------------------------------------- #
+# Whitespace inside digit grouping (regression from the GHMC LED tender)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # The observed real form: spaces after the commas.
+        ("Rs.3, 00, 00,000/- (Rupees Three Crore only)", "30000000.00"),
+        ("Rs. 2, 98, 720.00", "298720.00"),
+        ("1, 00, 000", "100000.00"),
+        # Must still parse without the spaces.
+        ("Rs. 3,00,00,000/-", "30000000.00"),
+        ("Rs. 2,98,720.00", "298720.00"),
+    ],
+)
+def test_spaces_inside_digit_grouping(raw: str, expected: str) -> None:
+    """Real tenders print "Rs.3, 00, 00,000/-". Stopping the match at the first
+    comma turns a Rs. 3 crore requirement into Rs. 3."""
+    assert normalize_amount(raw) == Decimal(expected)
+
+
+def test_a_crore_requirement_never_collapses_to_single_rupees() -> None:
+    for raw in ("Rs.3, 00, 00,000/-", "Rs. 3,00,00,000/-", "Rs. 3 Cr"):
+        assert normalize_amount(raw) == Decimal("30000000.00"), raw
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Spaces are allowed only after a comma. Bare space-separated numbers
+        # must stay separate, or unrelated figures merge into one.
+        ("At least 2, Rs. 2 Cr each", "20000000.00"),
+        ("Minimum 3 works of Rs. 50 lakh each", "5000000.00"),
+        ("completion within 30 60 90 days of Rs. 5 Cr", "50000000.00"),
+    ],
+)
+def test_bare_spaces_do_not_merge_unrelated_numbers(raw: str, expected: str) -> None:
+    assert normalize_amount(raw) == Decimal(expected)

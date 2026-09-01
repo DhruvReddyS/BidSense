@@ -129,7 +129,10 @@ def test_reingesting_replaces_rather_than_duplicates(pdf, clean):
         limit=200,
     )
     assert len(found) == second.chunks_indexed
-    assert first.row_id != second.row_id  # replaced, not merged
+    # The row id must be STABLE across re-extraction: vendor_submissions
+    # references it, so minting a new id (or delete/recreate) would cascade away
+    # every bid filed against the tender.
+    assert first.row_id == second.row_id
 
 
 @live
@@ -242,3 +245,78 @@ def test_failed_then_successful_run_leaves_one_row(pdf, clean):
         assert len(rows) == 1, "the shell row from the failed run must be replaced"
         assert rows[0].tender_id == TENDER_ID
         assert len(rows[0].eligibility_criteria) == 3
+
+
+@live
+@embed
+def test_reextracting_a_notification_preserves_its_vendor_bids(pdf, clean):
+    """The data-loss case. vendor_submissions cascades from the notification, so
+    delete-and-recreate on re-extraction silently destroys every bid filed
+    against the tender -- a hundred evaluations lost to re-running extraction,
+    or to uploading a corrigendum (5.6)."""
+    first = ingest_notification(pdf, llm=StubLLM())
+    ingest_submission(pdf, vendor_id="V-04", tender_id=TENDER_ID, llm=StubLLM())
+    ingest_submission(pdf, vendor_id="V-09", tender_id=TENDER_ID, llm=StubLLM())
+
+    with session_scope() as session:
+        before = session.scalars(
+            select(VendorSubmissionRow).where(
+                VendorSubmissionRow.notification_id == first.row_id
+            )
+        ).all()
+        assert len(before) == 2
+
+    second = ingest_notification(pdf, llm=StubLLM())
+    assert second.row_id == first.row_id
+
+    with session_scope() as session:
+        after = session.scalars(
+            select(VendorSubmissionRow).where(
+                VendorSubmissionRow.notification_id == second.row_id
+            )
+        ).all()
+        assert {s.vendor_id for s in after} == {"V-04", "V-09"}, (
+            "vendor bids must survive re-extraction of the notification"
+        )
+
+
+@live
+@embed
+def test_reextraction_refreshes_criteria_without_merging_stale_ones(pdf, clean):
+    """Children are replaced wholesale. A partial merge would leave criteria
+    from a previous, possibly wrong, extraction silently in force."""
+    ingest_notification(pdf, llm=StubLLM())
+
+    trimmed = StubLLM()
+    trimmed.script["EligibilityList"].items = trimmed.script["EligibilityList"].items[:1]
+    ingest_notification(pdf, llm=trimmed)
+
+    with session_scope() as session:
+        row = session.scalar(
+            select(TenderNotificationRow).where(TenderNotificationRow.tender_id == TENDER_ID)
+        )
+        assert len(row.eligibility_criteria) == 1, "stale criteria must not survive"
+
+
+@live
+@embed
+def test_a_shell_row_from_a_failed_run_donates_its_bids(pdf, clean):
+    """When header extraction fails the tender_id falls back to the filename, so
+    a bid filed against that shell must be re-homed onto the real row rather
+    than deleted with it."""
+    broken = ingest_notification(pdf, llm=StubLLM(fail_on={"RawHeader"}))
+    ingest_submission(
+        pdf, vendor_id="V-77", tender_id=broken.identifier, llm=StubLLM()
+    )
+
+    good = ingest_notification(pdf, llm=StubLLM())
+
+    with session_scope() as session:
+        rows = session.scalars(
+            select(TenderNotificationRow).where(
+                TenderNotificationRow.source_file.like("%NOTIF_ITservices_01.pdf")
+            )
+        ).all()
+        assert len(rows) == 1
+        assert rows[0].tender_id == TENDER_ID
+        assert {s.vendor_id for s in rows[0].submissions} == {"V-77"}

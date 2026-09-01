@@ -38,7 +38,15 @@ _CURRENCY_NOISE = re.compile(
     r"(?:₹|rs\.?|inr|rupees?|only|/-|\bapprox(?:imately)?\b|\bupto\b|\bup\s+to\b)",
     re.IGNORECASE,
 )
-_NUMBER = re.compile(r"(\d[\d,]*(?:\.\d+)?)")
+# Indian grouping, tolerating whitespace after a comma: real tenders print
+# "Rs.3, 00, 00,000/-" (observed in the GHMC LED tender). Without the optional
+# space the match stops at "3" and a Rs. 3 crore requirement becomes Rs. 3 --
+# a threshold every bidder on earth clears.
+#
+# The space is allowed only AFTER a comma, and only before a 2-3 digit group.
+# Allowing bare space-separated digits would merge "at least 2, Rs. 2 Cr" into
+# a single number, and merge unrelated figures like "30 60 90 days".
+_NUMBER = re.compile(r"(\d+(?:,\s*\d{2,3})*(?:\.\d+)?)")
 
 
 class MoneyParseError(ValueError):
@@ -94,7 +102,8 @@ def normalize_amount(raw: str | int | float | Decimal) -> Decimal:
     if chosen is None:
         chosen = candidates[0]
 
-    digits = chosen.group(1).replace(",", "")
+    # Separators carry no magnitude once removed -- the digits themselves do.
+    digits = chosen.group(1).replace(",", "").replace(" ", "")
     try:
         value = Decimal(digits)
     except InvalidOperation as exc:  # pragma: no cover - guarded by the regex
