@@ -37,6 +37,25 @@ from app.schemas.submission import VendorSubmission
 logger = logging.getLogger(__name__)
 
 
+def _notify(state: "ExtractionState", node: str, event: str = "complete") -> None:
+    """Report extractor progress to the caller, if it asked to be told.
+
+    Both starts and completions are reported. Completions alone are not enough:
+    under free-tier pacing the first extractor can take two minutes, and a
+    progress bar sitting at 0% for that long reads as a hung request.
+
+    Progress reporting must never break extraction, so a failing callback is
+    swallowed -- a broken progress bar is not a reason to lose a document.
+    """
+    callback = state.get("on_node_complete")
+    if callback is None:
+        return
+    try:
+        callback(node, event)
+    except Exception:                     # pragma: no cover - defensive
+        logger.debug("progress callback failed for %s", node, exc_info=True)
+
+
 class ExtractionState(TypedDict, total=False):
     """Each extractor writes its own key, so parallel branches never collide.
     `errors` and `timings` are the exceptions and use additive reducers."""
@@ -58,8 +77,17 @@ class ExtractionState(TypedDict, total=False):
     past_projects: list[raw.RawPastProject]
     submitted_documents: list[raw.RawSubmittedDocument]
 
+    on_node_complete: Any
     errors: Annotated[list[str], operator.add]
     timings: Annotated[list[tuple[str, float]], operator.add]
+
+
+def notification_node_names() -> list[str]:
+    return list(_NOTIFICATION_NODES)
+
+
+def vendor_node_names() -> list[str]:
+    return list(_VENDOR_NODES)
 
 
 def _run(state: ExtractionState, node: str, prompt_template: str, schema):
@@ -77,6 +105,7 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
     # buries three relevant clauses in 380 pages of contract boilerplate.
     text, pages = select_pages(state["document"], node)
     logger.debug("%s: reading pages %s", node, pages)
+    _notify(state, node, "start")
 
     try:
         # The gate matches the fan-out to what the backend can actually absorb.
@@ -90,10 +119,12 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
             )
         elapsed = time.perf_counter() - started
         logger.info("%s: ok in %.2fs (%d pages)", node, elapsed, len(pages))
+        _notify(state, node)
         return result, [], [(node, elapsed)]
     except (LLMError, Exception) as exc:  # noqa: BLE001 - deliberately broad
         elapsed = time.perf_counter() - started
         logger.warning("%s: failed after %.2fs: %s", node, elapsed, exc)
+        _notify(state, node)   # a failed group still advances progress
         return None, [f"{node}: {exc}"], [(node, elapsed)]
 
 
@@ -240,13 +271,17 @@ class ExtractionResult(TypedDict):
 
 
 def extract_notification(
-    document: ParsedDocument, *, llm: LLMProvider | None = None
+    document: ParsedDocument,
+    *,
+    llm: LLMProvider | None = None,
+    on_node_complete=None,
 ) -> tuple[TenderNotification, ExtractionResult]:
     """Run the notification extraction graph over a parsed document."""
     state = {
         "document": document,
         "text": document.full_text(),
         "llm": llm or get_llm(),
+        "on_node_complete": on_node_complete,
         "errors": [],
         "timings": [],
     }
@@ -275,12 +310,14 @@ def extract_submission(
     vendor_id: str,
     tender_id: str | None = None,
     llm: LLMProvider | None = None,
+    on_node_complete=None,
 ) -> tuple[VendorSubmission, ExtractionResult]:
     """Run the vendor-bid extraction graph over a parsed document."""
     state = {
         "document": document,
         "text": document.full_text(),
         "llm": llm or get_llm(),
+        "on_node_complete": on_node_complete,
         "errors": [],
         "timings": [],
     }

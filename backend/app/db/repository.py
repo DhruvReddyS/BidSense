@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import TenderNotificationRow, VendorSubmissionRow
@@ -186,19 +186,53 @@ def get_submission_row(
     )
 
 
-def list_notifications(session: Session) -> list[TenderNotificationRow]:
+def list_notifications(
+    session: Session, *, limit: int = 50, offset: int = 0
+) -> list[TenderNotificationRow]:
     return list(
         session.scalars(
-            select(TenderNotificationRow).order_by(TenderNotificationRow.created_at.desc())
+            select(TenderNotificationRow)
+            .order_by(TenderNotificationRow.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
     )
 
 
-def list_submissions(session: Session, notification_id: uuid.UUID) -> list[VendorSubmissionRow]:
+def count_notifications(session: Session) -> int:
+    return session.scalar(select(func.count()).select_from(TenderNotificationRow)) or 0
+
+
+def submission_counts(session: Session, notification_ids: list[uuid.UUID]) -> dict:
+    """Bid counts for many tenders in one query.
+
+    The listing previously called list_submissions() once per notification --
+    an N+1 that turns a 20-tender page into 21 round trips and loads every
+    submission row just to call len() on it.
+    """
+    if not notification_ids:
+        return {}
+    rows = session.execute(
+        select(VendorSubmissionRow.notification_id, func.count())
+        .where(VendorSubmissionRow.notification_id.in_(notification_ids))
+        .group_by(VendorSubmissionRow.notification_id)
+    ).all()
+    return {notification_id: count for notification_id, count in rows}
+
+
+def list_submissions(
+    session: Session,
+    notification_id: uuid.UUID,
+    *,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[VendorSubmissionRow]:
     return list(
         session.scalars(
             select(VendorSubmissionRow)
             .where(VendorSubmissionRow.notification_id == notification_id)
             .order_by(VendorSubmissionRow.vendor_id)
+            .limit(limit)
+            .offset(offset)
         )
     )

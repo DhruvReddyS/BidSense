@@ -26,6 +26,7 @@ from app.compliance.matching import (
     match_document,
     normalise,
 )
+from app.compliance.requirements import Applicability, Requirement, deduplicate
 from app.compliance.models import (
     ActionItem,
     CheckStatus,
@@ -38,7 +39,11 @@ from app.compliance.models import (
     format_money,
 )
 from app.schemas.common import CriterionType, Provenance
-from app.schemas.notification import EligibilityCriterion, TenderNotification
+from app.schemas.notification import (
+    EligibilityCriterion,
+    MandatoryDocument,
+    TenderNotification,
+)
 from app.schemas.submission import VendorSubmission
 
 # Words in a criterion that indicate it is about turnover rather than, say,
@@ -56,6 +61,26 @@ def _mentions(text: str, hints: tuple[str, ...]) -> bool:
 # --------------------------------------------------------------------------- #
 # Document presence (Section 4.3 "hard document checklist")
 # --------------------------------------------------------------------------- #
+def _collect_requirements(notification: TenderNotification) -> list[Requirement]:
+    """Every document the bidder must produce, stated once.
+
+    Document-type eligibility criteria are folded in here rather than checked
+    separately: a tender that lists "Copy of GST registration" both as an
+    eligibility condition and in the document checklist is stating one
+    requirement twice, and showing it twice makes a clean bid look untidy.
+    """
+    documents = list(notification.mandatory_documents)
+    for criterion in notification.eligibility_criteria:
+        if criterion.type is CriterionType.DOCUMENT:
+            documents.append(
+                MandatoryDocument(
+                    doc_name=criterion.criterion,
+                    provenance=criterion.provenance,
+                )
+            )
+    return deduplicate(documents)
+
+
 def _check_documents(
     notification: TenderNotification,
     submission: VendorSubmission,
@@ -88,39 +113,44 @@ def _check_documents(
     haystack = [n for n in present_names + certificate_names if not contradicted(n)]
 
     items: list[GapItem] = []
-    for required in notification.mandatory_documents:
+    for requirement in _collect_requirements(notification):
         result = match_document(
-            required.doc_name,
+            requirement.primary.doc_name,
             haystack,
-            extra_aliases=required.aliases,
+            extra_aliases=requirement.aliases,
             use_embeddings=use_embeddings,
         )
-        items.append(_document_item(required.doc_name, required.provenance, result, declared_absent))
+        items.append(_document_item(requirement, result, declared_absent))
     return items
 
 
 def _document_item(
-    doc_name: str,
-    provenance: Provenance,
+    requirement: Requirement,
     result: MatchResult,
     declared_absent: set[str],
 ) -> GapItem:
+    doc_name = requirement.label
+    provenance = requirement.primary.provenance
+    base = dict(
+        requirement=f"Submit {doc_name}",
+        kind=RequirementKind.DOCUMENT,
+        required_value=doc_name,
+        notification_provenance=provenance,
+    )
+
     if result.matched and not result.is_uncertain:
         return GapItem(
-            requirement=f"Submit {doc_name}",
-            kind=RequirementKind.DOCUMENT,
             status=CheckStatus.MATCH,
             severity=Severity.INFO,
-            required_value=doc_name,
             found_value=result.matched_name,
             explanation=(
-                f"Found in your submission as “{result.matched_name}”."
+                f"Found in your submission as \u201c{result.matched_name}\u201d."
                 if result.method != "exact"
                 else "Found in your submission."
             ),
             match_method=result.method,
             match_score=result.score,
-            notification_provenance=provenance,
+            **base,
         )
 
     if result.matched and result.is_uncertain:
@@ -128,31 +158,38 @@ def _document_item(
         # Silently accepting it would tell a vendor they are covered when the
         # only evidence is two names that read alike.
         return GapItem(
-            requirement=f"Submit {doc_name}",
-            kind=RequirementKind.DOCUMENT,
             status=CheckStatus.PARTIAL,
             severity=Severity.REVIEW,
-            required_value=doc_name,
             found_value=result.matched_name,
             explanation=(
-                f"“{result.matched_name}” looks like it may satisfy this, but the "
-                f"names differ enough (similarity {result.score:.2f}) that you "
+                f"\u201c{result.matched_name}\u201d looks like it may satisfy this, but "
+                f"the names differ enough (similarity {result.score:.2f}) that you "
                 "should confirm it is the right document."
             ),
             match_method=result.method,
             match_score=result.score,
-            notification_provenance=provenance,
+            **base,
+        )
+
+    # Not found. Whether that disqualifies depends on whether the requirement
+    # binds THIS bidder. A JV agreement is not a gap for a sole proprietor, and
+    # reporting it as disqualifying buries the real failures in noise.
+    if requirement.applicability is not Applicability.ALWAYS:
+        return GapItem(
+            status=CheckStatus.MANUAL_CHECK,
+            severity=Severity.REVIEW,
+            found_value=None,
+            explanation=_conditional_explanation(requirement.applicability, doc_name),
+            match_score=result.score,
+            **base,
         )
 
     explicitly_absent = doc_name.lower() in declared_absent or any(
         normalise(doc_name) == normalise(a) for a in declared_absent
     )
     return GapItem(
-        requirement=f"Submit {doc_name}",
-        kind=RequirementKind.DOCUMENT,
         status=CheckStatus.MISSING,
         severity=Severity.DISQUALIFYING,
-        required_value=doc_name,
         found_value=None,
         explanation=(
             f"Your submission lists {doc_name} but marks it as not enclosed."
@@ -160,8 +197,29 @@ def _document_item(
             else f"No document matching {doc_name} was found in your submission."
         ),
         match_score=result.score,
-        notification_provenance=provenance,
+        **base,
     )
+
+
+_CONDITIONAL_TEXT = {
+    Applicability.JOINT_VENTURE: (
+        "This applies only if you are bidding as a joint venture or consortium. "
+        "If you are bidding on your own, it does not apply to you — confirm and "
+        "ignore."
+    ),
+    Applicability.CONCESSION: (
+        "This applies only if you are claiming a concession or preference (MSME, "
+        "startup, and similar). If you are not claiming one, it does not apply."
+    ),
+    Applicability.CONDITIONAL: (
+        "The tender marks this as conditional. Check whether it applies to your "
+        "bid; it is not automatically required."
+    ),
+}
+
+
+def _conditional_explanation(applicability: Applicability, doc_name: str) -> str:
+    return f"{doc_name} was not found. " + _CONDITIONAL_TEXT[applicability]
 
 
 # --------------------------------------------------------------------------- #
@@ -532,16 +590,8 @@ def build_gap_report(
             items.append(_check_numeric(criterion, submission))
         elif criterion.type is CriterionType.BOOLEAN:
             items.append(_check_boolean(criterion, submission))
-        else:  # DOCUMENT-type eligibility criterion
-            result = match_document(
-                criterion.criterion,
-                [d.doc_name for d in submission.documents_submitted if d.present]
-                + [c.name for c in submission.certifications if c.doc_present],
-                use_embeddings=use_embeddings,
-            )
-            items.append(
-                _document_item(criterion.criterion, criterion.provenance, result, set())
-            )
+        # DOCUMENT-type criteria are folded into _collect_requirements above, so
+        # a tender stating one requirement in two places yields one row.
 
     items += _check_format_rules(notification)
 

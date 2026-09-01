@@ -70,6 +70,7 @@ def ingest_notification(
     llm: LLMProvider | None = None,
     owner_user_id: uuid.UUID | None = None,
     index: bool = True,
+    on_node_complete=None,
 ) -> IngestReport:
     path = Path(path)
     report = IngestReport(file_name=path.name, doc_kind=DocumentKind.NOTIFICATION)
@@ -82,7 +83,9 @@ def ingest_notification(
     report.parse_warnings = document.parse_warnings
 
     started = time.perf_counter()
-    notification, result = extract_notification(document, llm=llm)
+    notification, result = extract_notification(
+        document, llm=llm, on_node_complete=on_node_complete
+    )
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
@@ -110,6 +113,7 @@ def ingest_submission(
     llm: LLMProvider | None = None,
     owner_user_id: uuid.UUID | None = None,
     index: bool = True,
+    on_node_complete=None,
 ) -> IngestReport:
     path = Path(path)
     report = IngestReport(file_name=path.name, doc_kind=DocumentKind.SUBMISSION)
@@ -123,7 +127,11 @@ def ingest_submission(
 
     started = time.perf_counter()
     submission, result = extract_submission(
-        document, vendor_id=vendor_id, tender_id=tender_id, llm=llm
+        document,
+        vendor_id=vendor_id,
+        tender_id=tender_id,
+        llm=llm,
+        on_node_complete=on_node_complete,
     )
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]

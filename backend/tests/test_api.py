@@ -76,9 +76,26 @@ def clean():
 
 @pytest.fixture
 def stubbed():
-    """Route handlers construct their own LLM; patch the factory they call."""
-    with patch("app.extraction.graph.get_llm", return_value=StubLLM()):
+    """Route handlers construct their own LLM; patch the factory they call.
+
+    Job submission is also made synchronous: uploads are queued to a thread pool
+    in production, but a test that races a background worker is a flaky test.
+    """
+    from app.api import jobs as job_runner
+
+    with patch("app.extraction.graph.get_llm", return_value=StubLLM()), patch.object(
+        job_runner, "submit", job_runner.run_inline
+    ):
         yield
+
+
+def _await_job(client, response) -> dict:
+    """Upload responses are 202 + a job id; resolve them to the finished job."""
+    assert response.status_code == 202, response.text
+    body = response.json()
+    job = client.get(body["poll_url"]).json()
+    assert job["status"] in {"succeeded", "partial", "failed"}, job
+    return job
 
 
 def _upload(client, pdf):
@@ -117,30 +134,89 @@ def test_health_reports_each_dependency_separately(client):
 # Upload
 # --------------------------------------------------------------------------- #
 @live
-def test_upload_notification_returns_extraction_summary(client, pdf, clean, stubbed):
+def test_upload_returns_immediately_with_a_job(client, pdf, clean, stubbed):
+    """Extraction takes minutes under free-tier pacing. Holding the HTTP
+    connection open for that long is a production failure, not a slow request."""
     response = _upload(client, pdf)
-    assert response.status_code == 201
+    assert response.status_code == 202
     body = response.json()
-    assert body["ok"] is True
-    assert body["identifier"] == TENDER_ID
-    assert body["pages"] == 3
-    assert body["chunks_indexed"] > 0
-    assert body["extraction_errors"] == []
+    assert body["status"] == "queued"
+    assert body["poll_url"].endswith(body["job_id"])
+    assert body["file_name"] == "NOTIF_ITservices_01.pdf"
+
+
+@live
+def test_job_reports_a_completed_extraction(client, pdf, clean, stubbed):
+    job = _await_job(client, _upload(client, pdf))
+    assert job["status"] == "succeeded"
+    assert job["progress"] == 1.0
+    assert job["steps_done"] == job["steps_total"] == 6
+    assert job["tender_id"] == TENDER_ID
+
+    result = job["result"]
+    assert result["ok"] is True
+    assert result["pages"] == 3
+    assert result["chunks_indexed"] > 0
+    assert result["extraction_errors"] == []
+    assert set(result["node_timings"]) == {
+        "header", "eligibility", "documents", "evaluation", "technical", "format_rules",
+    }
+
+
+@live
+def test_partial_extraction_is_reported_as_partial_not_failed(client, pdf, clean):
+    """A run with a failed field group still stored usable data. Calling that
+    'failed' would tell the user to discard a document that is 5/6 extracted."""
+    from app.api import jobs as job_runner
+
+    with patch(
+        "app.extraction.graph.get_llm", return_value=StubLLM(fail_on={"TechnicalList"})
+    ), patch.object(job_runner, "submit", job_runner.run_inline):
+        job = _await_job(client, _upload(client, pdf))
+
+    assert job["status"] == "partial"
+    assert len(job["result"]["extraction_errors"]) == 1
+    assert job["result"]["identifier"] == TENDER_ID
+
+
+def test_unknown_job_is_404(client):
+    import uuid as _uuid
+
+    assert client.get(f"/api/jobs/{_uuid.uuid4()}").status_code == 404
+
+
+def test_malformed_job_id_is_400_not_500(client):
+    assert client.get("/api/jobs/not-a-uuid").status_code == 400
 
 
 @live
 def test_uploaded_notification_appears_in_the_listing(client, pdf, clean, stubbed):
-    _upload(client, pdf)
-    listing = client.get("/api/notifications").json()
-    entry = next(n for n in listing if n["tender_id"] == TENDER_ID)
+    _await_job(client, _upload(client, pdf))
+    body = client.get("/api/notifications").json()
+    entry = next(n for n in body["items"] if n["tender_id"] == TENDER_ID)
     assert entry["eligibility_count"] == 3
     assert entry["document_count"] == 5
     assert entry["submission_count"] == 0
 
 
 @live
+def test_listing_is_paginated(client, pdf, clean, stubbed):
+    _await_job(client, _upload(client, pdf))
+    body = client.get("/api/notifications?limit=1&offset=0").json()
+    assert len(body["items"]) <= 1
+    assert body["page"]["limit"] == 1
+    assert body["page"]["offset"] == 0
+    assert body["page"]["total"] >= 1
+
+
+def test_pagination_rejects_absurd_limits(client):
+    assert client.get("/api/notifications?limit=100000").status_code == 422
+    assert client.get("/api/notifications?offset=-1").status_code == 422
+
+
+@live
 def test_full_notification_includes_provenance(client, pdf, clean, stubbed):
-    _upload(client, pdf)
+    _await_job(client, _upload(client, pdf))
     body = client.get(f"/api/notifications/{TENDER_ID}").json()
     turnover = next(
         c for c in body["eligibility_criteria"] if "turnover" in c["criterion"].lower()
@@ -174,7 +250,7 @@ def test_unknown_tender_is_a_clear_404(client):
 
 @live
 def test_unknown_vendor_against_a_real_tender_is_404(client, pdf, clean, stubbed):
-    _upload(client, pdf)
+    _await_job(client, _upload(client, pdf))
     response = client.post(
         "/api/gap-report", json={"tender_id": TENDER_ID, "vendor_id": "NOBODY"}
     )
@@ -186,9 +262,22 @@ def test_unknown_vendor_against_a_real_tender_is_404(client, pdf, clean, stubbed
 # Gap report (Sections 4.3, 4.4, 4.6)
 # --------------------------------------------------------------------------- #
 @live
+def test_bid_against_a_nonexistent_tender_fails_fast(client, pdf, stubbed):
+    """Validated before queueing: otherwise the user waits three minutes to be
+    told the tender does not exist."""
+    with pdf.open("rb") as handle:
+        response = client.post(
+            "/api/submissions",
+            files={"file": (pdf.name, handle, "application/pdf")},
+            data={"vendor_id": "V-1", "tender_id": "NO/SUCH/TENDER"},
+        )
+    assert response.status_code == 404
+
+
+@live
 def test_gap_report_end_to_end(client, pdf, clean, stubbed):
-    _upload(client, pdf)
-    assert _upload_bid(client, pdf).status_code == 201
+    _await_job(client, _upload(client, pdf))
+    _await_job(client, _upload_bid(client, pdf))
 
     body = client.post(
         "/api/gap-report", json={"tender_id": TENDER_ID, "vendor_id": "V-04"}
@@ -214,8 +303,8 @@ def test_gap_report_end_to_end(client, pdf, clean, stubbed):
 def test_gap_report_flags_the_missing_iso_certificate(client, pdf, clean, stubbed):
     """The stub bid marks the ISO certificate as not enclosed, and the tender
     requires it -- that must come back as a disqualifying gap."""
-    _upload(client, pdf)
-    _upload_bid(client, pdf)
+    _await_job(client, _upload(client, pdf))
+    _await_job(client, _upload_bid(client, pdf))
     body = client.post(
         "/api/gap-report", json={"tender_id": TENDER_ID, "vendor_id": "V-04"}
     ).json()
@@ -232,7 +321,7 @@ def test_gap_report_flags_the_missing_iso_certificate(client, pdf, clean, stubbe
 # --------------------------------------------------------------------------- #
 @live
 def test_ask_retrieves_and_cites(client, pdf, clean, stubbed):
-    _upload(client, pdf)
+    _await_job(client, _upload(client, pdf))
 
     scripted = StubLLM()
     scripted.generate_text = lambda prompt, system=None: "The EMD is Rs. 2,00,000 [1]."
@@ -254,7 +343,7 @@ def test_ask_retrieves_and_cites(client, pdf, clean, stubbed):
 def test_ask_with_no_relevant_content_declines_rather_than_inventing(
     client, pdf, clean, stubbed
 ):
-    _upload(client, pdf)
+    _await_job(client, _upload(client, pdf))
     scripted = StubLLM()
     scripted.generate_text = lambda prompt, system=None: (
         "The uploaded documents do not state this."

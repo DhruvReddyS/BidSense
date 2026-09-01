@@ -1,0 +1,207 @@
+"""Background ingestion runner.
+
+Uploads return a job id immediately and the extraction runs on a worker thread.
+A thread pool rather than a task queue is a deliberate choice for this system's
+scale: the work is I/O-bound (waiting on the LLM), the bottleneck is a free-tier
+quota of a few requests per minute, and adding a broker would be infrastructure
+without benefit. The job table is in Postgres, so swapping the executor for
+Celery or RQ later is a change to this file only.
+"""
+
+from __future__ import annotations
+
+import logging
+import shutil
+import threading
+import traceback
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from pathlib import Path
+
+from app.db.models import IngestJob, JobKind, JobStatus
+from app.db.session import session_scope
+from app.extraction import ingest_notification, ingest_submission
+from app.extraction.graph import notification_node_names, vendor_node_names
+
+logger = logging.getLogger(__name__)
+
+# Small on purpose. Concurrent extractions all contend for the same LLM quota,
+# so more workers would not finish sooner -- they would just queue inside the
+# rate limiter while holding database sessions open.
+_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingest")
+_lock = threading.Lock()
+
+
+def create_job(
+    kind: JobKind,
+    file_name: str,
+    *,
+    tender_id: str | None = None,
+    vendor_id: str | None = None,
+    pages_total: int | None = None,
+) -> uuid.UUID:
+    steps = len(notification_node_names() if kind is JobKind.NOTIFICATION else vendor_node_names())
+    with session_scope() as session:
+        job = IngestJob(
+            kind=kind,
+            status=JobStatus.QUEUED,
+            file_name=file_name,
+            tender_id=tender_id,
+            vendor_id=vendor_id,
+            pages_total=pages_total,
+            steps_total=steps,
+            stage="queued",
+        )
+        session.add(job)
+        session.flush()
+        return job.id
+
+
+def _update(job_id: uuid.UUID, **fields) -> None:
+    with session_scope() as session:
+        job = session.get(IngestJob, job_id)
+        if job is None:      # pragma: no cover - job deleted mid-run
+            return
+        for key, value in fields.items():
+            setattr(job, key, value)
+
+
+_STAGE_LABELS = {
+    "header": "tender details and deadlines",
+    "eligibility": "eligibility criteria",
+    "documents": "required documents",
+    "evaluation": "evaluation criteria",
+    "technical": "technical requirements",
+    "format_rules": "submission rules",
+    "vendor_header": "bidder details",
+    "turnover": "turnover figures",
+    "certifications": "certifications",
+    "past_projects": "past projects",
+    "submitted_documents": "enclosed documents",
+}
+
+
+def _progress_callback(job_id: uuid.UUID):
+    """Report extractor starts and completions.
+
+    Completions alone leave the bar at 0% for the two minutes the first
+    extractor can take under free-tier pacing, which reads as a hung request.
+    Reporting starts lets the UI name what is in flight straight away.
+    """
+    state = {"done": 0, "running": set()}
+
+    def report(node: str, event: str = "complete") -> None:
+        with _lock:
+            label = _STAGE_LABELS.get(node, node.replace("_", " "))
+            if event == "start":
+                state["running"].add(node)
+                stage = f"reading {label}"
+            else:
+                state["done"] += 1
+                state["running"].discard(node)
+                remaining = sorted(state["running"])
+                stage = (
+                    f"reading {_STAGE_LABELS.get(remaining[0], remaining[0])}"
+                    if remaining
+                    else f"finished {label}"
+                )
+            _update(job_id, steps_done=state["done"], stage=stage)
+
+    return report
+
+
+def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
+    _update(
+        job_id,
+        status=JobStatus.RUNNING,
+        stage="parsing document",
+        started_at=datetime.now(timezone.utc),
+    )
+    try:
+        runner = ingest_notification if kind is JobKind.NOTIFICATION else ingest_submission
+        report = _progress_callback(job_id)
+        _update(job_id, stage="extracting")
+        result = runner(path, on_node_complete=report, **kwargs)
+
+        # A partial extraction is stored and flagged, never discarded: the
+        # fields that did land are still worth reviewing.
+        status = JobStatus.PARTIAL if result.extraction_errors else JobStatus.SUCCEEDED
+        _update(
+            job_id,
+            status=status,
+            stage="done",
+            steps_done=result_steps(result),
+            row_id=result.row_id,
+            tender_id=result.identifier if kind is JobKind.NOTIFICATION else kwargs.get("tender_id"),
+            result={
+                "ok": result.ok,
+                "identifier": result.identifier,
+                "pages": result.pages,
+                "ocr_pages": result.ocr_pages,
+                "chunks_indexed": result.chunks_indexed,
+                "parse_warnings": result.parse_warnings,
+                "extraction_errors": result.extraction_errors,
+                "seconds": round(result.total_seconds, 2),
+                "node_timings": {k: round(v, 2) for k, v in result.node_timings},
+            },
+            finished_at=datetime.now(timezone.utc),
+        )
+        logger.info("job %s finished: %s", job_id, status)
+    except Exception as exc:
+        logger.exception("job %s failed", job_id)
+        _update(
+            job_id,
+            status=JobStatus.FAILED,
+            stage="failed",
+            error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=3)}",
+            finished_at=datetime.now(timezone.utc),
+        )
+    finally:
+        # The upload was written to a temp directory; it is not needed once the
+        # text is extracted and indexed.
+        shutil.rmtree(path.parent, ignore_errors=True)
+
+
+def result_steps(result) -> int:
+    return len(result.node_timings)
+
+
+def submit(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
+    """Queue the extraction. Falls back to running inline if the pool is gone.
+
+    The fallback matters during interpreter shutdown (and in tests): dropping
+    the work silently would leave a job stuck in QUEUED for ever.
+    """
+    try:
+        _executor.submit(_run, job_id, kind, path, **kwargs)
+    except RuntimeError:
+        logger.warning("executor unavailable; running job %s inline", job_id)
+        _run(job_id, kind, path, **kwargs)
+
+
+def run_inline(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
+    """Run a job on the calling thread. Used by tests to keep them deterministic."""
+    _run(job_id, kind, path, **kwargs)
+
+
+def reap_stale_jobs() -> int:
+    """Mark jobs abandoned by a restart as failed.
+
+    Without this a process kill leaves rows stuck in RUNNING for ever, and the
+    UI polls them until the user gives up. Called once at startup.
+    """
+    from sqlalchemy import select
+
+    with session_scope() as session:
+        stale = session.scalars(
+            select(IngestJob).where(
+                IngestJob.status.in_([JobStatus.QUEUED, JobStatus.RUNNING])
+            )
+        ).all()
+        for job in stale:
+            job.status = JobStatus.FAILED
+            job.stage = "interrupted"
+            job.error = "The server restarted while this job was running. Re-upload the file."
+            job.finished_at = datetime.now(timezone.utc)
+        return len(stale)
