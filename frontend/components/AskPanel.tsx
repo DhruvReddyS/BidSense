@@ -57,13 +57,24 @@ export function AskPanel({
   }
 
   return (
-    <Card className="flex min-h-[26rem] flex-col p-5">
-      <div>
-        <h2 className="text-sm font-semibold tracking-tight">Ask this tender</h2>
-        <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">
-          Answers come only from the uploaded document, and every one cites the
-          clause it came from. If the document does not say, the answer says so.
-        </p>
+    <Card className="flex min-h-[30rem] flex-col p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold tracking-tight">Ask this tender</h2>
+          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
+            Answers come only from the uploaded document and every one cites the
+            clause it came from. If the document does not say, the answer says
+            so rather than filling the gap.
+          </p>
+        </div>
+        {turns.length > 0 && (
+          <button
+            onClick={() => setTurns([])}
+            className="btn btn-subtle !px-2 !py-1 text-xs"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       {turns.length === 0 && (
@@ -84,8 +95,16 @@ export function AskPanel({
       <div className="mt-5 flex-1 space-y-6">
         {turns.map((turn, i) => (
           <div key={i} className="animate-rise">
-            <p className="text-sm font-medium">{turn.question}</p>
-            <div className="mt-2">
+            <div className="flex gap-2.5">
+              <span
+                className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[hsl(var(--surface-2))] text-[10px] font-semibold text-[hsl(var(--fg-muted))]"
+                aria-hidden
+              >
+                Q
+              </span>
+              <p className="text-sm font-medium leading-snug">{turn.question}</p>
+            </div>
+            <div className="mt-2.5 pl-[1.9rem]">
               {turn.error ? (
                 <p className="rounded-lg border border-[hsl(var(--bad-border))] bg-[hsl(var(--bad-soft))] px-3 py-2 text-sm text-[hsl(var(--bad))]">
                   {turn.error}
@@ -109,7 +128,7 @@ export function AskPanel({
           e.preventDefault();
           void ask(question);
         }}
-        className="mt-5 flex gap-2 border-t pt-4"
+        className="mt-6 flex gap-2 border-t pt-5"
       >
         <input
           value={question}

@@ -154,13 +154,58 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
             job_id,
             status=JobStatus.FAILED,
             stage="failed",
-            error=f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=3)}",
+            error=_explain(exc),
             finished_at=datetime.now(timezone.utc),
         )
     finally:
         # The upload was written to a temp directory; it is not needed once the
         # text is extracted and indexed.
         shutil.rmtree(path.parent, ignore_errors=True)
+
+
+# Failures a user can actually act on, translated from the exception text.
+# Anything unmatched keeps the traceback, which is what a developer needs.
+_KNOWN_FAILURES: list[tuple[str, str]] = [
+    (
+        "uq_vendor_per_tender",
+        "A bid with this reference is already recorded against this tender. "
+        "Wait for the earlier upload to finish, or use a different reference.",
+    ),
+    (
+        "every configured model has exhausted",
+        "The daily free-tier quota is spent on every configured model. Wait for "
+        "the quota to reset, add more models to GEMINI_FALLBACK_MODELS, or "
+        "switch LLM_PROVIDER to ollama.",
+    ),
+    (
+        "cut off at the output token limit",
+        "The document produced more content than fits in one model response. "
+        "Raise LLM_MAX_OUTPUT_TOKENS, or narrow the page selection for the "
+        "affected section.",
+    ),
+    (
+        "PERMISSION_DENIED",
+        "The language model rejected the API key. Check GEMINI_API_KEY, or "
+        "switch LLM_PROVIDER to ollama.",
+    ),
+    (
+        "Unsupported format",
+        "That file type cannot be read. Upload a PDF or DOCX.",
+    ),
+]
+
+
+def _explain(exc: Exception) -> str:
+    """A message the person who uploaded the file can act on.
+
+    A raw IntegrityError with a database traceback tells a bidder nothing about
+    what to do next, and these failure modes are all recoverable by the user.
+    """
+    text = str(exc)
+    for marker, message in _KNOWN_FAILURES:
+        if marker in text:
+            return message
+    return f"{type(exc).__name__}: {exc}\n{traceback.format_exc(limit=3)}"
 
 
 def result_steps(result) -> int:

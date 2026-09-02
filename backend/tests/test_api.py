@@ -463,3 +463,42 @@ def test_a_recently_started_job_is_left_alone(client):
         session.execute(
             text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id}
         )
+
+
+# --------------------------------------------------------------------------- #
+# Failure messages a user can act on
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("raised", "expect"),
+    [
+        (
+            'duplicate key value violates unique constraint "uq_vendor_per_tender"',
+            "already recorded against this tender",
+        ),
+        (
+            "gemini: every configured model has exhausted its daily free-tier quota",
+            "daily free-tier quota is spent",
+        ),
+        (
+            "gemini response was cut off at the output token limit (32768)",
+            "more content than fits",
+        ),
+        ("403 PERMISSION_DENIED. Your project has been denied", "rejected the API key"),
+        ("Unsupported format '.txt'", "PDF or DOCX"),
+    ],
+)
+def test_known_failures_are_explained_not_dumped(raised: str, expect: str):
+    """A raw IntegrityError with a database traceback tells a bidder nothing
+    about what to do next, and these failures are all user-recoverable."""
+    from app.api.jobs import _explain
+
+    assert expect in _explain(RuntimeError(raised))
+
+
+def test_an_unrecognised_failure_keeps_its_traceback():
+    """Translating everything would hide the failures a developer needs to see."""
+    from app.api.jobs import _explain
+
+    message = _explain(ValueError("something entirely unexpected"))
+    assert "ValueError" in message
+    assert "something entirely unexpected" in message
