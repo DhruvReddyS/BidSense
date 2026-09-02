@@ -163,6 +163,16 @@ def _document_item(
         kind=RequirementKind.DOCUMENT,
         required_value=doc_name,
         notification_provenance=provenance,
+        # Carried on EVERY branch, not only the not-found one. A conditional
+        # document that near-matches leaves through the PARTIAL branch above,
+        # and setting this only on the not-found path dropped the "only if you
+        # are a joint venture" qualifier from exactly those rows -- which on the
+        # GHMC tender is most of them.
+        conditional_on=(
+            None
+            if requirement.applicability is Applicability.ALWAYS
+            else _CONDITION_LABELS[requirement.applicability]
+        ),
     )
 
     if result.matched and not result.is_uncertain:
@@ -268,6 +278,15 @@ _CONDITIONAL_TEXT = {
         "The tender marks this as conditional. Check whether it applies to your "
         "bid; it is not automatically required."
     ),
+}
+
+
+# Short form of the same condition, for the action list. The explanations above
+# are a paragraph each, which is right in a report row and wrong in a to-do line.
+_CONDITION_LABELS = {
+    Applicability.JOINT_VENTURE: "you are bidding as a joint venture or consortium",
+    Applicability.CONCESSION: "you are claiming an MSME, startup or similar concession",
+    Applicability.CONDITIONAL: "this clause applies to your bid",
 }
 
 
@@ -726,6 +745,20 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
             action = item.explanation
         elif group is ActionGroup.CLARIFY:
             action = f"State clearly in your bid: {item.requirement}"
+        elif item.conditional_on and item.found_value:
+            action = (
+                f"Only if {item.conditional_on}: confirm "
+                f"\u201c{item.found_value}\u201d satisfies {_verb(item.requirement)}. "
+                "Otherwise this does not apply to you."
+            )
+        elif item.conditional_on:
+            # Named as conditional in the to-do itself. "Check yourself: Submit
+            # Joint Venture Agreement" reads as an instruction to a sole
+            # proprietor who has no such agreement and needs none.
+            action = (
+                f"Only if {item.conditional_on}: {_verb(item.requirement)}. "
+                "Otherwise this does not apply to you."
+            )
         else:
             action = (
                 f"Confirm \u201c{item.found_value}\u201d satisfies: {item.requirement}"
@@ -739,6 +772,7 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
                 severity=item.severity,
                 group=group,
                 requirement=item.requirement,
+                applies_only_if=item.conditional_on,
                 clause_ref=(
                     item.notification_provenance.clause_ref
                     if item.notification_provenance
@@ -747,8 +781,28 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
             )
         )
 
-    actions.sort(key=lambda a: (_SEVERITY_ORDER[a.severity], _GROUP_ORDER[a.group]))
+    # Conditional items sink to the bottom of their band. They are the least
+    # likely to need doing -- most bidders are not a joint venture -- and on a
+    # real tender there are enough of them to bury the ones that are.
+    actions.sort(
+        key=lambda a: (
+            _SEVERITY_ORDER[a.severity],
+            _GROUP_ORDER[a.group],
+            1 if a.applies_only_if else 0,
+        )
+    )
     return actions
+
+
+def _verb(requirement: str) -> str:
+    """Turn a requirement line into something that reads as an instruction.
+
+    Requirements arrive as "Submit X" from the document check and as a bare
+    clause from everywhere else, so a blanket prefix produces either "Only if...:
+    Submit Submit X" or a sentence with no verb at all.
+    """
+    text = requirement.strip()
+    return text[0].lower() + text[1:] if text[:1].isupper() and " " in text else text
 
 
 # --------------------------------------------------------------------------- #

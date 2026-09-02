@@ -187,3 +187,134 @@ def test_a_normal_answer_is_left_alone():
     llm = ScriptedLLM("The EMD is Rs. 2,00,000 [1] and bids close on 15 March 2026 [1].")
     result = answer_question("What is the EMD?", SOURCES, llm=llm)
     assert result.answer.startswith("The EMD is Rs. 2,00,000")
+
+
+# --------------------------------------------------------------------------- #
+# Three-state retrieval confidence (Stage 4.11)
+# --------------------------------------------------------------------------- #
+def _chunk(score: float, text: str = "The EMD is Rs. 2,00,000."):
+    from app.rag.retrieve import RetrievedChunk
+
+    return RetrievedChunk(
+        text=text, score=score, doc_kind="notification", source_file="n.pdf",
+        source_page=2, clause_ref="3.1", vendor_id=None, tender_id="T-1",
+        section="eligibility",
+    )
+
+
+def test_confidence_is_taken_from_the_best_chunk_not_the_average():
+    """One strongly matching clause is enough to answer a question about that
+    clause. Averaging it against five pieces of surrounding boilerplate punishes
+    exactly the queries retrieval got right -- a precise question has the fewest
+    good matches, not the most."""
+    from app.rag.answer import Confidence, classify_confidence
+
+    chunks = [_chunk(0.78)] + [_chunk(0.30) for _ in range(5)]
+    assert classify_confidence(chunks) is Confidence.HIGH
+
+
+@pytest.mark.parametrize(
+    "best, expected",
+    [
+        (0.78, "high"),   # measured: answerable questions land 0.65-0.77
+        (0.65, "high"),
+        (0.58, "low"),    # measured: vague questions land 0.48-0.58
+        (0.47, "low"),
+        (0.40, "none"),   # measured: off-topic lands 0.40-0.55
+    ],
+)
+def test_the_three_states_match_the_measured_score_bands(best, expected):
+    from app.rag.answer import classify_confidence
+
+    assert classify_confidence([_chunk(best)]).value == expected
+
+
+def test_a_question_nothing_matches_never_reaches_the_model():
+    """Sending loosely related chunks anyway invites the model to stitch an
+    answer out of whatever it was handed -- and every citation in that answer
+    would be REAL, which is exactly what makes it hard to catch."""
+    from app.rag.answer import NOT_COVERED, answer_question
+
+    llm = CountingLLM(["The EMD is Rs. 2,00,000 [1]."])
+    answer = answer_question("Who won the 2019 cricket world cup?", [_chunk(0.40)], llm=llm)
+
+    assert llm.calls == 0, "a model call was spent on a question nothing matched"
+    assert answer.answer == NOT_COVERED
+    assert answer.answered is False
+    assert answer.confidence.value == "none"
+
+
+def test_a_declined_question_still_shows_what_was_found():
+    """The passages are returned so the vendor can judge for themselves rather
+    than being told only that we gave up."""
+    from app.rag.answer import answer_question
+
+    answer = answer_question("unrelated", [_chunk(0.40)], llm=CountingLLM([""]))
+    assert len(answer.retrieved) == 1
+    assert answer.retrieved[0].label
+
+
+def test_a_weak_match_is_answered_but_says_so():
+    from app.rag.answer import answer_question
+
+    llm = CountingLLM(["The penalty is 0.5% per week [1]."])
+    answer = answer_question("Tell me about penalties", [_chunk(0.52)], llm=llm)
+
+    assert llm.calls == 1
+    assert answer.answered
+    assert answer.confidence.value == "low"
+    assert answer.caveat and "weaker evidence" in answer.caveat
+
+
+def test_a_strong_match_carries_no_caveat():
+    """The caveat must mean something. Attaching it to every answer would make
+    it invisible."""
+    from app.rag.answer import answer_question
+
+    answer = answer_question(
+        "What is the EMD?", [_chunk(0.74)],
+        llm=CountingLLM(["The EMD is Rs. 2,00,000 [1]."]),
+    )
+    assert answer.confidence.value == "high"
+    assert answer.caveat is None
+
+
+def test_a_weak_match_where_the_model_declines_carries_no_caveat():
+    """"The documents do not state this" is already the honest answer. Telling a
+    vendor the evidence was thin for a non-answer is noise."""
+    from app.rag.answer import NO_ANSWER, answer_question
+
+    answer = answer_question(
+        "something", [_chunk(0.50)], llm=CountingLLM([NO_ANSWER])
+    )
+    assert answer.confidence.value == "low"
+    assert answer.answered is False
+    assert answer.caveat is None
+
+
+class CountingLLM:
+    """Returns canned text and counts how often it was actually called.
+
+    Separate from `ScriptedLLM` above because these tests assert that the model
+    is NOT called, which needs a counter rather than a recorded prompt list.
+    """
+
+    name = "scripted"
+    max_concurrency = 1
+
+    def __init__(self, replies):
+        self._replies = list(replies)
+        self.calls = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def generate_text(self, prompt, *, system=None):
+        self.calls += 1
+        return self._replies[min(self.calls - 1, len(self._replies) - 1)]
+
+    def generate_structured(self, prompt, schema, *, system=None):
+        raise NotImplementedError

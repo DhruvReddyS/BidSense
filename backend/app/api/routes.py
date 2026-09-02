@@ -27,7 +27,10 @@ from app.api.schemas import (
     AskRequest,
     AskResponse,
     ChangedFieldOut,
+    CompletionOut,
     CorrigendumOut,
+    DataQualityOut,
+    ValidationFindingOut,
     GapReportRequest,
     GapReportResponse,
     HealthResponse,
@@ -42,6 +45,13 @@ from app.db.models import IngestJob, JobKind
 from app.compliance.gap import build_gap_report
 from app.corrigendum.diff import FIELD_LABELS
 from app.corrigendum.staleness import mark_report_generated, staleness_for
+from app.extraction.validate import (
+    Finding,
+    Severity as ValidationSeverity,
+    summarise,
+    validate_notification,
+    validate_submission,
+)
 from app.config import settings
 from app.db.repository import (
     count_notifications,
@@ -380,9 +390,40 @@ def gap_report(
     notification_row = require_notification(session, request.tender_id)
     submission_row = require_submission(session, request.tender_id, request.vendor_id)
 
-    report = build_gap_report(
-        to_notification_schema(notification_row),
-        to_submission_schema(submission_row),
+    notification = to_notification_schema(notification_row)
+    submission = to_submission_schema(submission_row)
+    report = build_gap_report(notification, submission)
+
+    # Re-validated here rather than read back from the ingest job: this checks
+    # what is actually STORED, which is what the report was computed from. A
+    # job's findings describe the run, and the two can diverge after a partial
+    # re-extraction.
+    findings = [
+        ValidationFindingOut(
+            field=f.field, severity=f.severity.value, message=f.message,
+            value=f.value, affects_confidence=f.affects_confidence, source=source,
+        )
+        for source, items in (
+            ("notification", validate_notification(notification)),
+            ("bid", validate_submission(submission)),
+        )
+        for f in items
+    ]
+    quality = DataQualityOut(
+        ok=not any(f.affects_confidence for f in findings),
+        banner=summarise(
+            [
+                Finding(
+                    field=f.field,
+                    severity=ValidationSeverity(f.severity),
+                    message=f.message,
+                    value=f.value,
+                    affects_confidence=f.affects_confidence,
+                )
+                for f in findings
+            ]
+        ),
+        findings=findings,
     )
 
     # Stamped on the FIRST report and on an explicit re-check, never on every
@@ -398,6 +439,15 @@ def gap_report(
         report=report,
         verdict=report.verdict,
         counts=report.counts,
+        data_quality=quality,
+        action_counts=report.action_counts,
+        completion=CompletionOut(
+            satisfied=report.completion.satisfied,
+            total=report.completion.total,
+            undetermined=report.completion.undetermined,
+            label=report.completion.label,
+            caveat=report.completion.caveat,
+        ),
         staleness=StalenessOut(
             stale=state.stale,
             banner=state.banner,
@@ -433,4 +483,8 @@ def ask(request: AskRequest, session: Session = Depends(get_db)) -> AskResponse:
         )
 
     answer = answer_question(request.question, chunks)
-    return AskResponse(answer=answer, grounded=answer.is_grounded)
+    return AskResponse(
+        answer=answer,
+        grounded=answer.is_grounded,
+        confidence=answer.confidence.value,
+    )

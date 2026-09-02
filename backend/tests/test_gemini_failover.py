@@ -124,3 +124,109 @@ def test_truncated_response_is_named_not_left_as_a_json_error(provider):
 
     with pytest.raises(LLMError, match="cut off at the output token limit"):
         provider.generate_structured("hi", RawHeader)
+
+
+# --------------------------------------------------------------------------- #
+# Concurrent failover: the fan-out must retire a model ONCE, not once per thread
+# --------------------------------------------------------------------------- #
+def test_a_parallel_fan_out_spends_one_request_discovering_a_dead_model(provider):
+    """Six extractors start together and all pick the same model.
+
+    Before the post-slot re-check, every one of them queued behind the rate
+    limiter and spent its turn finding out the model was already retired. At the
+    free tier's 5 requests per minute that is roughly a minute of wall clock
+    burned per model, on a run whose entire budget is a few minutes. Observed in
+    a real run as five identical "quota exhausted" lines for one model.
+
+    Asserted on the number of requests actually issued against the dead model,
+    not on the log output -- the log is a symptom, the wasted request is the cost.
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    attempts: list[str] = []
+    lock = threading.Lock()
+
+    def fake_generate_content(model, contents, config):
+        with lock:
+            attempts.append(model)
+        if model == provider._candidates[0]:
+            raise RuntimeError(DAILY)
+        return _response()
+
+    provider._client.models.generate_content.side_effect = fake_generate_content
+    # Pacing is what creates the window; keep it, but small enough to be a test.
+    provider._limiter = _FastLimiter()
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = [
+            pool.submit(provider._call, "prompt", {}, "generate_text") for _ in range(6)
+        ]
+        for future in results:
+            future.result()
+
+    dead = provider._candidates[0]
+    spent_on_dead = attempts.count(dead)
+    assert spent_on_dead == 1, (
+        f"{spent_on_dead} requests were spent on a model already known to be "
+        f"exhausted (attempts: {attempts})"
+    )
+    assert len(attempts) == 7, f"expected 1 doomed + 6 real requests, got {attempts}"
+
+
+def test_every_caller_still_gets_an_answer_after_the_failover(provider):
+    """The saving must not come from dropping work. All six still succeed."""
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    lock = threading.Lock()
+    calls: list[str] = []
+
+    def fake_generate_content(model, contents, config):
+        with lock:
+            calls.append(model)
+        if model == provider._candidates[0]:
+            raise RuntimeError(DAILY)
+        return _response()
+
+    provider._client.models.generate_content.side_effect = fake_generate_content
+    provider._limiter = _FastLimiter()
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        answers = [
+            f.result()
+            for f in [pool.submit(provider._call, "p", {}, "generate_text") for _ in range(6)]
+        ]
+    assert len(answers) == 6
+    assert all(a is not None for a in answers)
+
+
+def test_all_models_retired_stops_calling_rather_than_firing_a_doomed_request(provider):
+    """With nothing live left, the actionable quota error is raised without
+    spending another request on a model already known to be dead."""
+    attempts: list[str] = []
+
+    def fake_generate_content(model, contents, config):
+        attempts.append(model)
+        raise RuntimeError(DAILY)
+
+    provider._client.models.generate_content.side_effect = fake_generate_content
+    provider._limiter = _FastLimiter()
+
+    with pytest.raises(LLMError) as exc:
+        provider._call("prompt", {}, "generate_text")
+
+    assert "every configured model has exhausted" in str(exc.value)
+    # One request per model, and not one more.
+    assert len(attempts) == len(provider._candidates), attempts
+
+
+class _FastLimiter:
+    """A rate limiter that still serialises callers but does not sleep for real."""
+
+    def __init__(self):
+        self._lock = __import__("threading").Lock()
+
+    def acquire(self):
+        with self._lock:
+            __import__("time").sleep(0.01)

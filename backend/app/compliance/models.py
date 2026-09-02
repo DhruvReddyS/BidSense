@@ -58,6 +58,12 @@ class GapItem(BaseModel):
     is_mandatory: bool = True
     match_method: str | None = None
     match_score: float | None = None
+    #: Set when the requirement binds only some bidders (a JV agreement, an MSME
+    #: concession). Carried through to the action list so a sole proprietor is
+    #: not handed "Check yourself: submit your Joint Venture Agreement" -- on the
+    #: GHMC tender that wording accounted for nine of a compliant bidder's
+    #: twenty-three to-dos, none of which applied to them.
+    conditional_on: str | None = None
 
     notification_provenance: Provenance | None = None
     submission_provenance: Provenance | None = None
@@ -125,6 +131,53 @@ class ActionItem(BaseModel):
     group: ActionGroup
     requirement: str
     clause_ref: str | None = None
+    #: Non-null when this only applies to some bidders. The UI groups these
+    #: separately; they are still listed, because deciding on the vendor's
+    #: behalf that they are not a joint venture is not ours to make.
+    applies_only_if: str | None = None
+
+    @property
+    def is_blocking(self) -> bool:
+        """A to-do that stops the bid going in, as opposed to one to check."""
+        return self.group in (ActionGroup.HARD_FAIL, ActionGroup.UPLOAD)
+
+
+class Completion(BaseModel):
+    """A count of mandatory requirements satisfied. Explicitly NOT a score.
+
+    Section 4.4 forbids inventing a score the tender did not publish, and that
+    rule is a credibility feature rather than a limitation -- a number a vendor
+    cannot trace to a clause is worse than no number. This does not break it:
+    every unit here is one requirement, read from the tender, checked against
+    the bid, and clickable through to both. Nothing is weighted, nothing is
+    combined, and two tenders' counts are not comparable.
+
+    The distinction is thin enough that it has to be stated in the UI copy, not
+    only in this docstring -- a bare "7/9" beside a progress bar reads as a
+    score to every person who has ever seen one. `caveat` is that copy, carried
+    with the number so the two cannot be separated.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    satisfied: int
+    total: int
+    #: Mandatory requirements that could not be decided either way. Counted
+    #: separately because folding them into "not satisfied" would report a
+    #: vendor as failing something we merely could not read.
+    undetermined: int = 0
+
+    @property
+    def label(self) -> str:
+        return f"{self.satisfied} of {self.total} mandatory requirements satisfied"
+
+    @property
+    def caveat(self) -> str:
+        return (
+            "This is a count of requirements met, not a score. The tender does "
+            "not publish weightings, so nothing here is weighted and this number "
+            "cannot be compared against another tender's."
+        )
 
 
 class GapReport(BaseModel):
@@ -138,6 +191,45 @@ class GapReport(BaseModel):
     items: list[GapItem] = Field(default_factory=list)
     score_preview: ScorePreview
     action_list: list[ActionItem] = Field(default_factory=list)
+
+    @property
+    def completion(self) -> Completion:
+        """Mandatory requirements satisfied, counted rather than scored.
+
+        Only MATCH counts as satisfied. A partial, a manual check and an
+        unreadable value are all "we have not established this", and rolling
+        them in either direction would be inventing information -- upward it
+        flatters a bid, downward it reports a vendor as failing something nobody
+        checked.
+        """
+        mandatory = [i for i in self.items if i.is_mandatory]
+        satisfied = sum(1 for i in mandatory if i.status is CheckStatus.MATCH)
+        undetermined = sum(
+            1
+            for i in mandatory
+            if i.status
+            in (CheckStatus.PARTIAL, CheckStatus.MANUAL_CHECK, CheckStatus.NOT_ASSESSABLE)
+        )
+        return Completion(
+            satisfied=satisfied, total=len(mandatory), undetermined=undetermined
+        )
+
+    @property
+    def action_counts(self) -> dict[str, int]:
+        """How the to-do list splits, so the UI can lead with what blocks a bid.
+
+        A compliant bidder on a 49-document tender still collects twenty-odd
+        "check this yourself" items, and rendering them in one flat list makes a
+        clean bid look like a disaster. These counts are what lets the two be
+        shown differently.
+        """
+        return {
+            "blocking": sum(1 for a in self.action_list if a.is_blocking),
+            "to_check": sum(
+                1 for a in self.action_list if not a.is_blocking and not a.applies_only_if
+            ),
+            "conditional": sum(1 for a in self.action_list if a.applies_only_if),
+        }
 
     # --- summary counts, computed rather than stored, so they cannot drift ---
     @property

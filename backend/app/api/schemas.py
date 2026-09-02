@@ -108,6 +108,9 @@ class AskResponse(BaseModel):
     # Surfaced so the UI can show a warning rather than presenting an
     # ungrounded answer as if it were verified.
     grounded: bool
+    #: high | low | none. Lifted out of the answer so the UI can style the
+    #: whole response, not just append a sentence to it.
+    confidence: str
 
 
 class GapReportRequest(BaseModel):
@@ -157,11 +160,50 @@ class StalenessOut(BaseModel):
     last_checked_at: datetime | None = None
 
 
+class ValidationFindingOut(BaseModel):
+    field: str
+    severity: str
+    message: str
+    value: str | None = None
+    affects_confidence: bool = True
+    #: Which document the finding is about, so the UI can say whose data is thin.
+    source: str          # "notification" | "bid"
+
+
+class DataQualityOut(BaseModel):
+    """How much the figures below can be trusted (Section 10).
+
+    Separate from the verdict on purpose. The verdict answers "does this bid
+    meet the tender"; this answers "how good was our reading of either
+    document". A confident verdict computed from a notification whose deadline
+    and EMD were never extracted is the failure this exists to make visible.
+    """
+
+    ok: bool
+    banner: str | None = None
+    findings: list[ValidationFindingOut] = Field(default_factory=list)
+
+
+class CompletionOut(BaseModel):
+    satisfied: int
+    total: int
+    undetermined: int
+    label: str
+    caveat: str
+
+
 class GapReportResponse(BaseModel):
     report: GapReport
     verdict: str
     counts: dict[str, int]
     staleness: StalenessOut
+    data_quality: DataQualityOut
+    #: Section 4.4/4.6 -- a factual count, with the copy that keeps it from
+    #: being read as a score travelling alongside it.
+    completion: CompletionOut
+    #: Section 4.6 -- the split the UI leads with, so twenty "check this" items
+    #: do not make a clean bid look like a disaster.
+    action_counts: dict[str, int] = Field(default_factory=dict)
 
 
 NotificationList.model_rebuild()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 
 from app.config import settings
 from app.llm.base import LLMError, LLMProvider, TModel
@@ -15,6 +16,15 @@ from app.llm.ratelimit import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class _ModelRetired(Exception):
+    """Raised instead of calling a model another thread has just retired.
+
+    Deliberately not an LLMError: nothing failed, and no request was spent. It
+    means "re-select and try again", and `retry_transient` must not treat it as
+    a transient API fault to be retried against the same dead model.
+    """
 
 
 class GeminiProvider(LLMProvider):
@@ -56,16 +66,29 @@ class GeminiProvider(LLMProvider):
             if m.strip() and m.strip() != settings.gemini_model
         ]
         self._exhausted: set[str] = set()
+        # Guards `_exhausted`. The fan-out means several threads read and
+        # write it concurrently, and a lost write there costs a whole
+        # rate-limited request per thread.
+        self._state = threading.Lock()
 
     @property
-    def _model(self) -> str:
-        """The first candidate whose daily quota is not known to be spent."""
-        for model in self._candidates:
-            if model not in self._exhausted:
-                return model
-        # Everything is spent; retry the primary so the caller sees the real
-        # quota error rather than a confusing internal state error.
-        return self._candidates[0]
+    def _model(self) -> str | None:
+        """The first candidate whose daily quota is not known to be spent.
+
+        None means every model is retired, which the caller turns into the
+        actionable quota error rather than firing a request it knows will fail.
+        """
+        with self._state:
+            for model in self._candidates:
+                if model not in self._exhausted:
+                    return model
+        return None
+
+    def _retire(self, model: str) -> list[str]:
+        """Mark a model's daily quota spent. Returns the models still live."""
+        with self._state:
+            self._exhausted.add(model)
+            return [m for m in self._candidates if m not in self._exhausted]
 
     def _config(self, system: str | None, schema: type[TModel] | None = None) -> dict:
         cfg: dict = {
@@ -84,11 +107,26 @@ class GeminiProvider(LLMProvider):
         last: Exception | None = None
 
         # Walk the candidate models, retiring any whose daily quota is spent.
-        for _ in range(len(self._candidates)):
+        # Bounded by the candidate count plus one round, because a re-selection
+        # after another thread retired our model consumes an iteration without
+        # having spent a request.
+        for _ in range(len(self._candidates) + 1):
             model = self._model
+            if model is None:
+                break
 
             def once(model=model):
                 self._limiter.acquire()
+                # Re-checked AFTER the rate-limiter slot, not only before it.
+                # The extraction graph fans out five or six extractors at once
+                # and they all choose a model before any of them has an answer,
+                # so on the first exhausted model every one of them queues up
+                # behind the limiter and spends its turn discovering the same
+                # dead model. Measured: five doomed calls, and at 5 requests per
+                # minute that is a minute of wall clock per model retired, on a
+                # run whose whole budget is a few minutes.
+                if model in self._exhausted:
+                    raise _ModelRetired(model)
                 return self._client.models.generate_content(
                     model=model, contents=contents, config=config
                 )
@@ -97,12 +135,15 @@ class GeminiProvider(LLMProvider):
                 return retry_transient(
                     once, label=f"gemini {label} [{model}]", attempts=settings.gemini_retries
                 )
+            except _ModelRetired:
+                # Another thread retired this model while we waited for a slot.
+                # No request was spent; pick the next live one.
+                continue
             except Exception as exc:
                 last = exc
                 if not is_daily_quota_exhausted(exc):
                     raise LLMError(f"gemini {label} failed: {exc}") from exc
-                self._exhausted.add(model)
-                remaining = [m for m in self._candidates if m not in self._exhausted]
+                remaining = self._retire(model)
                 logger.warning(
                     "%s: daily free-tier quota exhausted; %s",
                     model,

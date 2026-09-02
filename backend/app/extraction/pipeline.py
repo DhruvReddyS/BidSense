@@ -20,11 +20,33 @@ from app.extraction.persist import (
     save_notification,
     save_submission,
 )
+from app.extraction.validate import (
+    Finding,
+    affects_confidence,
+    summarise,
+    validate_notification,
+    validate_submission,
+)
 from app.ingest import parse_document
 from app.llm import LLMProvider
 from app.schemas.common import DocumentKind
 
 logger = logging.getLogger(__name__)
+
+
+def _provider_label(llm: "LLMProvider | None") -> str:
+    """Name the model that produced an extraction.
+
+    Worth recording because the failure this enables is provider-shaped: the
+    same 101-page tender yields a full header from gemini-3.5-flash and an empty
+    one from a local qwen3:4b, both reporting zero errors. Without this, the
+    only evidence of which ran is the wall-clock time.
+    """
+    from app.llm import get_llm
+
+    provider = llm or get_llm()
+    model = getattr(provider, "_model", None)
+    return f"{provider.name}:{model}" if model else provider.name
 
 
 @dataclass
@@ -42,6 +64,15 @@ class IngestReport:
     parse_warnings: list[str] = field(default_factory=list)
     extraction_errors: list[str] = field(default_factory=list)
     node_timings: list[tuple[str, float]] = field(default_factory=list)
+    #: Plausibility findings (Section 10). Distinct from `extraction_errors`:
+    #: those are nodes that FAILED, these are nodes that succeeded and returned
+    #: something that cannot be right, or returned nothing where a value was
+    #: expected. A run with no errors and six findings is the dangerous case --
+    #: it reports as a clean success.
+    validation: list[Finding] = field(default_factory=list)
+    #: Which provider and model produced this. Degraded output is only
+    #: attributable if we record what produced it.
+    extracted_by: str | None = None
     parse_seconds: float = 0.0
     extract_seconds: float = 0.0
     persist_seconds: float = 0.0
@@ -54,13 +85,29 @@ class IngestReport:
     def ok(self) -> bool:
         return not self.extraction_errors and self.row_id is not None
 
+    @property
+    def needs_review(self) -> bool:
+        """True when the run succeeded but produced something implausible.
+
+        `ok` deliberately stays True for these -- the rows were written and are
+        worth reading. But a caller that only looks at `ok` would present a
+        notification missing its deadline, its EMD and its issuing authority as
+        a clean extraction, which is how this failure stayed invisible.
+        """
+        return affects_confidence(self.validation)
+
+    @property
+    def validation_summary(self) -> str | None:
+        return summarise(self.validation)
+
     def summary(self) -> str:
         state = "OK" if self.ok else "PARTIAL"
         return (
             f"[{state}] {self.file_name}: {self.identifier} | {self.pages}p "
             f"({self.ocr_pages} OCR) | {self.chunks_indexed} chunks | "
             f"{self.total_seconds:.1f}s | {len(self.extraction_errors)} errors, "
-            f"{len(self.parse_warnings)} warnings"
+            f"{len(self.parse_warnings)} warnings, "
+            f"{len(self.validation)} validation finding(s)"
         )
 
 
@@ -90,6 +137,9 @@ def ingest_notification(
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
     report.identifier = notification.tender_id
+    report.extracted_by = _provider_label(llm)
+    # Run BEFORE persisting, so the findings describe exactly what was stored.
+    report.validation = validate_notification(notification, document)
 
     started = time.perf_counter()
     with session_scope() as session:
@@ -137,6 +187,8 @@ def ingest_submission(
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
     report.identifier = submission.vendor_id
+    report.extracted_by = _provider_label(llm)
+    report.validation = validate_submission(submission, document)
 
     started = time.perf_counter()
     with session_scope() as session:

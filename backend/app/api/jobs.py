@@ -148,7 +148,15 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
 
         # A partial extraction is stored and flagged, never discarded: the
         # fields that did land are still worth reviewing.
-        status = JobStatus.PARTIAL if result.extraction_errors else JobStatus.SUCCEEDED
+        #
+        # A run with no errors but implausible output is PARTIAL too. It is the
+        # more dangerous of the two: nothing raised, so without this it reports
+        # as a clean success while the notification has no deadline and no EMD.
+        status = (
+            JobStatus.PARTIAL
+            if result.extraction_errors or result.needs_review
+            else JobStatus.SUCCEEDED
+        )
         _update(
             job_id,
             status=status,
@@ -168,6 +176,17 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
                 "chunks_indexed": result.chunks_indexed,
                 "parse_warnings": result.parse_warnings,
                 "extraction_errors": result.extraction_errors,
+                "extracted_by": result.extracted_by,
+                "validation_summary": result.validation_summary,
+                "validation": [
+                    {
+                        "field": f.field,
+                        "severity": f.severity.value,
+                        "message": f.message,
+                        "value": f.value,
+                    }
+                    for f in result.validation
+                ],
                 "seconds": round(result.total_seconds, 2),
                 "node_timings": {k: round(v, 2) for k, v in result.node_timings},
             },
