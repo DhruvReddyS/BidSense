@@ -223,6 +223,16 @@ def save_submission(
     row.quoted_price_inr = (
         submission.quoted_price.amount_inr if submission.quoted_price else None
     )
+    row.liquid_assets_raw = (
+        submission.liquid_assets.raw_text if submission.liquid_assets else None
+    )
+    row.liquid_assets_inr = (
+        submission.liquid_assets.amount_inr if submission.liquid_assets else None
+    )
+    row.net_worth_raw = submission.net_worth.raw_text if submission.net_worth else None
+    row.net_worth_inr = (
+        submission.net_worth.amount_inr if submission.net_worth else None
+    )
     row.is_blacklisted = submission.is_blacklisted
     row.debarment_disclosure = submission.debarment_disclosure
     row.status = submission.status

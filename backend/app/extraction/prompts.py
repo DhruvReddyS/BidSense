@@ -140,6 +140,13 @@ from an incorporation date.
 
 For quoted_price_raw, copy the bid amount exactly as printed.
 
+For liquid_assets_raw, look for the bidder's statement of liquid assets, working
+capital, or unutilised credit facilities -- usually supported by a bankers'
+solvency certificate or a credit availability letter. Copy the figure exactly as
+printed. Do not put the turnover figure here; they are different requirements
+and large tenders test both. For net_worth_raw, copy the declared net worth as
+printed. Return null for either if the bid does not state it.
+
 For declared_debarment, read the non-blacklisting declaration carefully and
 return text ONLY if the bidder admits to being debarred, blacklisted, banned, or
 under liquidation or insolvency proceedings. Nearly every bid contains a

@@ -126,6 +126,8 @@ def to_submission_schema(
             for t in row.turnover
         ],
         years_in_business=row.years_in_business,
+        liquid_assets=_money(row.liquid_assets_raw, row.liquid_assets_inr),
+        net_worth=_money(row.net_worth_raw, row.net_worth_inr),
         certifications=[
             Certification(
                 name=c.name,

@@ -62,6 +62,11 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
     pricing_summary: Mapped[str | None] = mapped_column(Text)
     quoted_price_raw: Mapped[str | None] = mapped_column(Text)
     quoted_price_inr: Mapped[Decimal | None] = mapped_column(Money)
+    # Financial-capacity floors that large tenders test separately from turnover.
+    liquid_assets_raw: Mapped[str | None] = mapped_column(Text)
+    liquid_assets_inr: Mapped[Decimal | None] = mapped_column(Money)
+    net_worth_raw: Mapped[str | None] = mapped_column(Text)
+    net_worth_inr: Mapped[Decimal | None] = mapped_column(Money)
 
     # Section 5.8 -- hard-fail in the rule engine. Set by a reviewer from an
     # official list, or derived from the bidder's own disclosure below.

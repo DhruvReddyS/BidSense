@@ -163,6 +163,18 @@ class RawVendorHeader(BaseModel):
     )
     pricing_summary: str | None = None
     quoted_price_raw: str | None = Field(default=None, description="As printed. Do NOT convert.")
+    liquid_assets_raw: str | None = Field(
+        default=None,
+        description=(
+            "Liquid assets, working capital, or unutilised bank credit "
+            "facilities the bidder declares, exactly as printed. This is the "
+            "figure a solvency or credit-availability certificate states. Do "
+            "NOT convert, and do not use the turnover figure here."
+        ),
+    )
+    net_worth_raw: str | None = Field(
+        default=None, description="Declared net worth exactly as printed. Do NOT convert."
+    )
     technical_approach_text: str | None = Field(
         default=None,
         description=(

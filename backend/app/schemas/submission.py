@@ -79,6 +79,22 @@ class VendorSubmission(SchemaModel):
 
     turnover: list[YearlyTurnover] = Field(default_factory=list)
     years_in_business: float | None = Field(default=None, ge=0)
+    # Section 6 does not name this, but large works and EPC tenders routinely
+    # set a financial-capacity floor separate from turnover -- HGCL requires
+    # "liquid assets and/or credit facilities of not less than Rs. 49.855
+    # Crores". Without a field to hold it the criterion can only ever be
+    # reported as needs-manual-check, which lets an under-capitalised bidder
+    # through Level 1.
+    liquid_assets: MoneyAmount | None = Field(
+        default=None,
+        description=(
+            "Liquid assets, working capital or unutilised credit facilities the "
+            "bidder declares, in canonical rupees."
+        ),
+    )
+    net_worth: MoneyAmount | None = Field(
+        default=None, description="Declared net worth, where stated as a figure."
+    )
     certifications: list[Certification] = Field(default_factory=list)
     past_projects: list[PastProject] = Field(default_factory=list)
     documents_submitted: list[SubmittedDocument] = Field(default_factory=list)

@@ -266,6 +266,8 @@ def to_submission(
         tender_id=tender_id,
         turnover=turnover_rows,
         years_in_business=header.years_in_business,
+        liquid_assets=MoneyAmount.parse(header.liquid_assets_raw),
+        net_worth=MoneyAmount.parse(header.net_worth_raw),
         certifications=[
             Certification(
                 name=i.name,

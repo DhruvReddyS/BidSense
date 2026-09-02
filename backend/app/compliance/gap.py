@@ -50,8 +50,34 @@ from app.schemas.submission import VendorSubmission
 # Words in a criterion that indicate it is about turnover rather than, say,
 # project value -- used to pick which extracted number to compare against.
 _TURNOVER_HINTS = ("turnover", "revenue", "annual receipt", "gross receipt")
+
+# Units under which a bare number genuinely means "how many projects".
+#
+# Everything else is a physical quantity the bid does not express as a count,
+# and comparing it against the number of listed projects produces a confident
+# false elimination. HGCL asks for "similar works of 13 MW cumulative capacity";
+# read as thirteen projects, a bidder citing two 13 MW plants is eliminated for
+# having "only 2". Same failure class as reading "5 years" as five rupees.
+_COUNT_UNITS = {
+    "", "project", "projects", "work", "works", "no", "no.", "nos", "nos.",
+    "number", "numbers", "order", "orders", "contract", "contracts",
+    "assignment", "assignments", "job", "jobs", "count",
+}
+_YEAR_UNITS = {"", "year", "years", "yr", "yrs"}
+
+
+def _unit_is(unit: str | None, allowed: set[str]) -> bool:
+    """Whether a criterion's unit permits this comparison at all."""
+    return (unit or "").strip().lower().rstrip(".") in {
+        u.rstrip(".") for u in allowed
+    }
 _EXPERIENCE_HINTS = ("experience", "years in business", "operating", "established")
 _PROJECT_HINTS = ("project", "work", "contract", "assignment", "order")
+_LIQUIDITY_HINTS = (
+    "liquid asset", "credit facilit", "working capital", "solvency",
+    "line of credit", "cash flow", "bid capacity",
+)
+_NET_WORTH_HINTS = ("net worth", "networth")
 
 
 def _mentions(text: str, hints: tuple[str, ...]) -> bool:
@@ -244,6 +270,20 @@ def _check_numeric(
         threshold = criterion.threshold_amount.amount_inr
         if _mentions(criterion.criterion, _TURNOVER_HINTS):
             return _compare_turnover(criterion, submission, threshold, severity_if_failed, base)
+        if _mentions(criterion.criterion, _LIQUIDITY_HINTS):
+            return _compare_declared_amount(
+                submission.liquid_assets, threshold, severity_if_failed, base,
+                label="liquid assets and credit facilities",
+                advice="State your available liquid assets and credit facilities "
+                       "as a figure, supported by a bankers' certificate.",
+            )
+        if _mentions(criterion.criterion, _NET_WORTH_HINTS):
+            return _compare_declared_amount(
+                submission.net_worth, threshold, severity_if_failed, base,
+                label="net worth",
+                advice="State your net worth as a figure, certified by your "
+                       "Chartered Accountant.",
+            )
         if _mentions(criterion.criterion, _PROJECT_HINTS):
             return _compare_project_value(criterion, submission, threshold, severity_if_failed, base)
         return GapItem(
@@ -259,15 +299,43 @@ def _check_numeric(
 
     # --- plain-number thresholds (years, counts) ---
     if criterion.threshold_number is not None:
-        if _mentions(criterion.criterion, _EXPERIENCE_HINTS):
+        stated = f"{criterion.threshold_number:g} {criterion.unit or ''}".strip()
+
+        if _mentions(criterion.criterion, _EXPERIENCE_HINTS) and _unit_is(
+            criterion.unit, _YEAR_UNITS
+        ):
             return _compare_experience(criterion, submission, severity_if_failed, base)
-        if _mentions(criterion.criterion, _PROJECT_HINTS):
+
+        if _mentions(criterion.criterion, _PROJECT_HINTS) and _unit_is(
+            criterion.unit, _COUNT_UNITS
+        ):
             return _compare_project_count(criterion, submission, severity_if_failed, base)
+
+        # The requirement is a physical quantity -- megawatts of capacity,
+        # kilometres of cable, tonnes of steel. Nothing in the extracted schema
+        # holds a comparable figure, and guessing produces a confident false
+        # elimination rather than an honest "check this yourself".
+        if criterion.unit and not _unit_is(criterion.unit, _COUNT_UNITS | _YEAR_UNITS):
+            return GapItem(
+                status=CheckStatus.MANUAL_CHECK,
+                severity=Severity.REVIEW,
+                required_value=stated,
+                explanation=(
+                    f"This asks for {stated}. That is a quantity we cannot read "
+                    "off your bid automatically, so check it against your own "
+                    "records — it is not a failure."
+                ),
+                **base,
+            )
+
         return GapItem(
             status=CheckStatus.MANUAL_CHECK,
             severity=Severity.REVIEW,
-            required_value=f"{criterion.threshold_number:g} {criterion.unit or ''}".strip(),
-            explanation="Numeric requirement with no matching figure in your bid to compare. Check manually.",
+            required_value=stated,
+            explanation=(
+                "Numeric requirement with no matching figure in your bid to "
+                "compare. Check it yourself."
+            ),
             **base,
         )
 
@@ -281,6 +349,48 @@ def _check_numeric(
             "read as a definite number. Check this one yourself."
             if criterion.threshold_raw
             else "No threshold could be read for this requirement. Check it manually."
+        ),
+        **base,
+    )
+
+
+def _compare_declared_amount(
+    declared, threshold: Decimal, fail_severity, base, *, label: str, advice: str
+) -> GapItem:
+    """Compare a single declared figure against a money floor.
+
+    Used for the financial-capacity criteria large tenders set alongside
+    turnover. An absent figure is NOT_ASSESSABLE rather than a failure: the
+    bidder may well hold the capacity and simply not have stated it in a form
+    we could read, and eliminating on that would be a guess.
+    """
+    if declared is None or not declared.is_resolved:
+        return GapItem(
+            status=CheckStatus.NOT_ASSESSABLE,
+            severity=Severity.REVIEW,
+            required_value=format_money(threshold),
+            found_value=declared.raw_text if declared else None,
+            explanation=(
+                f"Your bid does not state {label} in a form we could read. {advice}"
+            ),
+            **base,
+        )
+
+    passed = declared.amount_inr >= threshold
+    return GapItem(
+        status=CheckStatus.MATCH if passed else CheckStatus.MISSING,
+        severity=Severity.INFO if passed else fail_severity,
+        required_value=format_money(threshold),
+        found_value=format_money(declared.amount_inr),
+        explanation=(
+            f"Your declared {label} of {format_money(declared.amount_inr)} meets "
+            f"the requirement of {format_money(threshold)}."
+            if passed
+            else (
+                f"Your declared {label} is {format_money(declared.amount_inr)}, "
+                f"below the required {format_money(threshold)}. You do not "
+                "currently qualify on this criterion."
+            )
         ),
         **base,
     )

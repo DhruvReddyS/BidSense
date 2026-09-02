@@ -751,3 +751,153 @@ def test_a_bid_with_nothing_extracted_against_a_real_tender_still_fails():
     assert report.was_checked is True
     assert report.verdict == "not_compliant"
     assert report.blocking_items
+
+
+# --------------------------------------------------------------------------- #
+# Unit-aware numeric comparison (regression: "13 MW" read as "13 projects")
+# --------------------------------------------------------------------------- #
+def _numeric(criterion: str, number: float, unit: str | None):
+    return notification(
+        eligibility_criteria=[
+            EligibilityCriterion(
+                criterion=criterion,
+                type=CriterionType.NUMERIC,
+                threshold_raw=f"{number:g}{unit or ''}",
+                threshold_number=number,
+                unit=unit,
+            )
+        ]
+    )
+
+
+def test_a_capacity_requirement_is_not_compared_as_a_project_count():
+    """HGCL requires "similar works of 13 MW cumulative capacity". Read as
+    thirteen projects, a bidder citing two 13 MW plants is eliminated for having
+    "only 2" -- a confident false elimination, the worst error this tool can
+    make."""
+    report = build_gap_report(
+        _numeric("Satisfactorily completed similar works", 13, "MW"),
+        submission(past_projects=[PastProject(client="NTPC"), PastProject(client="SECI")]),
+        **NO_EMBED,
+    )
+    item = report.items[-1]
+    assert item.status is CheckStatus.MANUAL_CHECK
+    assert item.severity is not Severity.DISQUALIFYING
+    assert "13 MW" in item.required_value
+    assert "not a failure" in item.explanation
+
+
+@pytest.mark.parametrize("unit", ["MW", "Km", "MT", "Sqm", "kVA", "cum"])
+def test_physical_quantities_never_eliminate(unit: str):
+    report = build_gap_report(
+        _numeric("Minimum key quantities executed for works", 166, unit),
+        submission(past_projects=[PastProject(client="X")]),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MANUAL_CHECK
+    assert report.verdict != "not_compliant"
+
+
+@pytest.mark.parametrize("unit", ["projects", "works", "nos", "Nos.", "orders", None])
+def test_genuine_counts_are_still_compared(unit):
+    """The guard must not disable the comparison it exists to protect."""
+    report = build_gap_report(
+        _numeric("At least three similar works completed", 3, unit),
+        submission(past_projects=[PastProject(client="X")]),
+        **NO_EMBED,
+    )
+    item = report.items[-1]
+    assert item.status is CheckStatus.MISSING
+    assert "1 projects" in item.found_value
+
+
+def test_experience_in_years_is_still_compared():
+    report = build_gap_report(
+        _numeric("Minimum years of experience", 5, "years"),
+        submission(years_in_business=3),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MISSING
+
+
+def test_experience_stated_in_a_non_year_unit_is_not_compared():
+    report = build_gap_report(
+        _numeric("Experience of executing works of capacity", 50, "MW"),
+        submission(years_in_business=3),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MANUAL_CHECK
+
+
+# --------------------------------------------------------------------------- #
+# Financial capacity beyond turnover
+# --------------------------------------------------------------------------- #
+def _liquidity_notification():
+    return notification(
+        eligibility_criteria=[
+            EligibilityCriterion(
+                criterion="Liquid assets and/or credit facilities",
+                type=CriterionType.NUMERIC,
+                threshold_raw="Rs. 49.855 Crores",
+                threshold_amount=MoneyAmount(raw_text="Rs. 49.855 Crores"),
+                unit="INR",
+            )
+        ]
+    )
+
+
+def test_insufficient_liquid_assets_eliminate():
+    """Large tenders set a financial-capacity floor separate from turnover.
+    Without a field to hold it, the criterion could only ever be needs-check,
+    which let an under-capitalised bidder through Level 1."""
+    report = build_gap_report(
+        _liquidity_notification(),
+        submission(liquid_assets=MoneyAmount(raw_text="Rs. 18.40 Crores")),
+        **NO_EMBED,
+    )
+    item = report.items[-1]
+    assert item.status is CheckStatus.MISSING
+    assert item.severity is Severity.DISQUALIFYING
+    assert "₹18.4 Cr" in item.explanation and "₹49.855 Cr" in item.explanation
+
+
+def test_sufficient_liquid_assets_pass():
+    report = build_gap_report(
+        _liquidity_notification(),
+        submission(liquid_assets=MoneyAmount(raw_text="Rs. 62 Crores")),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MATCH
+
+
+def test_liquidity_exactly_at_the_floor_passes():
+    """Section 9.2.2's borderline case: "not less than" is >=, not >."""
+    report = build_gap_report(
+        _liquidity_notification(),
+        submission(liquid_assets=MoneyAmount(raw_text="Rs. 49,85,50,000")),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MATCH
+
+
+def test_undeclared_liquid_assets_are_not_a_failure():
+    """The bidder may hold the capacity and simply not have stated it in a form
+    we could read. Eliminating on that would be a guess."""
+    report = build_gap_report(_liquidity_notification(), submission(), **NO_EMBED)
+    item = report.items[-1]
+    assert item.status is CheckStatus.NOT_ASSESSABLE
+    assert item.severity is not Severity.DISQUALIFYING
+    assert "bankers' certificate" in item.explanation
+
+
+def test_turnover_is_not_mistaken_for_liquidity():
+    """They are different requirements and large tenders test both."""
+    report = build_gap_report(
+        _liquidity_notification(),
+        submission(
+            turnover=[YearlyTurnover(year=2023, amount=MoneyAmount(raw_text="Rs. 200 Cr"))],
+            liquid_assets=MoneyAmount(raw_text="Rs. 18 Cr"),
+        ),
+        **NO_EMBED,
+    )
+    assert report.items[-1].status is CheckStatus.MISSING
