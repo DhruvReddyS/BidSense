@@ -5,49 +5,101 @@
 /*
  * Design tokens.
  *
- * One accent colour, a wide neutral ramp, and semantic status colours that mean
- * the same thing everywhere in the product. A compliance tool earns trust
- * partly through consistency: if "missing" is red in the table it must be red
- * in the summary, the filter chip and the action list, or the reader has to
- * re-learn the legend on every screen.
+ * One accent, a wide neutral ramp, and semantic status colours that mean the
+ * same thing everywhere. A compliance tool earns trust partly through
+ * consistency: if "missing" is red in the table it must be red in the summary,
+ * the filter chip and the action list, or the reader re-learns the legend on
+ * every screen.
+ *
+ * Dark mode redefines the same tokens rather than adding `dark:` variants at
+ * every call site, so a component written once is correct in both themes.
  */
 @layer base {
   :root {
-    --bg: 0 0% 99%;
+    color-scheme: light;
+
+    --bg: 240 20% 99%;
+    --bg-alt: 240 20% 97%;
     --surface: 0 0% 100%;
-    --surface-2: 240 6% 97%;
-    --border: 240 6% 90%;
-    --border-strong: 240 5% 84%;
+    --surface-2: 240 14% 96.5%;
+    --surface-3: 240 12% 93%;
+    --border: 240 12% 90%;
+    --border-strong: 240 10% 82%;
 
-    --fg: 240 10% 12%;
-    --fg-muted: 240 4% 46%;
-    --fg-subtle: 240 4% 60%;
+    --fg: 240 16% 11%;
+    --fg-muted: 240 6% 44%;
+    --fg-subtle: 240 6% 58%;
 
-    --accent: 243 75% 59%;
+    --accent: 243 80% 60%;
+    --accent-hover: 243 80% 54%;
     --accent-fg: 0 0% 100%;
-    --accent-soft: 243 100% 97%;
-    --accent-border: 243 75% 88%;
+    --accent-soft: 243 100% 97.5%;
+    --accent-border: 243 80% 89%;
 
-    --ok: 142 70% 32%;
-    --ok-soft: 138 76% 96%;
-    --ok-border: 141 60% 84%;
+    --ok: 152 62% 30%;
+    --ok-soft: 150 62% 96%;
+    --ok-border: 150 46% 82%;
 
-    --warn: 32 90% 40%;
-    --warn-soft: 48 96% 95%;
-    --warn-border: 45 90% 80%;
+    --warn: 28 84% 40%;
+    --warn-soft: 40 92% 95.5%;
+    --warn-border: 38 84% 80%;
 
-    --bad: 0 72% 46%;
-    --bad-soft: 0 86% 97%;
-    --bad-border: 0 80% 89%;
+    --bad: 358 68% 47%;
+    --bad-soft: 356 84% 97%;
+    --bad-border: 357 74% 88%;
 
-    --info: 234 89% 55%;
-    --info-soft: 226 100% 97%;
-    --info-border: 228 90% 88%;
+    --info: 232 80% 56%;
+    --info-soft: 228 100% 97.5%;
+    --info-border: 228 80% 88%;
 
-    --neutral-soft: 240 5% 96%;
-    --neutral-border: 240 5% 88%;
+    --neutral-soft: 240 12% 95.5%;
+    --neutral-border: 240 10% 87%;
 
-    --radius: 0.625rem;
+    --shadow-color: 240 30% 20%;
+    --radius: 0.75rem;
+  }
+
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    --bg: 240 12% 7%;
+    --bg-alt: 240 12% 9%;
+    --surface: 240 11% 10.5%;
+    --surface-2: 240 10% 14%;
+    --surface-3: 240 9% 18%;
+    --border: 240 9% 19%;
+    --border-strong: 240 8% 28%;
+
+    --fg: 240 18% 96%;
+    --fg-muted: 240 8% 65%;
+    --fg-subtle: 240 7% 50%;
+
+    --accent: 243 90% 72%;
+    --accent-hover: 243 90% 78%;
+    --accent-fg: 240 40% 10%;
+    --accent-soft: 243 40% 18%;
+    --accent-border: 243 45% 32%;
+
+    --ok: 150 62% 62%;
+    --ok-soft: 152 32% 15%;
+    --ok-border: 152 28% 27%;
+
+    --warn: 38 92% 66%;
+    --warn-soft: 36 40% 15%;
+    --warn-border: 36 34% 28%;
+
+    --bad: 358 82% 70%;
+    --bad-soft: 358 38% 16%;
+    --bad-border: 358 34% 30%;
+
+    --info: 230 92% 74%;
+    --info-soft: 230 38% 17%;
+    --info-border: 230 34% 31%;
+
+    --neutral-soft: 240 10% 15%;
+    --neutral-border: 240 8% 24%;
+
+    --shadow-color: 240 60% 2%;
   }
 
   * {
@@ -56,19 +108,34 @@
 
   html {
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
   }
 
   body {
     background: hsl(var(--bg));
     color: hsl(var(--fg));
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
   }
 
-  /* Tabular figures everywhere numbers are compared -- rupee amounts in a
-     column must line up, or the reader cannot scan them. */
+  ::selection {
+    background: hsl(var(--accent) / 0.22);
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Numbers that get compared must line up, or the reader cannot scan them. */
   .tnum {
     font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -0.021em;
   }
 }
 
@@ -76,32 +143,37 @@
   .card {
     @apply rounded-xl border bg-[hsl(var(--surface))];
     box-shadow:
-      0 1px 2px -1px rgb(0 0 0 / 0.06),
-      0 1px 3px 0 rgb(0 0 0 / 0.04);
+      0 1px 2px -1px hsl(var(--shadow-color) / 0.07),
+      0 1px 3px 0 hsl(var(--shadow-color) / 0.05);
   }
 
   .card-hover {
-    @apply transition-all duration-200;
+    @apply transition-all duration-200 ease-out;
   }
   .card-hover:hover {
     border-color: hsl(var(--border-strong));
     box-shadow:
-      0 2px 4px -2px rgb(0 0 0 / 0.08),
-      0 6px 16px -4px rgb(0 0 0 / 0.08);
-    transform: translateY(-1px);
+      0 2px 4px -2px hsl(var(--shadow-color) / 0.09),
+      0 8px 22px -6px hsl(var(--shadow-color) / 0.12);
+    transform: translateY(-2px);
   }
 
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
-           text-sm font-medium transition-colors
-           disabled:cursor-not-allowed disabled:opacity-50;
+           text-sm font-medium transition-all duration-150
+           disabled:pointer-events-none disabled:opacity-45;
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(0.5px) scale(0.995);
   }
   .btn-primary {
     background: hsl(var(--accent));
     color: hsl(var(--accent-fg));
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.16);
   }
   .btn-primary:hover:not(:disabled) {
-    background: hsl(243 75% 53%);
+    background: hsl(var(--accent-hover));
+    box-shadow: 0 2px 8px -1px hsl(var(--accent) / 0.4);
   }
   .btn-ghost {
     @apply border bg-[hsl(var(--surface))];
@@ -109,30 +181,49 @@
   }
   .btn-ghost:hover:not(:disabled) {
     background: hsl(var(--surface-2));
+    border-color: hsl(var(--border-strong));
+  }
+  .btn-subtle {
+    color: hsl(var(--fg-muted));
+  }
+  .btn-subtle:hover:not(:disabled) {
+    background: hsl(var(--surface-2));
+    color: hsl(var(--fg));
   }
 
   .input {
     @apply w-full rounded-lg border bg-[hsl(var(--surface))] px-3 py-2 text-sm
-           outline-none transition-shadow placeholder:text-[hsl(var(--fg-subtle))];
+           outline-none transition-all placeholder:text-[hsl(var(--fg-subtle))];
   }
   .input:focus {
     border-color: hsl(var(--accent));
-    box-shadow: 0 0 0 3px hsl(var(--accent) / 0.12);
+    box-shadow: 0 0 0 3.5px hsl(var(--accent) / 0.14);
+    outline: none;
   }
 
   .label {
-    @apply text-xs font-medium uppercase tracking-wide text-[hsl(var(--fg-muted))];
+    @apply text-[11px] font-medium uppercase tracking-[0.055em] text-[hsl(var(--fg-muted))];
   }
 
   .chip {
     @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border
            px-2 py-0.5 text-xs font-medium;
   }
+
+  /* A quiet grid behind the page header — enough texture to stop a plain
+     background reading as unfinished, faint enough to ignore. */
+  .grid-backdrop {
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.55) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(ellipse 75% 100% at 50% 0%, #000 25%, transparent 78%);
+  }
 }
 
 @layer utilities {
-  /* Long clause text and vendor names must be able to wrap mid-token, or a
-     67-character reference blows out the table. */
+  /* Clause references and vendor names must wrap mid-token, or a 67-character
+     reference blows out the table. */
   .break-anywhere {
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -142,7 +233,7 @@
     100% { transform: translateX(100%); }
   }
   .skeleton {
-    @apply relative overflow-hidden rounded bg-[hsl(var(--surface-2))];
+    @apply relative overflow-hidden rounded-md bg-[hsl(var(--surface-2))];
   }
   .skeleton::after {
     content: "";
@@ -151,26 +242,40 @@
     background-image: linear-gradient(
       90deg,
       transparent,
-      rgb(255 255 255 / 0.6),
+      hsl(var(--surface-3) / 0.9),
       transparent
     );
     animation: shimmer 1.6s infinite;
   }
 
   @keyframes rise {
-    from { opacity: 0; transform: translateY(4px); }
+    from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   .animate-rise {
-    animation: rise 0.24s ease-out both;
+    animation: rise 0.26s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+
+  @keyframes draw {
+    from { stroke-dashoffset: var(--dash-total); }
+  }
+  .animate-draw {
+    animation: draw 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .stagger > * {
+    animation: rise 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0.02s; }
+  .stagger > *:nth-child(2) { animation-delay: 0.05s; }
+  .stagger > *:nth-child(3) { animation-delay: 0.08s; }
+  .stagger > *:nth-child(4) { animation-delay: 0.11s; }
+  .stagger > *:nth-child(5) { animation-delay: 0.14s; }
+  .stagger > *:nth-child(6) { animation-delay: 0.17s; }
 }
 
-/* Respect a reader who has asked for less motion. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

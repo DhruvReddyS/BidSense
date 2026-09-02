@@ -711,3 +711,43 @@ def test_extraction_turns_a_disclosure_into_the_flag():
     )
     assert result.is_blacklisted is True
     assert result.debarment_disclosure == DISCLOSURE
+
+
+# --------------------------------------------------------------------------- #
+# An unchecked report is not a pass (regression)
+# --------------------------------------------------------------------------- #
+def test_an_empty_report_is_not_reported_as_compliant():
+    """When extraction yields no requirements -- a failed run, a scanned
+    notification with no OCR, a format the parser could not read -- an empty
+    report must not fall through to "compliant" and tell every vendor they have
+    no blocking issues. Silence is not a pass."""
+    report = build_gap_report(
+        TenderNotification(tender_id="T-1", title="Nothing extracted"),
+        submission(),
+        **NO_EMBED,
+    )
+    assert report.items == []
+    assert report.verdict == "not_checked"
+    assert report.is_compliant is False
+    assert report.was_checked is False
+
+
+def test_a_tender_with_requirements_still_reports_normally():
+    """The guard must not swallow the ordinary case."""
+    report = build_gap_report(notification(), submission(), **NO_EMBED)
+    assert report.was_checked is True
+    assert report.verdict == "compliant"
+    assert report.is_compliant is True
+
+
+def test_a_bid_with_nothing_extracted_against_a_real_tender_still_fails():
+    """The dangerous direction is the other one: requirements exist but the bid
+    yielded nothing. That must be reported as failure, not as unchecked."""
+    report = build_gap_report(
+        notification(),
+        VendorSubmission(vendor_id="V-9", vendor_name="Empty Bid Co"),
+        **NO_EMBED,
+    )
+    assert report.was_checked is True
+    assert report.verdict == "not_compliant"
+    assert report.blocking_items

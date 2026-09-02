@@ -23,23 +23,26 @@ const TONE: Record<Tone, string> = {
 
 export const STATUS_META: Record<
   CheckStatus,
-  { label: string; tone: Tone; dot: string; blurb: string }
+  { label: string; tone: Tone; token: string; dot: string; blurb: string }
 > = {
   match: {
     label: "Met",
     tone: "ok",
+    token: "ok",
     dot: "bg-[hsl(var(--ok))]",
     blurb: "Found in your submission",
   },
   partial: {
     label: "Check",
     tone: "warn",
+    token: "warn",
     dot: "bg-[hsl(var(--warn))]",
     blurb: "Probably covered, but confirm it",
   },
   missing: {
     label: "Missing",
     tone: "bad",
+    token: "bad",
     dot: "bg-[hsl(var(--bad))]",
     blurb: "Not found — this blocks your bid",
   },
@@ -48,6 +51,7 @@ export const STATUS_META: Record<
   manual_check: {
     label: "Your call",
     tone: "info",
+    token: "info",
     dot: "bg-[hsl(var(--info))]",
     blurb: "Needs a human eye",
   },
@@ -55,6 +59,7 @@ export const STATUS_META: Record<
   not_assessable: {
     label: "Unreadable",
     tone: "neutral",
+    token: "fg-subtle",
     dot: "bg-[hsl(var(--fg-subtle))]",
     blurb: "We could not read a value to compare",
   },
@@ -113,6 +118,15 @@ export const VERDICT_META: Record<
     body: "At least one mandatory requirement is not met. Each one is listed below with the clause it comes from.",
     tone: "bad",
     icon: "✕",
+  },
+  // Not a pass. Nothing was checked, which is a different thing from nothing
+  // being wrong, and conflating them would green-light every bid on a tender
+  // whose extraction failed.
+  not_checked: {
+    title: "We could not check this bid",
+    body: "No requirements were read from the tender notification, so there was nothing to check your bid against. Re-upload the notification, or check whether it is a scanned document that needs OCR.",
+    tone: "neutral",
+    icon: "?",
   },
 };
 

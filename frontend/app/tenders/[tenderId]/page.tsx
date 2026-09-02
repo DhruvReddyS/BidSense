@@ -44,25 +44,34 @@ export default async function TenderPage({
 
   return (
     <div className="space-y-7">
-      <div>
+      <div className="relative -mx-5 -mt-9 px-5 pb-1 pt-9">
+        <div className="grid-backdrop pointer-events-none absolute inset-0 -z-10" />
         <Link
           href="/"
-          className="text-sm text-[hsl(var(--accent))] hover:underline"
+          className="inline-flex items-center gap-1 text-sm text-[hsl(var(--fg-muted))] transition-colors hover:text-[hsl(var(--accent))]"
         >
-          ← All tenders
+          <span aria-hidden>←</span> All tenders
         </Link>
-        <h1 className="mt-3 break-anywhere text-2xl font-semibold leading-tight tracking-tight">
+        <h1 className="mt-3 max-w-4xl break-anywhere text-[1.7rem] font-semibold leading-[1.2] tracking-tight">
           {tender.title}
         </h1>
-        <p className="mt-1.5 text-sm text-fg-muted">
-          {tender.issuing_authority ?? "Issuing authority not stated"}
-        </p>
-        <p className="mt-1 break-anywhere font-mono text-[11px] text-fg-subtle">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+          <span className="text-[hsl(var(--fg-muted))]">
+            {tender.issuing_authority ?? "Issuing authority not stated"}
+          </span>
+          {tender.sector && (
+            <>
+              <span className="text-[hsl(var(--fg-subtle))]" aria-hidden>·</span>
+              <span className="text-[hsl(var(--fg-muted))]">{tender.sector}</span>
+            </>
+          )}
+        </div>
+        <p className="mt-1.5 break-anywhere font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
           {tender.tender_id}
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Bids close"
           value={formatDate(deadline)}
@@ -118,14 +127,17 @@ function Stat({
     <div className="card p-4">
       <p className="label">{label}</p>
       <p
-        className={`tnum mt-1 break-anywhere text-lg font-semibold leading-tight ${
+        className={`tnum mt-1.5 break-anywhere text-lg font-semibold leading-tight ${
           urgent ? "text-[hsl(var(--warn))]" : ""
         }`}
       >
         {value}
       </p>
       {note && (
-        <p className="mt-0.5 truncate text-xs text-fg-subtle" title={note}>
+        <p
+          className="mt-1 truncate text-xs text-[hsl(var(--fg-subtle))]"
+          title={note}
+        >
           {note}
         </p>
       )}

@@ -28,7 +28,7 @@ export function TenderWorkspace({
       <div
         role="tablist"
         aria-label="Tender sections"
-        className="flex gap-1 border-b"
+        className="inline-flex gap-0.5 rounded-xl border bg-[hsl(var(--surface-2))] p-1"
       >
         {TABS.map(({ key, label, hint }) => (
           <button
@@ -37,15 +37,15 @@ export function TenderWorkspace({
             aria-selected={tab === key}
             title={hint}
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors ${
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all ${
               tab === key
-                ? "border-[hsl(var(--accent))] text-[hsl(var(--accent))]"
-                : "border-transparent text-fg-muted hover:text-fg"
+                ? "bg-[hsl(var(--surface))] text-[hsl(var(--fg))] shadow-sm"
+                : "text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]"
             }`}
           >
             {label}
             {key === "requirements" && (
-              <span className="tnum ml-1.5 text-xs opacity-60">
+              <span className="tnum ml-1.5 text-xs opacity-55">
                 {tender.eligibility_criteria.length + tender.mandatory_documents.length}
               </span>
             )}

@@ -11,7 +11,13 @@ export type CheckStatus =
 
 export type Severity = "disqualifying" | "action_needed" | "review" | "info";
 
-export type Verdict = "compliant" | "needs_review" | "not_compliant";
+export type Verdict =
+  | "compliant"
+  | "needs_review"
+  | "not_compliant"
+  // Nothing could be checked: extraction produced no requirements. Distinct
+  // from "compliant", which would otherwise be reported on an empty run.
+  | "not_checked";
 
 export interface Provenance {
   clause_ref: string | null;

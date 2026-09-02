@@ -8,13 +8,12 @@ import type {
   GapItem,
   GapReportResponse,
 } from "@/lib/types";
+import { ComplianceRing } from "./Ring";
 import {
   Card,
   Chip,
   SectionTitle,
-  SeverityChip,
   STATUS_META,
-  StatusBar,
   StatusChip,
   VERDICT_META,
 } from "./ui";
@@ -70,47 +69,67 @@ export function GapReport({ data }: { data: GapReportResponse }) {
   return (
     <div className="space-y-6">
       {/* Verdict ------------------------------------------------------- */}
-      <Card
-        className={`overflow-hidden border-[hsl(var(--${meta.tone}-border))]`}
-      >
-        <div className={`bg-[hsl(var(--${meta.tone}-soft))] p-5`}>
-          <div className="flex items-start gap-3.5">
-            <span
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[hsl(var(--${meta.tone}))] text-base font-bold text-white`}
-              aria-hidden
-            >
-              {meta.icon}
-            </span>
-            <div className="min-w-0">
-              <p className={`font-semibold text-[hsl(var(--${meta.tone}))]`}>
-                {meta.title}
-              </p>
-              <p className="mt-1 text-sm text-fg-muted">{meta.body}</p>
-              {report.vendor_name && (
-                <p className="mt-2 text-xs text-fg-subtle">
-                  Bid from {report.vendor_name}
+      <Card className="overflow-hidden">
+        <div
+          className={`border-b bg-[hsl(var(--${meta.tone}-soft))] px-6 py-5`}
+        >
+          <div className="flex flex-wrap items-center gap-6">
+            <ComplianceRing counts={counts} />
+
+            <div className="min-w-[16rem] flex-1">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--${meta.tone}))] text-[11px] font-bold text-white`}
+                  aria-hidden
+                >
+                  {meta.icon}
+                </span>
+                <p
+                  className={`text-lg font-semibold tracking-tight text-[hsl(var(--${meta.tone}))]`}
+                >
+                  {meta.title}
                 </p>
-              )}
+              </div>
+              <p className="mt-2 max-w-lg text-sm leading-relaxed text-[hsl(var(--fg-muted))]">
+                {meta.body}
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+                {(Object.keys(STATUS_META) as CheckStatus[]).map((key) => {
+                  const value = counts[key] ?? 0;
+                  if (!value) return null;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setFilter(key)}
+                      title={STATUS_META[key].blurb}
+                      className="flex items-center gap-2 text-xs transition-opacity hover:opacity-70"
+                    >
+                      <span
+                        className={`h-2 w-2 rounded-full ${STATUS_META[key].dot}`}
+                      />
+                      <span className="tnum font-semibold">{value}</span>
+                      <span className="text-[hsl(var(--fg-muted))]">
+                        {STATUS_META[key].label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="space-y-3 p-5">
-          <StatusBar counts={counts} />
-          <div className="flex flex-wrap gap-x-5 gap-y-2">
-            {(Object.keys(STATUS_META) as CheckStatus[]).map((key) => {
-              const value = counts[key] ?? 0;
-              if (!value) return null;
-              return (
-                <div key={key} className="flex items-center gap-2 text-xs">
-                  <span className={`h-2 w-2 rounded-full ${STATUS_META[key].dot}`} />
-                  <span className="tnum font-semibold">{value}</span>
-                  <span className="text-fg-muted">{STATUS_META[key].label}</span>
-                </div>
-              );
-            })}
+        {report.vendor_name && (
+          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-xs text-[hsl(var(--fg-muted))]">
+            <span>
+              Bid from <span className="font-medium text-[hsl(var(--fg))]">{report.vendor_name}</span>
+            </span>
+            <span className="font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
+              {report.items.length} requirements checked
+            </span>
           </div>
-        </div>
+        )}
       </Card>
 
       {/* Section 4.6 — the action list, grouped by what the vendor can do. */}

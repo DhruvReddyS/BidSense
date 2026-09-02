@@ -156,14 +156,25 @@ class GapReport(BaseModel):
         """No mandatory requirement definitively failed.
 
         Deliberately not "everything is green": items needing manual check or
-        left unassessable keep this False-adjacent -- see `verdict`.
+        left unassessable keep this False-adjacent -- see `verdict`. A report
+        that checked nothing is not compliant either, since nothing was tested.
         """
-        return not self.blocking_items
+        return bool(self.items) and not self.blocking_items
 
     @property
     def verdict(self) -> str:
-        """Three-way, because a clean run and an undecidable run are different
-        answers and a vendor is entitled to know which one they got."""
+        """Four-way. A clean run, an undecidable run and a run that checked
+        nothing at all are three different answers, and a vendor is entitled to
+        know which one they got.
+
+        `not_checked` exists because the alternative is worse than useless: when
+        extraction yields no requirements -- a failed run, a scanned notification
+        with no OCR, a document in a format the parser could not read -- an
+        empty report would otherwise fall through to "compliant" and tell every
+        vendor they have no blocking issues. Silence is not a pass.
+        """
+        if not self.items:
+            return "not_checked"
         if self.blocking_items:
             return "not_compliant"
         if any(
@@ -172,6 +183,12 @@ class GapReport(BaseModel):
         ):
             return "needs_review"
         return "compliant"
+
+    @property
+    def was_checked(self) -> bool:
+        """False when nothing could be checked. Distinct from `is_compliant`,
+        which is about whether anything failed."""
+        return bool(self.items)
 
 
 def format_money(value: Decimal | None) -> str:
