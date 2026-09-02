@@ -37,6 +37,7 @@ class JobStatus(StrEnum):
 class JobKind(StrEnum):
     NOTIFICATION = "notification"
     SUBMISSION = "submission"
+    CORRIGENDUM = "corrigendum"
 
 
 job_status_enum = SAEnum(

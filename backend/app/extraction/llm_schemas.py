@@ -212,3 +212,68 @@ class PastProjectList(BaseModel):
 class SubmittedDocumentList(BaseModel):
     model_config = ConfigDict(extra="ignore")
     items: list[RawSubmittedDocument] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# Corrigendum (Section 5.6) -- an amendment to an already-extracted notification
+# --------------------------------------------------------------------------- #
+class RawCorrigendumHeader(BaseModel):
+    """Which notification this amends, and which of its header fields it restates.
+
+    The restated fields are extracted rather than the *changes* to them: a
+    corrigendum usually prints the new value and leaves the old one implicit,
+    and the old value is already in our database. Diffing is arithmetic on two
+    known values, so it belongs in code -- the same argument that keeps money
+    normalisation out of the model.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    corrigendum_id: str | None = Field(
+        default=None, description="The corrigendum's own reference number as printed."
+    )
+    parent_tender_id: str | None = Field(
+        default=None,
+        description="The tender reference this amends, exactly as printed in the corrigendum.",
+    )
+    issued_date: str | None = Field(default=None, description="ISO date YYYY-MM-DD.")
+    submission_deadline: str | None = Field(
+        default=None, description="The NEW bid submission deadline, ISO YYYY-MM-DD. Null if unchanged."
+    )
+    pre_bid_query_deadline: str | None = Field(
+        default=None, description="The NEW pre-bid query deadline, ISO YYYY-MM-DD. Null if unchanged."
+    )
+    emd_amount_raw: str | None = Field(
+        default=None, description="The NEW EMD exactly as printed. Null if unchanged. Do NOT convert."
+    )
+    contract_value_raw: str | None = Field(
+        default=None,
+        description="The NEW estimated contract value as printed. Null if unchanged. Do NOT convert.",
+    )
+
+
+class RawCorrigendumChange(Cited):
+    """One amendment the corrigendum states in so many words."""
+
+    subject: str = Field(
+        description="What is being amended, in the document's own words, e.g. "
+        "'Average annual turnover' or 'Last date for submission of bids'."
+    )
+    old_value: str | None = Field(
+        default=None,
+        description="The previous value, ONLY if the corrigendum prints it. Null otherwise. "
+        "Do not reconstruct it from knowledge of the original tender.",
+    )
+    new_value: str | None = Field(
+        default=None, description="The amended value exactly as printed. Do NOT convert."
+    )
+    change_kind: str = Field(
+        default="amended",
+        description="One of: 'amended', 'added', 'deleted', 'extended'.",
+    )
+
+
+class CorrigendumChangeList(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    items: list[RawCorrigendumChange] = Field(default_factory=list)

@@ -26,6 +26,8 @@ from app.api import jobs as job_runner
 from app.api.schemas import (
     AskRequest,
     AskResponse,
+    ChangedFieldOut,
+    CorrigendumOut,
     GapReportRequest,
     GapReportResponse,
     HealthResponse,
@@ -34,9 +36,12 @@ from app.api.schemas import (
     NotificationList,
     NotificationSummary,
     Page,
+    StalenessOut,
 )
 from app.db.models import IngestJob, JobKind
 from app.compliance.gap import build_gap_report
+from app.corrigendum.diff import FIELD_LABELS
+from app.corrigendum.staleness import mark_report_generated, staleness_for
 from app.config import settings
 from app.db.repository import (
     count_notifications,
@@ -202,6 +207,32 @@ def upload_submission(
     return _accept(job_id, path.name)
 
 
+@router.post("/corrigenda", response_model=JobAccepted, status_code=202)
+def upload_corrigendum(
+    file: UploadFile = File(...),
+    tender_id: str = Form(..., min_length=1, max_length=255),
+    session: Session = Depends(get_db),
+) -> JobAccepted:
+    """Section 5.6 (Part 1 slice) -- amend a notification already extracted.
+
+    Validated before queueing for the same reason a bid is: an amendment to a
+    tender we have never read cannot be diffed against anything, and finding
+    that out three minutes later helps nobody.
+    """
+    require_notification(session, tender_id)
+
+    path = _save_upload(file)
+    try:
+        job_id = job_runner.create_job(
+            JobKind.CORRIGENDUM, path.name, tender_id=tender_id
+        )
+        job_runner.submit(job_id, JobKind.CORRIGENDUM, path, tender_id=tender_id)
+    except Exception:
+        shutil.rmtree(path.parent, ignore_errors=True)
+        raise
+    return _accept(job_id, path.name)
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 def job_status(job_id: str, session: Session = Depends(get_db)) -> JobStatusResponse:
     try:
@@ -292,6 +323,45 @@ def get_submissions(tender_id: str, session: Session = Depends(get_db)):
     ]
 
 
+# Also before the greedy route below -- same reason as /submissions.
+@router.get("/notifications/{tender_id:path}/corrigenda", response_model=list[CorrigendumOut])
+def get_corrigenda(tender_id: str, session: Session = Depends(get_db)):
+    """Every amendment filed against this tender, newest first.
+
+    Not collapsed into one "current state": a tender amended twice was amended
+    twice, and the audit trail (5.5) needs both. Superseding them into a single
+    view is Part 2 work.
+    """
+    row = require_notification(session, tender_id)
+    return [
+        CorrigendumOut(
+            corrigendum_id=c.corrigendum_id,
+            parent_tender_id=c.parent_tender_id,
+            issued_date=c.issued_date,
+            source_file=c.source_file,
+            uploaded_at=c.created_at,
+            changed_fields=[
+                ChangedFieldOut(
+                    field_path=f.field_path,
+                    label=_field_label(f.field_path),
+                    old_value=f.old_value,
+                    new_value=f.new_value,
+                    clause_ref=f.clause_ref,
+                    source_page=f.source_page,
+                )
+                for f in c.changed_fields
+            ],
+        )
+        for c in sorted(row.corrigenda, key=lambda c: c.created_at, reverse=True)
+    ]
+
+
+def _field_label(field_path: str) -> str:
+    if field_path.startswith("unmapped:"):
+        return field_path.split(":", 1)[1]
+    return FIELD_LABELS.get(field_path, field_path.replace("_", " ").replace(".", " — "))
+
+
 # Declared last: {tender_id:path} matches anything, including the paths of the
 # more specific routes above.
 @router.get("/notifications/{tender_id:path}")
@@ -314,8 +384,28 @@ def gap_report(
         to_notification_schema(notification_row),
         to_submission_schema(submission_row),
     )
+
+    # Stamped on the FIRST report and on an explicit re-check, never on every
+    # read. Stamping on every read would clear the staleness banner the instant
+    # it rendered -- exactly when the vendor has not yet acted on it.
+    first_time = submission_row.last_gap_report_at is None
+    if first_time or request.acknowledge_amendments:
+        mark_report_generated(submission_row)
+        session.commit()
+
+    state = staleness_for(session, notification_row.id, submission_row)
     return GapReportResponse(
-        report=report, verdict=report.verdict, counts=report.counts
+        report=report,
+        verdict=report.verdict,
+        counts=report.counts,
+        staleness=StalenessOut(
+            stale=state.stale,
+            banner=state.banner,
+            corrigendum_id=state.corrigendum_id,
+            issued_date=state.issued_date,
+            changed_fields=list(state.changed_fields),
+            last_checked_at=state.last_checked_at,
+        ),
     )
 
 

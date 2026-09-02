@@ -13,6 +13,7 @@ import logging
 import uuid
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -39,6 +40,73 @@ logger = logging.getLogger(__name__)
 
 # Points per Qdrant upsert request.
 UPSERT_BATCH = 128
+
+
+def _claim_row(session: Session, lookup, build):
+    """Return the existing row for a unique key, inserting one if there is none.
+
+    The obvious `SELECT then INSERT` is not safe when two uploads of the same
+    document overlap, which they do: the API runs ingestion on a worker pool and
+    a user who double-clicks Upload, or re-uploads while the first run is still
+    going, produces exactly this. Both writers SELECT, both find nothing, both
+    INSERT, and the loser dies on the unique constraint -- observed as three
+    `uq_vendor_per_tender` failures out of four concurrent re-uploads.
+
+    Failing loudly there is better than duplicating, but it is still a failed
+    upload for work that was already done. So the INSERT goes inside a SAVEPOINT:
+    if it loses the race, only the savepoint rolls back, and the loser re-reads
+    the winner's row and updates it in place. Both writers converge on one row.
+
+    The SAVEPOINT is what makes this safe to retry -- a bare IntegrityError
+    poisons the whole transaction, and everything written before this point
+    would be lost with it.
+    """
+    row = session.scalar(lookup)
+    if row is not None:
+        return row
+    try:
+        with session.begin_nested():
+            row = build()
+            session.add(row)
+            session.flush()
+        return row
+    except IntegrityError:
+        session.expire_all()
+        row = session.scalar(lookup)
+        if row is None:
+            # Not the race we guarded: some other constraint was violated, and
+            # swallowing it would write a row nobody can explain.
+            raise
+        logger.info("lost an insert race; updating the row the other writer created")
+        return row
+
+
+def _lock_for_replace(session: Session, row) -> None:
+    """Serialize the wholesale replacement of a row's children.
+
+    Children are replaced, not merged (see the callers), and two writers doing
+    that to the same parent at once corrupt each other even though the parent
+    row itself is now race-free:
+
+        A: DELETE children ... INSERT children ... COMMIT
+        B: DELETE children   <- matches nothing, A already removed them
+           INSERT children   <- collides with A's rows on uq_turnover_per_year
+
+    B's ORM had the old children in its identity map, so it issues deletes by id
+    for rows that are gone (visible as SQLAlchemy's "expected to delete 3 row(s);
+    0 were matched" warning) and then inserts duplicates. Observed as
+    `uq_turnover_per_year` violations under four concurrent re-uploads of one bid.
+
+    `SELECT ... FOR UPDATE` on the parent makes B wait for A to commit; expiring
+    the row afterwards forces the children to be re-read as they now are, so B's
+    delete targets real rows. The two replacements then apply in sequence and the
+    last writer wins cleanly, which is what "re-extraction replaces" means.
+    """
+    session.flush()
+    session.execute(
+        select(type(row).id).where(type(row).id == row.id).with_for_update()
+    )
+    session.expire(row)
 
 
 def _prov(p: Provenance) -> dict:
@@ -98,8 +166,19 @@ def save_notification(
             session.flush()
             session.delete(duplicate)
     else:
-        row = TenderNotificationRow()
-        session.add(row)
+        # Insert under a savepoint so a concurrent upload of the same tender
+        # converges on one row instead of killing the loser's transaction.
+        row = _claim_row(
+            session,
+            select(TenderNotificationRow).where(
+                TenderNotificationRow.tender_id == notification.tender_id
+            ),
+            lambda: TenderNotificationRow(
+                tender_id=notification.tender_id,
+                title=notification.title,
+                issuing_authority=notification.issuing_authority,
+            ),
+        )
 
     row.tender_id = notification.tender_id
     row.title = notification.title
@@ -142,6 +221,9 @@ def save_notification(
 
     # Children are replaced wholesale, not merged: a partial merge would leave
     # criteria from a previous, possibly wrong, extraction silently in force.
+    # Locked first, so a concurrent re-extraction of the same tender replaces
+    # them after us rather than on top of us.
+    _lock_for_replace(session, row)
     row.eligibility_criteria.clear()
     row.mandatory_documents.clear()
     session.flush()
@@ -200,17 +282,25 @@ def save_submission(
             )
         )
 
-    row = session.scalar(
-        select(VendorSubmissionRow).where(
-            VendorSubmissionRow.vendor_id == submission.vendor_id,
-            VendorSubmissionRow.notification_id == notification_id,
-        )
+    lookup = select(VendorSubmissionRow).where(
+        VendorSubmissionRow.vendor_id == submission.vendor_id,
+        VendorSubmissionRow.notification_id == notification_id,
     )
-    if row is None:
-        row = VendorSubmissionRow()
-        session.add(row)
-    else:
+    existing = session.scalar(lookup)
+    if existing is not None:
         logger.info("Updating existing extraction for vendor %s", submission.vendor_id)
+    # Claimed under a savepoint: uq_vendor_per_tender makes two overlapping
+    # uploads of the same bid a race, and the loser should update the winner's
+    # row rather than fail an upload whose extraction has already been paid for.
+    row = _claim_row(
+        session,
+        lookup,
+        lambda: VendorSubmissionRow(
+            vendor_id=submission.vendor_id,
+            vendor_name=submission.vendor_name,
+            notification_id=notification_id,
+        ),
+    )
 
     row.vendor_id = submission.vendor_id
     row.vendor_name = submission.vendor_name
@@ -245,6 +335,7 @@ def save_submission(
 
     # Children are replaced wholesale, not merged: a partial merge would leave
     # figures from a previous, possibly wrong, extraction silently in force.
+    _lock_for_replace(session, row)
     row.turnover.clear()
     row.certifications.clear()
     row.past_projects.clear()
@@ -424,3 +515,58 @@ def index_submission(
         # tender_id rather than narrowing on it.
         stale_filter=build_filter(submission_id=str(row_id)),
     )
+
+
+def save_corrigendum(
+    session: Session,
+    corrigendum,
+    notification_row: TenderNotificationRow,
+    *,
+    source_file: str | None = None,
+) -> "CorrigendumRow":
+    """Insert or update an amendment against its parent notification.
+
+    Keyed on (notification, corrigendum_id) so re-uploading the same amendment
+    updates it rather than stacking a second copy -- which would show a vendor
+    the same change twice in the staleness banner.
+
+    A tender can legitimately carry SEVERAL corrigenda, so unlike the other two
+    save functions this one does not replace what is already there. Corrigendum
+    No. 2 does not supersede No. 1; both amended the tender, and the audit trail
+    (5.5) needs both.
+    """
+    from app.db.models import ChangedFieldRow, CorrigendumRow
+
+    lookup = select(CorrigendumRow).where(
+        CorrigendumRow.notification_id == notification_row.id,
+        CorrigendumRow.corrigendum_id == corrigendum.corrigendum_id,
+    )
+    row = _claim_row(
+        session,
+        lookup,
+        lambda: CorrigendumRow(
+            corrigendum_id=corrigendum.corrigendum_id,
+            notification_id=notification_row.id,
+            parent_tender_id=corrigendum.parent_tender_id,
+        ),
+    )
+
+    row.parent_tender_id = corrigendum.parent_tender_id
+    row.issued_date = corrigendum.issued_date
+    if source_file:
+        row.source_file = source_file
+
+    _lock_for_replace(session, row)
+    row.changed_fields.clear()
+    session.flush()
+    for change in corrigendum.changed_fields:
+        row.changed_fields.append(
+            ChangedFieldRow(
+                field_path=change.field_path,
+                old_value=change.old_value,
+                new_value=change.new_value,
+                **_prov(change.provenance),
+            )
+        )
+    session.flush()
+    return row

@@ -31,8 +31,11 @@ def test_document_names_are_embedded_once_not_once_per_requirement():
     Caching per (requirement, haystack) pair re-embeds that list once per
     requirement: 49 requirements against 50 documents becomes ~2,500 embeddings
     where 99 distinct ones exist, and the report takes minutes."""
-    requirements = [f"Required certificate number {i}" for i in range(20)]
-    submitted = [f"Enclosed certificate number {i}" for i in range(25)]
+    # Deliberately share no identifying vocabulary: the exact, alias and lexical
+    # tiers all short-circuit before the model, and this test is about how often
+    # the model is called. Names that resolve lexically would measure nothing.
+    requirements = [f"Kestrel{i} widget attestation" for i in range(20)]
+    submitted = [f"Marlin{i} gizmo confirmation" for i in range(25)]
 
     _embed_one.cache_clear()
     with patch(

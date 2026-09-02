@@ -113,12 +113,55 @@ class AskResponse(BaseModel):
 class GapReportRequest(BaseModel):
     tender_id: str
     vendor_id: str
+    acknowledge_amendments: bool = Field(
+        default=False,
+        description=(
+            "The one-click re-check (5.6). Viewing a report does not clear its "
+            "staleness banner -- the vendor may not have read it yet -- but "
+            "explicitly re-checking does."
+        ),
+    )
+
+
+class ChangedFieldOut(BaseModel):
+    field_path: str
+    label: str
+    old_value: str | None
+    new_value: str | None
+    clause_ref: str | None = None
+    source_page: int | None = None
+
+
+class CorrigendumOut(BaseModel):
+    corrigendum_id: str
+    parent_tender_id: str
+    issued_date: date | None
+    source_file: str | None = None
+    uploaded_at: datetime
+    changed_fields: list[ChangedFieldOut] = Field(default_factory=list)
+
+
+class StalenessOut(BaseModel):
+    """Section 5.6, Part 1 slice: the tender moved, the report has not.
+
+    `stale` is deliberately separate from the verdict. The verdict is still the
+    honest answer to the question that was asked; it was just asked about an
+    earlier version of the tender.
+    """
+
+    stale: bool
+    banner: str | None = None
+    corrigendum_id: str | None = None
+    issued_date: date | None = None
+    changed_fields: list[str] = Field(default_factory=list)
+    last_checked_at: datetime | None = None
 
 
 class GapReportResponse(BaseModel):
     report: GapReport
     verdict: str
     counts: dict[str, int]
+    staleness: StalenessOut
 
 
 NotificationList.model_rebuild()

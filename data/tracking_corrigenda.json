@@ -1,0 +1,40 @@
+{
+  "CMU-12011/17/2026-CMU": {
+    "file": "../data/corrigenda/CORRIGENDUM_No._1.pdf",
+    "corrigendum_id": "CORRIGENDUM No. 1",
+    "issued_date": "2026-08-12",
+    "amendments": {
+      "submission_deadline": {
+        "old": "22.08.2026",
+        "new": "05.09.2026"
+      },
+      "pre_bid_query_deadline": {
+        "old": "19.08.2026",
+        "new": "29.08.2026"
+      },
+      "emd_amount": {
+        "old": "Rs. 31,500/-",
+        "new": "Rs. 25,200/-"
+      }
+    },
+    "unmapped_notes": [
+      "Bidders are advised that the pre-bid meeting shall now be held in hybrid mode. The video-conference link shall be published on the Institute website two days prior to the meeting."
+    ]
+  },
+  "TENDER No.01/SE(Electrical)/GHMC/2024-25": {
+    "file": "../data/corrigenda/Corrigendum-II.pdf",
+    "corrigendum_id": "Corrigendum-II",
+    "issued_date": "2024-09-03",
+    "amendments": {
+      "submission_deadline": {
+        "old": "25.09.2024",
+        "new": "10.10.2024"
+      },
+      "contract_value_estimate": {
+        "old": "Rs. 298.72 Lakhs",
+        "new": "Rs. 312.45 Lakhs"
+      }
+    },
+    "unmapped_notes": []
+  }
+}

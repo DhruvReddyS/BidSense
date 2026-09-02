@@ -21,8 +21,12 @@ from pathlib import Path
 
 from app.db.models import IngestJob, JobKind, JobStatus
 from app.db.session import session_scope
-from app.extraction import ingest_notification, ingest_submission
-from app.extraction.graph import notification_node_names, vendor_node_names
+from app.extraction import ingest_corrigendum, ingest_notification, ingest_submission
+from app.extraction.graph import (
+    corrigendum_node_names,
+    notification_node_names,
+    vendor_node_names,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,15 @@ _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ingest")
 _lock = threading.Lock()
 
 
+# Which extractor set each job kind runs, so the progress bar's denominator is
+# right for all three rather than assuming every job is a six-node notification.
+_NODE_NAMES = {
+    JobKind.NOTIFICATION: notification_node_names,
+    JobKind.SUBMISSION: vendor_node_names,
+    JobKind.CORRIGENDUM: corrigendum_node_names,
+}
+
+
 def create_job(
     kind: JobKind,
     file_name: str,
@@ -41,7 +54,7 @@ def create_job(
     vendor_id: str | None = None,
     pages_total: int | None = None,
 ) -> uuid.UUID:
-    steps = len(notification_node_names() if kind is JobKind.NOTIFICATION else vendor_node_names())
+    steps = len(_NODE_NAMES[kind]())
     with session_scope() as session:
         job = IngestJob(
             kind=kind,
@@ -79,6 +92,8 @@ _STAGE_LABELS = {
     "certifications": "certifications",
     "past_projects": "past projects",
     "submitted_documents": "enclosed documents",
+    "corrigendum_header": "amendment details",
+    "corrigendum_changes": "what changed",
 }
 
 
@@ -111,6 +126,13 @@ def _progress_callback(job_id: uuid.UUID):
     return report
 
 
+_RUNNERS = {
+    JobKind.NOTIFICATION: ingest_notification,
+    JobKind.SUBMISSION: ingest_submission,
+    JobKind.CORRIGENDUM: ingest_corrigendum,
+}
+
+
 def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
     _update(
         job_id,
@@ -119,7 +141,7 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
         started_at=datetime.now(timezone.utc),
     )
     try:
-        runner = ingest_notification if kind is JobKind.NOTIFICATION else ingest_submission
+        runner = _RUNNERS[kind]
         report = _progress_callback(job_id)
         _update(job_id, stage="extracting")
         result = runner(path, on_node_complete=report, **kwargs)
@@ -133,7 +155,11 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
             stage="done",
             steps_done=result_steps(result),
             row_id=result.row_id,
-            tender_id=result.identifier if kind is JobKind.NOTIFICATION else kwargs.get("tender_id"),
+            tender_id=(
+                result.identifier
+                if kind is JobKind.NOTIFICATION
+                else kwargs.get("tender_id")
+            ),
             result={
                 "ok": result.ok,
                 "identifier": result.identifier,
@@ -187,6 +213,11 @@ _KNOWN_FAILURES: list[tuple[str, str]] = [
         "PERMISSION_DENIED",
         "The language model rejected the API key. Check GEMINI_API_KEY, or "
         "switch LLM_PROVIDER to ollama.",
+    ),
+    (
+        "to amend. Upload the original",
+        "This corrigendum names a tender that has not been uploaded yet. Upload "
+        "the original notification first, then the corrigendum.",
     ),
     (
         "Unsupported format",

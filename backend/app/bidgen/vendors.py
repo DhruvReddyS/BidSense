@@ -18,6 +18,7 @@ from app.bidgen.spec import VendorSpec
 GHMC_VENDORS = [
     VendorSpec(
         vendor_id="VENDOR_supply_01_01",
+        document_naming="alias",
         notification_id="NOTIF_supply_01",
         vendor_name="Lumina Electricals Private Limited",
         constitution="Private Limited Company registered under the Companies Act, 2013",
@@ -78,6 +79,7 @@ GHMC_VENDORS = [
     ),
     VendorSpec(
         vendor_id="VENDOR_supply_01_03",
+        document_naming="reworded",
         notification_id="NOTIF_supply_01",
         vendor_name="Deccan Lighting Solutions Private Limited",
         constitution="Private Limited Company registered under the Companies Act, 2013",
@@ -175,6 +177,7 @@ GHMC_VENDORS = [
 IITISM_VENDORS = [
     VendorSpec(
         vendor_id="VENDOR_civilworks_01_01",
+        document_naming="reworded",
         notification_id="NOTIF_civilworks_01",
         vendor_name="Jharkhand构 Constructions",   # replaced below
         constitution="Proprietorship Firm",
@@ -202,6 +205,7 @@ IITISM_VENDORS = [
     ),
     VendorSpec(
         vendor_id="VENDOR_civilworks_01_02",
+        document_naming="alias",
         notification_id="NOTIF_civilworks_01",
         vendor_name="Sahu Brothers Engineering Works",
         constitution="Partnership Firm registered under the Indian Partnership Act, 1932",
@@ -322,6 +326,7 @@ IITISM_VENDORS = [
 HGCL_VENDORS = [
     VendorSpec(
         vendor_id="VENDOR_civilworks_02_01",
+        document_naming="alias",
         notification_id="NOTIF_civilworks_02",
         vendor_name="Suryodaya Renewables Limited",
         constitution="Public Limited Company registered under the Companies Act, 2013",
@@ -448,6 +453,7 @@ HGCL_VENDORS = [
     ),
     VendorSpec(
         vendor_id="VENDOR_civilworks_02_05",
+        document_naming="reworded",
         notification_id="NOTIF_civilworks_02",
         vendor_name="Godavari Solar Ventures LLP",
         constitution="Limited Liability Partnership registered under the LLP Act, 2008",

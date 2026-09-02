@@ -73,6 +73,14 @@ class VendorSpec:
     # nothing else in the set would catch it. Declared rather than inferred from
     # the notes, so a reworded note cannot silently drop the coverage.
     is_borderline: bool = False
+    # How this bid names the documents it encloses (Section 6, document-name
+    # matching). "as_printed" copies the tender's own wording, which is what a
+    # generated corpus does by default and is precisely the problem: every name
+    # then matches by string equality and the alias, lexical and embedding tiers
+    # are never executed on real data. "alias" and "reworded" restate the names
+    # the way a bidder actually would, so the matcher has to earn the match.
+    # See app.bidgen.paraphrase.
+    document_naming: str = "as_printed"
     notes: str = ""
     extra_declarations: list[str] = field(default_factory=list)
 

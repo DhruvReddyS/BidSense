@@ -7,6 +7,8 @@ Section 10's elimination precision measures the fixture, not the pipeline.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.bidgen.render import build_pages
@@ -123,14 +125,25 @@ def test_a_compliant_bid_encloses_the_supplied_requirement_list():
 
 
 def test_an_omitted_document_is_listed_but_marked_absent():
-    """A real bid's checklist shows an outstanding item, it does not hide it."""
+    """A real bid's checklist shows an outstanding item, it does not hide it.
+
+    Asserted on the [X]/[ ] markers and the omitted NAME rather than on the
+    enclosed names: this vendor writes its checklist in its own words
+    (`document_naming`), so "PAN Card" legitimately appears as "Permanent
+    Account Number". The omitted document keeps the tender's wording -- renaming
+    it would change what the answer key says is missing.
+    """
     vendor = spec_for("VENDOR_supply_01_03")
     required = ["Manufacturers authorization form", "PAN Card", "GST registration"]
     text = " ".join(build_pages(vendor, PROFILES[vendor.notification_id], required))
 
     assert "NOT ENCLOSED" in text
-    assert "[X]  PAN Card" in text
-    assert "[X]  GST registration" in text
+    assert "Manufacturers authorization form" in text
+    # Counted on numbered checklist entries only. The legend above the list
+    # ("items marked [X] are enclosed") contains both markers too.
+    entries = re.findall(r"\d+\.\s+\[([X ])\]\s+(.+)", text)
+    assert [flag for flag, _ in entries] == ["X", "X", " "]
+    assert entries[-1][1].startswith("Manufacturers authorization form")
 
 
 def test_omission_matching_is_not_exact_string_only():

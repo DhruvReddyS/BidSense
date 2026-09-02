@@ -157,6 +157,36 @@ FIELD_GROUPS: dict[str, FieldGroup] = {
         ),
         query="past and ongoing projects: client, value, year, description of work executed",
     ),
+    # Corrigenda are short. Both groups keep the whole front matter, because an
+    # amendment's identity, its parent reference and its changes are usually all
+    # on page one -- and a page-selection miss on a two-page document costs the
+    # entire extraction rather than a field group.
+    "corrigendum_header": FieldGroup(
+        name="corrigendum_header",
+        cues=(
+            "corrigendum", "addendum", "amendment", "in reference to",
+            "tender no", "nit no", "bid notice", "issued on", "dated",
+            "extended", "revised", "last date", "due date", "emd",
+        ),
+        query=(
+            "corrigendum reference number, the tender it amends, date of issue, "
+            "revised submission deadline, revised EMD"
+        ),
+        always_include_first=3,
+    ),
+    "corrigendum_changes": FieldGroup(
+        name="corrigendum_changes",
+        cues=(
+            "amended", "amendment", "read as", "in place of", "instead of",
+            "substituted", "revised", "extended", "modified", "deleted",
+            "added", "stands", "may be read", "shall be read", "hereby",
+        ),
+        query=(
+            "clauses amended by this corrigendum, the previous wording and the "
+            "revised wording, extended dates, added or deleted requirements"
+        ),
+        always_include_first=3,
+    ),
     "submitted_documents": FieldGroup(
         name="submitted_documents",
         # "index" and "page no" are deliberately absent. They match a bid's own

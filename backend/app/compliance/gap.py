@@ -198,6 +198,35 @@ def _document_item(
             **base,
         )
 
+    explicitly_absent = doc_name.lower() in declared_absent or any(
+        normalise(doc_name) == normalise(a) for a in declared_absent
+    )
+
+    # Checked BEFORE the review band. When the bid's own checklist marks a
+    # document NOT ENCLOSED, that is the bidder telling us it is absent, and it
+    # outranks any resemblance to some other document they did enclose. Without
+    # this ordering a vendor who declared a missing manufacturer's authorisation
+    # was softened to "did you mean 'Document required from authorized
+    # dealers'?" -- turning a definite failure into a maybe, and losing the
+    # elimination.
+    if result.needs_review and not explicitly_absent:
+        # A near miss below the acceptance floor. Nothing is declared present --
+        # the vendor is asked, because telling them to obtain a document that is
+        # already in their bid under a different name is also a wrong answer.
+        return GapItem(
+            status=CheckStatus.PARTIAL,
+            severity=Severity.REVIEW,
+            found_value=result.review_candidate,
+            explanation=(
+                f"Your bid encloses “{result.review_candidate}”, which may be "
+                f"this document under a different name, but the names differ too "
+                f"much (similarity {result.score:.2f}) for us to treat it as "
+                "confirmed. Check it, and rename it to match the tender if it is."
+            ),
+            match_score=result.score,
+            **base,
+        )
+
     # Not found. Whether that disqualifies depends on whether the requirement
     # binds THIS bidder. A JV agreement is not a gap for a sole proprietor, and
     # reporting it as disqualifying buries the real failures in noise.
@@ -211,9 +240,6 @@ def _document_item(
             **base,
         )
 
-    explicitly_absent = doc_name.lower() in declared_absent or any(
-        normalise(doc_name) == normalise(a) for a in declared_absent
-    )
     return GapItem(
         status=CheckStatus.MISSING,
         severity=Severity.DISQUALIFYING,

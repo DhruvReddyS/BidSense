@@ -221,3 +221,43 @@ box or the words "NOT ENCLOSED" is present=false.
 
 VENDOR BID:
 {text}"""
+
+
+CORRIGENDUM_HEADER_PROMPT = """Extract the identifying fields of this CORRIGENDUM \
+(an amendment to a tender notification that has already been published).
+
+corrigendum_id is the amendment's OWN reference number ("Corrigendum No. 2",
+"Addendum-I"), not the tender's. parent_tender_id is the reference of the tender
+being amended, copied exactly as printed here.
+
+For submission_deadline, pre_bid_query_deadline, emd_amount_raw and
+contract_value_raw, return the NEW value ONLY if this corrigendum states one.
+Return null where the corrigendum does not mention that field -- null means
+"unchanged", and a value invented here would be recorded as an amendment that
+never happened, which is worse than missing one.
+
+Do NOT return the original tender's values from the surrounding recital text.
+Only the amended values.
+
+CORRIGENDUM:
+{text}"""
+
+
+CORRIGENDUM_CHANGES_PROMPT = """List every amendment this corrigendum makes to the \
+original tender.
+
+One entry per change. `subject` is what is being amended, in the document's own
+words. `new_value` is the amended value exactly as printed. `old_value` is the
+previous value ONLY where the corrigendum itself prints it -- corrigenda often
+say "in place of" or "instead of", and that is the only source you may use.
+Where the old value is not printed, return null; separate code holds the
+original tender and computes the difference.
+
+change_kind: 'extended' for a deadline moved later, 'amended' for a value
+replaced, 'added' for a requirement introduced, 'deleted' for one withdrawn.
+
+Do not list the corrigendum's own recitals, covering text, or instructions on
+how to download it. Only the substantive changes to the tender's terms.
+
+CORRIGENDUM:
+{text}"""

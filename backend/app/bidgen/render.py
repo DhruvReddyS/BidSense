@@ -186,7 +186,21 @@ def build_pages(
     """
     scale = scale or SCALES[tender.bid_scale]
     catalogue = list(required_documents or tender.key_documents)
+    # Renamed BEFORE the omission filter, so a deliberately omitted document is
+    # still recognised by its original name and the answer key stays exact.
     omitted_norm = {d.strip().lower() for d in spec.omitted_documents}
+    if getattr(spec, "document_naming", "as_printed") != "as_printed":
+        from app.bidgen.paraphrase import paraphrase
+
+        catalogue = [
+            name
+            if (
+                name.strip().lower() in omitted_norm
+                or any(o in name.strip().lower() for o in omitted_norm)
+            )
+            else paraphrase(name, spec.document_naming)
+            for name in catalogue
+        ]
 
     enclosed = [
         d for d in catalogue

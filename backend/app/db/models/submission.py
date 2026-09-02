@@ -9,12 +9,13 @@ not a JSONB path scan.
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     CheckConstraint,
     Date,
+    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -86,6 +87,12 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
     # the pointer so a chunk can be traced back to its row and vice versa.
     has_technical_approach: Mapped[bool] = mapped_column(default=False, nullable=False)
     source_file: Mapped[str | None] = mapped_column(Text)
+    # When a gap report was last put in front of someone (Section 5.6). Gap
+    # reports are computed on demand, not stored, so this timestamp is the only
+    # record that the vendor has SEEN a verdict -- and therefore the only thing a
+    # later corrigendum can make out of date. NULL means never reported, which is
+    # not the same as stale.
+    last_gap_report_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

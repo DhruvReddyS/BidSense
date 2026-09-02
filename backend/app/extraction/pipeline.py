@@ -157,3 +157,79 @@ def ingest_submission(
 
     logger.info(report.summary())
     return report
+
+
+def ingest_corrigendum(
+    path: str | Path,
+    *,
+    tender_id: str,
+    llm: LLMProvider | None = None,
+    on_node_complete=None,
+) -> IngestReport:
+    """Section 5.6 (Part 1 slice): amend an already-extracted notification.
+
+    The parent must already be in the database -- an amendment to a tender we
+    have never read cannot be diffed against anything, and storing it anyway
+    would produce a staleness banner naming changes we could not describe.
+    """
+    from app.corrigendum.staleness import Staleness  # noqa: F401  (documents intent)
+    from app.db.repository import to_notification_schema
+    from app.db.models import TenderNotificationRow
+    from app.extraction.graph import extract_corrigendum
+    from app.extraction.persist import save_corrigendum
+    from sqlalchemy import select
+
+    path = Path(path)
+    report = IngestReport(file_name=path.name, doc_kind=DocumentKind.NOTIFICATION)
+
+    started = time.perf_counter()
+    document = parse_document(path, DocumentKind.NOTIFICATION)
+    report.parse_seconds = time.perf_counter() - started
+    report.pages = document.page_count
+    report.ocr_pages = document.ocr_page_count
+    report.parse_warnings = document.parse_warnings
+
+    with session_scope() as session:
+        row = session.scalar(
+            select(TenderNotificationRow).where(
+                TenderNotificationRow.tender_id == tender_id
+            )
+        )
+        if row is None:
+            raise ValueError(
+                f"No notification {tender_id!r} to amend. Upload the original "
+                "tender before its corrigendum."
+            )
+        parent = to_notification_schema(row)
+
+    started = time.perf_counter()
+    corrigendum, result = extract_corrigendum(
+        document, parent, llm=llm, on_node_complete=on_node_complete
+    )
+    report.extract_seconds = time.perf_counter() - started
+    report.extraction_errors = result["errors"]
+    report.node_timings = result["timings"]
+    report.identifier = corrigendum.corrigendum_id
+
+    started = time.perf_counter()
+    with session_scope() as session:
+        notification_row = session.scalar(
+            select(TenderNotificationRow).where(
+                TenderNotificationRow.tender_id == tender_id
+            )
+        )
+        saved = save_corrigendum(
+            session, corrigendum, notification_row, source_file=str(path)
+        )
+        report.row_id = saved.id
+    report.persist_seconds = time.perf_counter() - started
+
+    # Not indexed into Qdrant. A corrigendum's text is short and its substance is
+    # the structured diff; chunking it would put amendment prose into retrieval
+    # alongside the clauses it amends, and a RAG answer citing both would read as
+    # a contradiction rather than a correction. Surfacing amendments in Q&A is
+    # Part 2 work and needs supersession handling, not just more chunks.
+    report.chunks_indexed = 0
+
+    logger.info(report.summary())
+    return report

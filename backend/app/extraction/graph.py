@@ -77,6 +77,9 @@ class ExtractionState(TypedDict, total=False):
     past_projects: list[raw.RawPastProject]
     submitted_documents: list[raw.RawSubmittedDocument]
 
+    corrigendum_header: raw.RawCorrigendumHeader | None
+    corrigendum_changes: list[raw.RawCorrigendumChange]
+
     on_node_complete: Any
     errors: Annotated[list[str], operator.add]
     timings: Annotated[list[tuple[str, float]], operator.add]
@@ -334,6 +337,92 @@ def extract_submission(
         tender_id=tender_id,
     )
     return submission, {
+        "errors": final.get("errors", []),
+        "timings": final.get("timings", []),
+        "parse_warnings": document.parse_warnings,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Corrigendum (Section 5.6) -- two nodes, not six
+# --------------------------------------------------------------------------- #
+# A corrigendum is a short document (typically one to three pages) that amends
+# an already-extracted notification. It needs the amendment's own identity and
+# the list of changes, and nothing else: re-running the full six-way notification
+# fan-out over it would spend six requests to re-read fields the corrigendum does
+# not restate, against a free tier of twenty per model per day.
+def extract_corrigendum_header(state: ExtractionState) -> dict:
+    result, errors, timings = _run(
+        state,
+        "corrigendum_header",
+        prompts.CORRIGENDUM_HEADER_PROMPT,
+        raw.RawCorrigendumHeader,
+    )
+    return {"corrigendum_header": result, "errors": errors, "timings": timings}
+
+
+def extract_corrigendum_changes(state: ExtractionState) -> dict:
+    return _list_node(
+        state,
+        "corrigendum_changes",
+        prompts.CORRIGENDUM_CHANGES_PROMPT,
+        raw.CorrigendumChangeList,
+        "corrigendum_changes",
+    )
+
+
+_CORRIGENDUM_NODES = {
+    "corrigendum_header": extract_corrigendum_header,
+    "corrigendum_changes": extract_corrigendum_changes,
+}
+
+_corrigendum_graph = None
+
+
+def corrigendum_node_names() -> list[str]:
+    return list(_CORRIGENDUM_NODES)
+
+
+def corrigendum_graph():
+    global _corrigendum_graph
+    if _corrigendum_graph is None:
+        _corrigendum_graph = _fan_out_graph(_CORRIGENDUM_NODES)
+    return _corrigendum_graph
+
+
+def extract_corrigendum(
+    document: ParsedDocument,
+    parent: TenderNotification,
+    *,
+    llm: LLMProvider | None = None,
+    on_node_complete=None,
+):
+    """Extract an amendment and diff it against the notification it amends.
+
+    The diff is computed here, in code, from the parent we already hold -- the
+    model is never asked what changed. It reads what the corrigendum printed;
+    comparing that against a stored value is deterministic, and a wrong answer
+    from a comparison is a bug rather than a sampling artefact.
+    """
+    from app.corrigendum.diff import diff_corrigendum
+
+    state = {
+        "document": document,
+        "text": document.full_text(),
+        "llm": llm or get_llm(),
+        "on_node_complete": on_node_complete,
+        "errors": [],
+        "timings": [],
+    }
+    final = corrigendum_graph().invoke(state)
+
+    corrigendum = diff_corrigendum(
+        parent,
+        final.get("corrigendum_header") or raw.RawCorrigendumHeader(),
+        final.get("corrigendum_changes") or [],
+        source_file=document.file_name,
+    )
+    return corrigendum, {
         "errors": final.get("errors", []),
         "timings": final.get("timings", []),
         "parse_warnings": document.parse_warnings,
