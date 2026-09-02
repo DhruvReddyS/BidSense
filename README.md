@@ -18,7 +18,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 226 tests
+../.venv/bin/python -m pytest -q           # 381 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -204,27 +204,33 @@ the clause the key names. A rule engine that rejects everybody scores perfect
 recall and is useless; one that rejects the right vendor for the wrong clause is
 not defensible if challenged, which is the point of Section 5.2.
 
-Against the GHMC tender — the real 68-page notification, 5 synthetic bids:
+Across all three real tenders, 15 bids of 60–172 pages each:
 
 | Metric | Value |
 |---|---|
-| Elimination precision | 100% |
-| Elimination recall | 100% |
-| F1 | 100% |
-| Reason accuracy | 100% |
+| Elimination precision | **100%** |
+| Elimination recall | **100%** |
+| F1 | **100%** |
+| Reason accuracy | **100%** |
 
-| Vendor | Intended | Predicted | Clause cited |
-|---|---|---|---|
-| 01 | pass | needs_review | — |
-| 02 | eliminate | not_compliant | 5 (turnover) ✓ |
-| 03 | eliminate | not_compliant | 7 (missing authorisation) ✓ |
-| 04 | eliminate | not_compliant | 3, 4 (debarment) ✓ |
-| 05 | pass (exactly on both thresholds) | needs_review | — |
+15 of 15 correct — 9 eliminations, 6 passes, no false positives or negatives,
+and every elimination citing the clause the answer key names.
+
+| Tender | Eliminations, with the clause cited |
+|---|---|
+| IIT (ISM) | `1.1(4)` similar work below 80% of estimate · `2.6(b)` no digital signature certificate · `1` turnover below 30% of estimate |
+| GHMC | `5` turnover below ₹3 Cr · `7` no manufacturer's authorisation · `3, 4` debarment |
+| HGCL | `28.1 vi)` liquidity below ₹49.855 Cr · `11.II(a)(h)` missing declaration · `2.2, 2.3` liquidation and debarment |
+
+Both relative thresholds on the IIT tender resolve correctly (80% and 30% of the
+estimated cost), and the borderline vendor sitting exactly on both passes —
+"not less than" is `>=`, and an off-by-one there would flip that vendor alone.
 
 Note that a passing vendor reports `needs_review`, not `compliant`: formatting
 and signing rules are always left to a human (Section 4.3), so nothing is ever
 declared fully clear. That is the honest answer, and it is why `verdict` is
-three-way rather than a boolean.
+four-way rather than a boolean — the fourth state, `not_checked`, exists so that
+a run which extracted nothing cannot be mistaken for a pass.
 
 The first run scored 67% recall. The miss was a bidder that **disclosed its own
 debarment in the bid text** while `is_blacklisted` — a manual flag under Section
@@ -246,8 +252,21 @@ cd backend
 
 ## Test data (Section 9.2)
 
-15 synthetic bids, 5 per notification, 9–10 pages each, written as real Indian
-technical bids. Ground truth is fixed **before** the prose (Section 9.2.1) and
+15 synthetic bids, 5 per notification, written as real Indian technical bids.
+Length is sized to the tender rather than chosen arbitrarily:
+
+| Tender | Value | Bid length | Scale |
+|---|---|---|---|
+| IIT (ISM) boundary wall | ₹12.5 lakh | ~60 pages | compact |
+| GHMC LED street lights | ₹29.9 crore | ~95 pages | standard |
+| HGCL 13 MW solar EPC | ₹99.7 crore | ~172 pages | comprehensive |
+
+The length comes from the sections that make real bids long — clause-by-clause
+specification compliance, a CV per named person, a method statement per
+activity, a case study per cited work, a declaration per page, an item-wise
+price schedule, reproduced annexures, and for the EPC a design basis report,
+an O&M plan and a survey sheet per roof block. Not padding: this is what page
+selection exists to handle, and a nine-page bid never exercised it. Ground truth is fixed **before** the prose (Section 9.2.1) and
 written to the tracking sheet in the same run, so the answer key cannot drift
 from the files.
 
