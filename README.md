@@ -204,21 +204,39 @@ the clause the key names. A rule engine that rejects everybody scores perfect
 recall and is useless; one that rejects the right vendor for the wrong clause is
 not defensible if challenged, which is the point of Section 5.2.
 
-First run against the GHMC tender (5 vendors, real 68-page notification):
+Against the GHMC tender — the real 68-page notification, 5 synthetic bids:
 
 | Metric | Value |
 |---|---|
 | Elimination precision | 100% |
-| Elimination recall | 67% |
+| Elimination recall | 100% |
+| F1 | 100% |
 | Reason accuracy | 100% |
-| Accuracy | 80% |
 
-The one miss was a bidder who **disclosed its own debarment in the bid text**
-while `is_blacklisted` — a manual flag under Section 5.8 — was unset, so the
-engine never saw it. Self-declared debarment is now extracted, and an
-elimination on that ground quotes the bidder's own words rather than asserting
-an internal flag. The reviewer's manual flag still wins when set: knowledge of
-an official list outranks what a bidder chose to admit.
+| Vendor | Intended | Predicted | Clause cited |
+|---|---|---|---|
+| 01 | pass | needs_review | — |
+| 02 | eliminate | not_compliant | 5 (turnover) ✓ |
+| 03 | eliminate | not_compliant | 7 (missing authorisation) ✓ |
+| 04 | eliminate | not_compliant | 3, 4 (debarment) ✓ |
+| 05 | pass (exactly on both thresholds) | needs_review | — |
+
+Note that a passing vendor reports `needs_review`, not `compliant`: formatting
+and signing rules are always left to a human (Section 4.3), so nothing is ever
+declared fully clear. That is the honest answer, and it is why `verdict` is
+three-way rather than a boolean.
+
+The first run scored 67% recall. The miss was a bidder that **disclosed its own
+debarment in the bid text** while `is_blacklisted` — a manual flag under Section
+5.8 — was unset, so the rule engine never saw it. Self-declared debarment is now
+extracted, and the elimination quotes the bidder's own words:
+
+> Your bid discloses that you are debarred or under insolvency proceedings:
+> *"We disclose that our firm was debarred by the Public Health Engineering
+> Department, Government of Chhattisgarh vide order dated 11.07.2023…"*
+
+A reviewer's manual flag still wins when set: knowledge of an official
+debarment list outranks what a bidder chose to admit.
 
 ```bash
 cd backend
