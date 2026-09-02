@@ -8,11 +8,21 @@
  */
 import type { CheckStatus, Severity, Verdict } from "@/lib/types";
 
-export type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "accent";
+export type Tone =
+  | "ok"
+  | "warn"
+  /** Outstanding: work to do before the deadline, not a failure. */
+  | "pending"
+  /** The only irreversible state. Reserved for "you do not qualify". */
+  | "bad"
+  | "info"
+  | "neutral"
+  | "accent";
 
 const TONE: Record<Tone, string> = {
   ok: "bg-[hsl(var(--ok-soft))] text-[hsl(var(--ok))] border-[hsl(var(--ok-border))]",
   warn: "bg-[hsl(var(--warn-soft))] text-[hsl(var(--warn))] border-[hsl(var(--warn-border))]",
+  pending: "bg-[hsl(var(--pending-soft))] text-[hsl(var(--pending))] border-[hsl(var(--pending-border))]",
   bad: "bg-[hsl(var(--bad-soft))] text-[hsl(var(--bad))] border-[hsl(var(--bad-border))]",
   info: "bg-[hsl(var(--info-soft))] text-[hsl(var(--info))] border-[hsl(var(--info-border))]",
   neutral:
@@ -39,29 +49,33 @@ export const STATUS_META: Record<
     dot: "bg-[hsl(var(--warn))]",
     blurb: "Probably covered, but confirm it",
   },
+  // Not "bad". Of 19 outstanding items on a real GHMC bid exactly one cannot
+  // be fixed before the deadline; painting the other 18 as failures is
+  // factually misleading and produces panic where the honest response is
+  // "here is your list".
   missing: {
-    label: "Missing",
-    tone: "bad",
-    token: "bad",
-    dot: "bg-[hsl(var(--bad))]",
-    blurb: "Not found — this blocks your bid",
+    label: "Outstanding",
+    tone: "pending",
+    token: "pending",
+    dot: "bg-[hsl(var(--pending))]",
+    blurb: "Not found in your bid — usually fixable before you submit",
   },
   // Worded as an instruction, not a verdict. The system has not checked these,
   // and the label must not imply that it has.
   manual_check: {
-    label: "Your call",
-    tone: "info",
-    token: "info",
-    dot: "bg-[hsl(var(--info))]",
-    blurb: "Needs a human eye",
+    label: "Your check",
+    tone: "warn",
+    token: "warn",
+    dot: "bg-[hsl(var(--warn))]",
+    blurb: "Visual or procedural — we do not claim to have verified it",
   },
   // "We could not read this" must never look like "you failed".
   not_assessable: {
     label: "Unreadable",
-    tone: "neutral",
-    token: "fg-subtle",
-    dot: "bg-[hsl(var(--fg-subtle))]",
-    blurb: "We could not read a value to compare",
+    tone: "warn",
+    token: "warn",
+    dot: "bg-[hsl(var(--warn))]",
+    blurb: "We could not read a value. That is not the same as failing it",
   },
 };
 
@@ -140,6 +154,7 @@ export const VERDICT_META: Record<
  * never defined.
  */
 export const TONE_SURFACE: Record<Tone, string> = {
+  pending: "bg-[hsl(var(--pending-soft))]",
   ok: "bg-[hsl(var(--ok-soft))] border-[hsl(var(--ok-border))]",
   warn: "bg-[hsl(var(--warn-soft))] border-[hsl(var(--warn-border))]",
   bad: "bg-[hsl(var(--bad-soft))] border-[hsl(var(--bad-border))]",
@@ -149,6 +164,7 @@ export const TONE_SURFACE: Record<Tone, string> = {
 };
 
 export const TONE_TEXT: Record<Tone, string> = {
+  pending: "text-[hsl(var(--pending))]",
   ok: "text-[hsl(var(--ok))]",
   warn: "text-[hsl(var(--warn))]",
   bad: "text-[hsl(var(--bad))]",
@@ -158,6 +174,7 @@ export const TONE_TEXT: Record<Tone, string> = {
 };
 
 export const TONE_SOLID: Record<Tone, string> = {
+  pending: "bg-[hsl(var(--pending))] text-white",
   ok: "bg-[hsl(var(--ok))]",
   warn: "bg-[hsl(var(--warn))]",
   bad: "bg-[hsl(var(--bad))]",
@@ -167,6 +184,7 @@ export const TONE_SOLID: Record<Tone, string> = {
 };
 
 export const TONE_EDGE: Record<Tone, string> = {
+  pending: "border-[hsl(var(--pending-border))]",
   ok: "border-l-[hsl(var(--ok))]",
   warn: "border-l-[hsl(var(--warn))]",
   bad: "border-l-[hsl(var(--bad))]",

@@ -168,7 +168,12 @@ export function BidChecker({
               Open this report on its own page →
             </Link>
           </div>
-          <GapReport data={report} />
+          <GapReport
+            data={report}
+            onRefresh={async (acknowledge) => {
+              setReport(await api.gapReport(tenderId, report.report.vendor_id, acknowledge));
+            }}
+          />
         </div>
       )}
 

@@ -15,91 +15,136 @@
  * every call site, so a component written once is correct in both themes.
  */
 @layer base {
+  /*
+   * Colour is derived from what this product decides, not from a palette.
+   *
+   * The inversion that matters: intensity tracks IRREVERSIBILITY, not severity.
+   * On a real GHMC bid, 19 items are outstanding and exactly ONE of them cannot
+   * be fixed before the deadline. Painting all 19 red is factually misleading
+   * and produces panic where the honest response is "here is your list". So the
+   * one strong colour in the system is reserved for "you do not qualify"; a
+   * missing document — a morning's work — gets a steady slate instead.
+   *
+   * Neutrals are warm (hue ~40, very low saturation) rather than the blue-grey
+   * default. The subject of this tool is printed paper, and a warm ramp reads
+   * as document rather than dashboard without tipping into skeuomorphism.
+   */
   :root {
     color-scheme: light;
 
-    --bg: 240 20% 99%;
-    --bg-alt: 240 20% 97%;
+    --bg: 40 24% 98%;
+    --bg-alt: 40 20% 96%;
     --surface: 0 0% 100%;
-    --surface-2: 240 14% 96.5%;
-    --surface-3: 240 12% 93%;
-    --border: 240 12% 90%;
-    --border-strong: 240 10% 82%;
+    --surface-2: 40 18% 96.5%;
+    --surface-3: 40 14% 92.5%;
+    --border: 40 12% 88%;
+    --border-strong: 40 10% 78%;
 
-    --fg: 240 16% 11%;
-    --fg-muted: 240 6% 44%;
-    --fg-subtle: 240 6% 58%;
+    --fg: 35 14% 12%;
+    --fg-muted: 35 7% 42%;
+    --fg-subtle: 35 6% 56%;
 
-    --accent: 243 80% 60%;
-    --accent-hover: 243 80% 54%;
+    /* Ink blue. It means one thing only: this is checkable, open the source. */
+    --accent: 216 52% 34%;
+    --accent-hover: 216 52% 27%;
     --accent-fg: 0 0% 100%;
-    --accent-soft: 243 100% 97.5%;
-    --accent-border: 243 80% 89%;
+    --accent-soft: 216 60% 96%;
+    --accent-border: 216 44% 83%;
 
-    --ok: 152 62% 30%;
-    --ok-soft: 150 62% 96%;
-    --ok-border: 150 46% 82%;
+    /* MET — deliberately the quietest state on screen. Nothing to do here. */
+    --ok: 140 18% 35%;
+    --ok-soft: 140 26% 96%;
+    --ok-border: 140 18% 84%;
 
-    --warn: 28 84% 40%;
-    --warn-soft: 40 92% 95.5%;
-    --warn-border: 38 84% 80%;
+    /* NEEDS YOUR OWN CHECK — the three-state honesty. A pencil mark, not an
+       error: format rules and near-matches are for a human to settle. */
+    --warn: 42 64% 32%;
+    --warn-soft: 44 72% 95%;
+    --warn-border: 42 48% 80%;
 
-    --bad: 358 68% 47%;
-    --bad-soft: 356 84% 97%;
-    --bad-border: 357 74% 88%;
+    /* OUTSTANDING — work to do, not failure. Most missing documents are
+       fixable before submission and the colour has to say so. */
+    --pending: 210 32% 35%;
+    --pending-soft: 210 40% 96%;
+    --pending-border: 210 28% 82%;
 
-    --info: 232 80% 56%;
-    --info-soft: 228 100% 97.5%;
-    --info-border: 228 80% 88%;
+    /* DOES NOT QUALIFY — the only genuinely irreversible state, and the only
+       strong colour. Oxblood: serious, not alarming. */
+    --bad: 353 50% 37%;
+    --bad-soft: 353 54% 96.5%;
+    --bad-border: 353 38% 84%;
 
-    --neutral-soft: 240 12% 95.5%;
-    --neutral-border: 240 10% 87%;
+    --info: 216 52% 34%;
+    --info-soft: 216 60% 96%;
+    --info-border: 216 44% 83%;
 
-    --shadow-color: 240 30% 20%;
-    --radius: 0.75rem;
+    --neutral-soft: 40 16% 95%;
+    --neutral-border: 40 12% 86%;
+
+    --shadow-color: 35 25% 20%;
+    --radius: 0.6rem;
+
+    /* Density, not breakpoint. A vendor checking one bid and a reviewer
+       scanning fifteen have different jobs, and responsive width does not
+       distinguish them -- both happen on the same laptop. */
+    --row-y: 0.85rem;
+    --row-x: 1.15rem;
+    --stack: 1.15rem;
+    --card-p: 1.25rem;
+  }
+
+  [data-density="compact"] {
+    --row-y: 0.5rem;
+    --row-x: 0.85rem;
+    --stack: 0.7rem;
+    --card-p: 0.85rem;
   }
 
   [data-theme="dark"] {
     color-scheme: dark;
 
-    --bg: 240 12% 7%;
-    --bg-alt: 240 12% 9%;
-    --surface: 240 11% 10.5%;
-    --surface-2: 240 10% 14%;
-    --surface-3: 240 9% 18%;
-    --border: 240 9% 19%;
-    --border-strong: 240 8% 28%;
+    --bg: 35 12% 8%;
+    --bg-alt: 35 11% 10%;
+    --surface: 35 10% 11.5%;
+    --surface-2: 35 9% 15%;
+    --surface-3: 35 8% 19%;
+    --border: 35 8% 21%;
+    --border-strong: 35 7% 32%;
 
-    --fg: 240 18% 96%;
-    --fg-muted: 240 8% 65%;
-    --fg-subtle: 240 7% 50%;
+    --fg: 40 16% 94%;
+    --fg-muted: 38 7% 66%;
+    --fg-subtle: 38 6% 50%;
 
-    --accent: 243 90% 72%;
-    --accent-hover: 243 90% 78%;
-    --accent-fg: 240 40% 10%;
-    --accent-soft: 243 40% 18%;
-    --accent-border: 243 45% 32%;
+    --accent: 213 70% 70%;
+    --accent-hover: 213 76% 78%;
+    --accent-fg: 216 50% 10%;
+    --accent-soft: 214 34% 20%;
+    --accent-border: 214 32% 34%;
 
-    --ok: 150 62% 62%;
-    --ok-soft: 152 32% 15%;
-    --ok-border: 152 28% 27%;
+    --ok: 142 30% 62%;
+    --ok-soft: 142 20% 15%;
+    --ok-border: 142 18% 27%;
 
-    --warn: 38 92% 66%;
-    --warn-soft: 36 40% 15%;
-    --warn-border: 36 34% 28%;
+    --warn: 43 62% 66%;
+    --warn-soft: 42 26% 15.5%;
+    --warn-border: 42 26% 30%;
 
-    --bad: 358 82% 70%;
-    --bad-soft: 358 38% 16%;
-    --bad-border: 358 34% 30%;
+    --pending: 210 46% 68%;
+    --pending-soft: 210 26% 16%;
+    --pending-border: 210 24% 31%;
 
-    --info: 230 92% 74%;
-    --info-soft: 230 38% 17%;
-    --info-border: 230 34% 31%;
+    --bad: 353 60% 68%;
+    --bad-soft: 353 28% 16%;
+    --bad-border: 353 26% 32%;
 
-    --neutral-soft: 240 10% 15%;
-    --neutral-border: 240 8% 24%;
+    --info: 213 70% 70%;
+    --info-soft: 214 34% 20%;
+    --info-border: 214 32% 34%;
 
-    --shadow-color: 240 60% 2%;
+    --neutral-soft: 35 9% 16%;
+    --neutral-border: 35 8% 26%;
+
+    --shadow-color: 35 40% 2%;
   }
 
   * {
@@ -128,10 +173,43 @@
     border-radius: 4px;
   }
 
-  /* Numbers that get compared must line up, or the reader cannot scan them. */
+  /*
+   * Three kinds of text on this screen, and they are read differently.
+   *
+   * PROSE is read left to right. System sans; personality here is a tax.
+   *
+   * AMOUNTS are compared by magnitude -- "is 3.45 below 3.77" -- which only
+   * works if the digits align vertically. Tabular figures, and the magnitude
+   * word (Cr / Lakh) dropped a step so the digits dominate the glance.
+   *
+   * IDENTIFIERS are compared character by character against a printed
+   * document: "28.1 vi)", "CMU-12011/17/2026-CMU", "page 67". They have
+   * internal structure a proportional font mangles, and the reader's task is
+   * matching, not reading. Monospace, and the same monospace everywhere so a
+   * clause ref is recognisable as a clause ref before it is read.
+   */
   .tnum {
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
+  }
+
+  .ref {
+    font-family: theme("fontFamily.mono");
+    font-size: 0.86em;
+    letter-spacing: -0.015em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .amount {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+  /* The unit is context, not the number. */
+  .amount .unit {
+    font-size: 0.82em;
+    font-weight: 400;
+    color: hsl(var(--fg-muted));
+    margin-left: 0.15em;
   }
 
   h1, h2, h3 {
@@ -210,14 +288,110 @@
            px-2 py-0.5 text-xs font-medium;
   }
 
-  /* A quiet grid behind the page header — enough texture to stop a plain
-     background reading as unfinished, faint enough to ignore. */
+  /*
+   * THE CITATION GRAMMAR.
+   *
+   * The one thing this product does that a person with a highlighter does not
+   * is refuse to assert anything without a clause behind it. That relationship
+   * is therefore the core visual unit, expressed identically everywhere it
+   * appears -- gap report, action list, RAG answer, export.
+   *
+   * The dotted underline is the footnote convention from legal and academic
+   * print: it says "there is a source for this" without shouting. On hover it
+   * goes solid and the clause chip fills, so the affordance telegraphs BEFORE
+   * the click -- a reader should know a figure is checkable without having to
+   * try it.
+   *
+   * Rule, absolute: a value that has provenance is never rendered bare.
+   */
+  /*
+   * Inline, not inline-flex. A requirement like "annual turnover on works of
+   * the individual/firm/company from Chartered Accountant" wraps to three
+   * lines, and as a flex item the clause ref floats off to the right of the
+   * first line -- detached from the words it belongs to, which breaks the one
+   * thing this component exists to express. Inline flow puts it immediately
+   * after the last word, where a footnote marker belongs.
+   */
+  .cited {
+    display: inline;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: left;
+  }
+  .cited > * + * {
+    margin-left: 0.4em;
+  }
+  .cited .claim {
+    border-bottom: 1px dotted hsl(var(--accent) / 0.55);
+    padding-bottom: 1px;
+    transition: border-color 0.14s ease, background-color 0.14s ease;
+  }
+  .cited .src {
+    @apply ref rounded px-1 py-px;
+    white-space: nowrap;
+    color: hsl(var(--fg-subtle));
+    border: 1px solid transparent;
+    transition: all 0.14s ease;
+  }
+  .cited:hover .claim,
+  .cited:focus-visible .claim {
+    border-bottom: 1px solid hsl(var(--accent));
+    background: hsl(var(--accent) / 0.07);
+  }
+  .cited:hover .src,
+  .cited:focus-visible .src {
+    color: hsl(var(--accent));
+    border-color: hsl(var(--accent-border));
+    background: hsl(var(--accent-soft));
+  }
+  /* Revealed on hover: names the destination before the click. */
+  .cited .go {
+    @apply ref whitespace-nowrap;
+    color: hsl(var(--accent));
+    opacity: 0;
+    transition: opacity 0.14s ease;
+  }
+  .cited:hover .go,
+  .cited:focus-visible .go {
+    opacity: 1;
+  }
+
+  /*
+   * State markers. Colour alone cannot carry the three-state honesty -- it is
+   * one channel, and it fails for a colour-blind reader entirely. Each state
+   * therefore also has a SHAPE, so met/outstanding/needs-your-check are
+   * distinguishable at a glance and in a screenshot.
+   */
+  .marker {
+    @apply inline-block h-[9px] w-[9px] shrink-0 rounded-[2px];
+    border: 1.5px solid currentColor;
+  }
+  .marker-met { background: currentColor; }                 /* filled  */
+  .marker-outstanding { background: transparent; }          /* open    */
+  .marker-check {                                            /* half    */
+    background: linear-gradient(135deg, currentColor 50%, transparent 50%);
+  }
+  .marker-fail {                                             /* struck  */
+    background: transparent;
+    position: relative;
+  }
+  .marker-fail::after {
+    content: "";
+    position: absolute;
+    inset: -1.5px;
+    background: linear-gradient(
+      to bottom right,
+      transparent 44%, currentColor 44%, currentColor 56%, transparent 56%
+    );
+  }
+
+  /*
+   * The header backdrop was a decorative grid. Removed rather than restyled:
+   * it helped nobody verify a claim or reach a decision, which is the only
+   * test a mark on this screen has to pass.
+   */
   .grid-backdrop {
-    background-image:
-      linear-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.55) 1px, transparent 1px);
-    background-size: 46px 46px;
-    mask-image: radial-gradient(ellipse 75% 100% at 50% 0%, #000 25%, transparent 78%);
+    background: none;
   }
 }
 

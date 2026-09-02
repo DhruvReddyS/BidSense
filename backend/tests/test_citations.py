@@ -216,3 +216,54 @@ def test_a_document_that_was_never_retained_is_a_clear_404() -> None:
     response = TestClient(app).get(f"/api/documents/{'a' * 64}/page/1")
     assert response.status_code == 404
     assert "not retained" in response.json()["detail"]
+
+
+# --------------------------------------------------------------------------- #
+# Precision: the highlight must cover the clause and nothing else
+# --------------------------------------------------------------------------- #
+def test_the_highlight_does_not_run_into_the_previous_sentence() -> None:
+    """The failure this alignment replaced.
+
+    A fixed-length window scored on set overlap cannot tell WHERE the words are,
+    only how many are present. On this real clause the preceding sentence shares
+    every distinctive word -- "3", "three", "financial", "years" -- so the
+    window locked onto it, and the highlight started a line early and stopped a
+    line short. Invisible in a test that only counted boxes; obvious the moment
+    anyone zoomed in.
+    """
+    line_one = _line(
+        "from Chartered Accountant as per returns filed for the past 3 three "
+        "financial years. Average Annual financial turnover during the last 3 three",
+        top=100.0,
+    )
+    line_two = _line(
+        "financial years ending 2024-25, should be at least 30% of the estimated cost.",
+        top=118.0,
+    )
+    words = line_one + line_two
+
+    boxes = find_highlight_boxes(
+        words,
+        "Average Annual financial turnover during the last 3 (three) financial "
+        "years ending 2024-25",
+    )
+    assert boxes, "the clause was not found at all"
+
+    # The highlight must begin at "Average", not at the "3" eleven words earlier.
+    average_x = next(w["x0"] for w in line_one if w["text"] == "Average")
+    assert boxes[0][0] >= average_x - 1, (
+        "the highlight starts before the cited clause, in the previous sentence"
+    )
+    # And it must reach the end of the clause on the second line.
+    end_x = next(w["x1"] for w in line_two if w["text"].startswith("2024"))
+    assert boxes[-1][2] >= end_x - 1, "the highlight stops short of the cited clause"
+
+
+def test_a_stray_common_word_elsewhere_does_not_stretch_the_highlight() -> None:
+    """Alignment keeps only blocks near the main match. Without that, a single
+    "the" at the far end of the page pulls the span across half of it."""
+    words = _line("the quick brown fox jumps over a lazy dog and then " * 1)
+    words += _line("Earnest Money Deposit shall be Rs 31,500 payable to the Director", top=140.0)
+    boxes = find_highlight_boxes(words, "Earnest Money Deposit shall be Rs 31,500")
+    assert len(boxes) == 1, f"the highlight spilled onto another line: {boxes}"
+    assert boxes[0][1] >= 140.0 - 1

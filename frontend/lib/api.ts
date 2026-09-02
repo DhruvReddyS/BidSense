@@ -1,5 +1,6 @@
 import type {
   AskResponse,
+  Corrigendum,
   GapReportResponse,
   Health,
   JobAccepted,
@@ -71,12 +72,78 @@ export const api = {
 
   job: (jobId: string) => request<JobStatus>(`/api/jobs/${jobId}`),
 
-  gapReport: (tenderId: string, vendorId: string) =>
+  gapReport: (tenderId: string, vendorId: string, acknowledgeAmendments = false) =>
     request<GapReportResponse>("/api/gap-report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tender_id: tenderId, vendor_id: vendorId }),
+      body: JSON.stringify({
+        tender_id: tenderId,
+        vendor_id: vendorId,
+        acknowledge_amendments: acknowledgeAmendments,
+      }),
     }),
+
+  corrigenda: (tenderId: string) =>
+    request<Corrigendum[]>(
+      `/api/notifications/${encodeURIComponent(tenderId)}/corrigenda`,
+    ),
+
+  uploadCorrigendum: (file: File, tenderId: string) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("tender_id", tenderId);
+    return request<JobAccepted>("/api/corrigenda", { method: "POST", body });
+  },
+
+  /** The rendered page a citation points at, with the passage marked. Returned
+   *  as an object URL the caller revokes: these are ~200KB PNGs and leaking one
+   *  per citation click adds up over a session. */
+  citationPage: async (
+    contentHash: string,
+    page: number,
+    highlight?: string | null,
+  ): Promise<{ url: string; highlights: number; pageCount: number }> => {
+    const params = new URLSearchParams();
+    if (highlight) params.set("highlight", highlight.slice(0, 2000));
+    const response = await fetch(
+      `${BASE}/api/documents/${contentHash}/page/${page}?${params}`,
+      { cache: "force-cache" },
+    );
+    if (!response.ok) {
+      throw new ApiError(
+        response.status === 404
+          ? "The source document for this citation is not retained. Re-upload it to enable page previews."
+          : `Could not render page ${page}.`,
+        response.status,
+      );
+    }
+    const blob = await response.blob();
+    return {
+      url: URL.createObjectURL(blob),
+      highlights: Number(response.headers.get("X-Highlights") ?? 0),
+      pageCount: Number(response.headers.get("X-Page-Count") ?? 0),
+    };
+  },
+
+  documentUrl: (contentHash: string) => `${BASE}/api/documents/${contentHash}`,
+
+  exportGapReport: async (tenderId: string, vendorId: string, fmt: "pdf" | "docx") => {
+    const response = await fetch(`${BASE}/api/gap-report/export?fmt=${fmt}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tender_id: tenderId, vendor_id: vendorId }),
+    });
+    if (!response.ok) throw new ApiError(`Export failed (${response.status}).`, response.status);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `compliance_${vendorId}.${fmt}`.replace(/[^\w.-]+/g, "_");
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
 
   ask: (question: string, tenderId: string, vendorId?: string) =>
     request<AskResponse>("/api/ask", {

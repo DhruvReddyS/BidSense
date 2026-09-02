@@ -63,6 +63,10 @@ export interface ActionItem {
   group: ActionGroup;
   requirement: string;
   clause_ref: string | null;
+  /** Non-null when the item binds only some bidders (a JV agreement, an MSME
+   *  concession). The UI groups these apart so a sole proprietor is not handed
+   *  six to-dos they neither have nor need. */
+  applies_only_if: string | null;
 }
 
 export interface GapReport {
@@ -74,10 +78,78 @@ export interface GapReport {
   action_list: ActionItem[];
 }
 
+/** A count of mandatory requirements met. Explicitly NOT a score: `caveat`
+ *  travels with the number and must be rendered beside it, never dropped. */
+export interface Completion {
+  satisfied: number;
+  total: number;
+  undetermined: number;
+  label: string;
+  caveat: string;
+}
+
+export interface ValidationFinding {
+  field: string;
+  severity: "error" | "warning";
+  message: string;
+  value: string | null;
+  affects_confidence: boolean;
+  source: "notification" | "bid";
+}
+
+/** How far the figures can be trusted. Separate from the verdict: one answers
+ *  "does this bid meet the tender", the other "how good was our reading". */
+export interface DataQuality {
+  ok: boolean;
+  banner: string | null;
+  findings: ValidationFinding[];
+}
+
+/** Section 5.6 — the tender moved, this report has not. */
+export interface Staleness {
+  stale: boolean;
+  banner: string | null;
+  corrigendum_id: string | null;
+  issued_date: string | null;
+  changed_fields: string[];
+  last_checked_at: string | null;
+}
+
+/** Content hashes for opening a citation on its source page. Null when the
+ *  document predates the store — the UI then shows page and clause without a
+ *  page image rather than a broken link. */
+export interface SourceDocuments {
+  notification: string | null;
+  bid: string | null;
+}
+
 export interface GapReportResponse {
   report: GapReport;
   verdict: Verdict;
   counts: Record<string, number>;
+  staleness: Staleness;
+  data_quality: DataQuality;
+  completion: Completion;
+  action_counts: { blocking: number; to_check: number; conditional: number };
+  sources: SourceDocuments;
+}
+
+export interface ChangedField {
+  field_path: string;
+  label: string;
+  old_value: string | null;
+  new_value: string | null;
+  clause_ref: string | null;
+  source_page: number | null;
+}
+
+export interface Corrigendum {
+  corrigendum_id: string;
+  parent_tender_id: string;
+  issued_date: string | null;
+  source_file: string | null;
+  uploaded_at: string;
+  changed_fields: ChangedField[];
 }
 
 export interface Citation {
@@ -91,6 +163,11 @@ export interface Citation {
   label: string;
 }
 
+/** How well retrieval matched the question. `none` means the model was never
+ *  called: handing it loosely related passages invites an answer stitched from
+ *  whatever it was given, and every citation in that answer would be real. */
+export type Confidence = "high" | "low" | "none";
+
 export interface GroundedAnswer {
   question: string;
   answer: string;
@@ -98,11 +175,15 @@ export interface GroundedAnswer {
   retrieved: Citation[];
   invented_citations: number[];
   answered: boolean;
+  confidence: Confidence;
+  caveat: string | null;
 }
 
 export interface AskResponse {
   answer: GroundedAnswer;
   grounded: boolean;
+  confidence: Confidence;
+  sources: SourceDocuments;
 }
 
 export interface NotificationSummary {
@@ -127,7 +208,7 @@ export interface JobAccepted {
 
 export interface JobStatus {
   job_id: string;
-  kind: "notification" | "submission";
+  kind: "notification" | "submission" | "corrigendum";
   status: "queued" | "running" | "succeeded" | "partial" | "failed";
   stage: string | null;
   progress: number;
@@ -201,6 +282,11 @@ export interface IngestResponse {
   parse_warnings: string[];
   extraction_errors: string[];
   seconds: number;
+  /** Which provider and model produced it. A run served by the local fallback
+   *  is a different run, and nothing else in the report says which. */
+  extracted_by?: string | null;
+  validation_summary?: string | null;
+  validation?: { field: string; severity: string; message: string }[];
 }
 
 export interface Health {

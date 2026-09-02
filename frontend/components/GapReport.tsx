@@ -1,27 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+
+import { api } from "@/lib/api";
 import type {
-  ActionGroup,
   ActionItem,
   CheckStatus,
   GapItem,
   GapReportResponse,
 } from "@/lib/types";
-import { ComplianceRing } from "./Ring";
-import {
-  Card,
-  Chip,
-  SectionTitle,
-  STATUS_META,
-  StatusChip,
-  TONE_EDGE,
-  TONE_SOLID,
-  TONE_SURFACE,
-  TONE_TEXT,
-  VERDICT_META,
-} from "./ui";
-import type { Tone } from "./ui";
+import { ActionList } from "./ActionList";
+import { DataQualityBanner, StalenessBanner } from "./Banners";
+import { CitationViewer, type CitationTarget } from "./CitationViewer";
+import { CompletionMeter } from "./CompletionMeter";
+import { Amount, Cited, STATE, StateTag } from "./Cited";
+import { TONE_EDGE, TONE_SURFACE, TONE_TEXT, VERDICT_META } from "./ui";
 
 const KIND_LABEL: Record<GapItem["kind"], string> = {
   document: "Document",
@@ -40,437 +33,434 @@ const FILTERS: (CheckStatus | "all" | "blocking")[] = [
   "match",
 ];
 
-export function GapReport({ data }: { data: GapReportResponse }) {
+const FILTER_LABEL: Record<string, string> = {
+  all: "All",
+  blocking: "Cannot be fixed",
+  missing: "Outstanding",
+  partial: "Confirm",
+  manual_check: "Your check",
+  not_assessable: "Unreadable",
+  match: "Met",
+};
+
+// The same shapes as the rows, so a filter reads as the state it selects.
+const FILTER_MARKER: Record<string, string> = {
+  blocking: "marker-fail",
+  missing: "marker-outstanding",
+  partial: "marker-check",
+  manual_check: "marker-check",
+  not_assessable: "marker-check",
+  match: "marker-met",
+};
+
+export function GapReport({
+  data,
+  onRefresh,
+}: {
+  data: GapReportResponse;
+  onRefresh?: (acknowledgeAmendments: boolean) => Promise<void> | void;
+}) {
   const [filter, setFilter] = useState<CheckStatus | "all" | "blocking">("all");
-  const [group, setGroup] = useState(true);
-  const { report, verdict, counts } = data;
+  const [tab, setTab] = useState<"actions" | "requirements">("actions");
+  // Density, not a breakpoint. A vendor checking one bid and a reviewer
+  // scanning fifteen are different jobs on the same laptop.
+  const [dense, setDense] = useState(false);
+  const [citation, setCitation] = useState<CitationTarget | null>(null);
+  const [rechecking, setRechecking] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "docx" | null>(null);
+
+  const { report, verdict, counts, staleness, data_quality, completion, sources } = data;
   const meta = VERDICT_META[verdict];
 
   const blocking = useMemo(
-    () => report.items.filter((i) => i.severity === "disqualifying"),
+    () => report.items.filter((item) => item.severity === "disqualifying"),
     [report.items],
+  );
+
+  // Only the genuinely irreversible ones. `action_counts.blocking` also counts
+  // documents to attach -- they block a submission, but they are fixable by
+  // definition, and labelling them "cannot be fixed" put the SAME item under
+  // two contradictory headings on a real report.
+  const unfixable = useMemo(
+    () => report.action_list.filter((action) => action.group === "hard_fail").length,
+    [report.action_list],
   );
 
   const visible = useMemo(() => {
     if (filter === "all") return report.items;
     if (filter === "blocking") return blocking;
-    return report.items.filter((i) => i.status === filter);
+    return report.items.filter((item) => item.status === filter);
   }, [filter, report.items, blocking]);
 
-  const grouped = useMemo(() => {
-    if (!group) return [["All requirements", visible]] as [string, GapItem[]][];
-    const buckets = new Map<string, GapItem[]>();
-    for (const item of visible) {
-      const key = KIND_LABEL[item.kind];
-      buckets.set(key, [...(buckets.get(key) ?? []), item]);
+  const tenderLabel = report.tender_id;
+  const bidLabel = report.vendor_name ?? report.vendor_id;
+
+  /** Open a citation on whichever document it belongs to. */
+  const openCitation = useCallback(
+    (side: "notification" | "bid", item: GapItem) => {
+      const provenance =
+        side === "notification" ? item.notification_provenance : item.submission_provenance;
+      setCitation({
+        contentHash: side === "notification" ? sources.notification : sources.bid,
+        page: provenance?.source_page ?? null,
+        snippet: provenance?.source_snippet ?? null,
+        clauseRef: provenance?.clause_ref ?? null,
+        documentLabel: side === "notification" ? tenderLabel : bidLabel,
+      });
+    },
+    [sources, tenderLabel, bidLabel],
+  );
+
+  const openActionCitation = useCallback(
+    (action: ActionItem) => {
+      // The action list carries a clause reference; the matching gap item
+      // carries the page and the snippet needed to mark the passage.
+      const source = report.items.find(
+        (item) => item.requirement === action.requirement,
+      );
+      setCitation({
+        contentHash: sources.notification,
+        page: source?.notification_provenance?.source_page ?? null,
+        snippet: source?.notification_provenance?.source_snippet ?? null,
+        clauseRef: action.clause_ref,
+        documentLabel: tenderLabel,
+      });
+    },
+    [report.items, sources.notification, tenderLabel],
+  );
+
+  async function recheck() {
+    if (!onRefresh) return;
+    setRechecking(true);
+    try {
+      await onRefresh(true);
+    } finally {
+      setRechecking(false);
     }
-    // Thresholds first: a failed number is the most consequential kind of gap.
-    const order = ["Threshold", "Document", "Condition", "Submission rule"];
-    return order
-      .filter((k) => buckets.has(k))
-      .map((k) => [k, buckets.get(k)!] as [string, GapItem[]]);
-  }, [visible, group]);
+  }
+
+  async function exportAs(fmt: "pdf" | "docx") {
+    setExporting(fmt);
+    try {
+      await api.exportGapReport(report.tender_id, report.vendor_id, fmt);
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Verdict ------------------------------------------------------- */}
-      <Card className="overflow-hidden">
-        <div className={`border-b px-6 py-5 ${TONE_SURFACE[meta.tone]}`}>
-          <div className="flex flex-wrap items-center gap-6">
-            <ComplianceRing counts={counts} />
+    <div className="space-y-5" data-density={dense ? "compact" : "comfortable"}>
+      <StalenessBanner staleness={staleness} onRecheck={recheck} rechecking={rechecking} />
 
-            <div className="min-w-[16rem] flex-1">
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold text-white ${TONE_SOLID[meta.tone]}`}
-                  aria-hidden
-                >
-                  {meta.icon}
-                </span>
-                <p
-                  className={`text-lg font-semibold tracking-tight ${TONE_TEXT[meta.tone]}`}
-                >
-                  {meta.title}
-                </p>
-              </div>
-              <p className="mt-2 max-w-lg text-sm leading-relaxed text-[hsl(var(--fg-muted))]">
+      {/* Verdict — the answer to the question the vendor came with. */}
+      <section
+        className={`card overflow-hidden border-2 ${TONE_EDGE[meta.tone]}`}
+        aria-labelledby="verdict-heading"
+      >
+        <div className={`px-5 py-4 sm:px-6 sm:py-5 ${TONE_SURFACE[meta.tone]}`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="label">Verdict</p>
+              <h2
+                id="verdict-heading"
+                className={`mt-1 text-xl font-semibold tracking-tight sm:text-2xl ${TONE_TEXT[meta.tone]}`}
+              >
+                {meta.title}
+              </h2>
+              <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-fg-muted">
                 {meta.body}
               </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <button
+                className="btn btn-ghost text-xs"
+                onClick={() => exportAs("pdf")}
+                disabled={exporting !== null}
+              >
+                {exporting === "pdf" ? "Preparing…" : "Export PDF"}
+              </button>
+              <button
+                className="btn btn-ghost text-xs"
+                onClick={() => exportAs("docx")}
+                disabled={exporting !== null}
+              >
+                {exporting === "docx" ? "Preparing…" : "Export DOCX"}
+              </button>
+            </div>
+          </div>
+        </div>
 
-              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
-                {(Object.keys(STATUS_META) as CheckStatus[]).map((key) => {
-                  const value = counts[key] ?? 0;
-                  if (!value) return null;
+        <dl className="grid grid-cols-2 divide-x divide-y border-t sm:grid-cols-4 sm:divide-y-0">
+          <Stat
+            label="Cannot be fixed"
+            value={unfixable}
+            marker="marker-fail"
+            colour="text-[hsl(var(--bad))]"
+          />
+          <Stat
+            label="Outstanding"
+            value={counts.missing ?? 0}
+            marker="marker-outstanding"
+            colour="text-[hsl(var(--pending))]"
+          />
+          <Stat
+            label="Your own check"
+            value={(counts.manual_check ?? 0) + (counts.partial ?? 0) + (counts.not_assessable ?? 0)}
+            marker="marker-check"
+            colour="text-[hsl(var(--warn))]"
+          />
+          <Stat
+            label="Met"
+            value={counts.match ?? 0}
+            marker="marker-met"
+            colour="text-[hsl(var(--ok))]"
+          />
+        </dl>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="order-2 min-w-0 space-y-5 lg:order-1">
+          <div
+            className="flex gap-1 rounded-lg border bg-[hsl(var(--surface-2))] p-1"
+            role="tablist"
+          >
+            {(
+              [
+                ["actions", `What to do (${report.action_list.length})`],
+                ["requirements", `Every requirement (${report.items.length})`],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                  tab === key
+                    ? "bg-[hsl(var(--surface))] text-fg shadow-sm"
+                    : "text-fg-muted hover:text-fg"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {tab === "requirements" ? (
+            <div className="flex items-center justify-end">
+              <button
+                className="ref text-fg-subtle underline-offset-2 hover:text-fg hover:underline"
+                onClick={() => setDense((value) => !value)}
+                title="Denser rows for working across many requirements"
+              >
+                {dense ? "comfortable rows" : "compact rows"}
+              </button>
+            </div>
+          ) : null}
+
+          {tab === "actions" ? (
+            <ActionList actions={report.action_list} onCite={openActionCitation} />
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {FILTERS.map((key) => {
+                  const count =
+                    key === "all"
+                      ? report.items.length
+                      : key === "blocking"
+                        ? blocking.length
+                        : (counts[key] ?? 0);
+                  if (!count && key !== "all") return null;
                   return (
                     <button
                       key={key}
                       onClick={() => setFilter(key)}
-                      title={STATUS_META[key].blurb}
-                      className="flex items-center gap-2 text-xs transition-opacity hover:opacity-70"
+                      className={`chip transition-colors ${
+                        filter === key
+                          ? "border-[hsl(var(--accent-border))] bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]"
+                          : "border-[hsl(var(--border))] bg-[hsl(var(--surface))] text-fg-muted hover:text-fg"
+                      }`}
                     >
-                      <span
-                        className={`h-2 w-2 rounded-full ${STATUS_META[key].dot}`}
-                      />
-                      <span className="tnum font-semibold">{value}</span>
-                      <span className="text-[hsl(var(--fg-muted))]">
-                        {STATUS_META[key].label}
-                      </span>
+                      {FILTER_MARKER[key] ? (
+                        <span className={`marker ${FILTER_MARKER[key]}`} aria-hidden />
+                      ) : null}
+                      {FILTER_LABEL[key]}
+                      <span className="tnum opacity-70">{count}</span>
                     </button>
                   );
                 })}
               </div>
-            </div>
-          </div>
-        </div>
 
-        {report.vendor_name && (
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-xs text-[hsl(var(--fg-muted))]">
-            <span>
-              Bid from <span className="font-medium text-[hsl(var(--fg))]">{report.vendor_name}</span>
-            </span>
-            <span className="font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
-              {report.items.length} requirements checked
-            </span>
-          </div>
-        )}
-      </Card>
-
-      {/* Section 4.6 — the action list, grouped by what the vendor can do. */}
-      <ActionList actions={report.action_list} />
-
-      {/* Section 4.4 — a score only if the tender published weights. */}
-      <Card className="p-5">
-        <SectionTitle
-          title="Evaluation score"
-          hint={
-            report.score_preview.available
-              ? `Estimated against the weightage this tender publishes (${report.score_preview.total_weightage}% total).`
-              : undefined
-          }
-        />
-        {report.score_preview.available ? (
-          <ul className="divide-y">
-            {report.score_preview.items.map((item, i) => (
-              <li key={i} className="flex items-center justify-between gap-4 py-2.5">
-                <span className="min-w-0 break-anywhere text-sm">{item.factor}</span>
-                <span className="flex shrink-0 items-center gap-3">
-                  <span className="tnum text-sm text-[hsl(var(--fg-muted))]">{item.weightage}%</span>
-                  <StatusChip status={item.status} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-[hsl(var(--fg-muted))]">
-            {report.score_preview.unavailable_reason}
-          </p>
-        )}
-      </Card>
-
-      {/* Requirements --------------------------------------------------- */}
-      <div>
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {FILTERS.map((key) => {
-            const count =
-              key === "all"
-                ? report.items.length
-                : key === "blocking"
-                  ? blocking.length
-                  : (counts[key] ?? 0);
-            if (count === 0 && key !== "all") return null;
-            const label =
-              key === "all"
-                ? "Everything"
-                : key === "blocking"
-                  ? "Blocking"
-                  : STATUS_META[key].label;
-            const active = filter === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                aria-pressed={active}
-                className={`chip transition-colors ${
-                  active
-                    ? "border-transparent bg-[hsl(var(--fg))] text-[hsl(var(--surface))]"
-                    : "bg-[hsl(var(--surface))] hover:bg-[hsl(var(--surface-2))]"
-                }`}
-              >
-                {label}
-                <span className="tnum opacity-60">{count}</span>
-              </button>
-            );
-          })}
-          <button
-            onClick={() => setGroup((g) => !g)}
-            className="ml-auto text-xs text-[hsl(var(--fg-muted))] underline-offset-2 hover:text-fg hover:underline"
-          >
-            {group ? "Show as one list" : "Group by type"}
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {grouped.map(([heading, items]) => (
-            <section key={heading}>
-              {group && (
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--fg-subtle))]">
-                  {heading}
-                  <span className="tnum ml-2 font-normal opacity-60">
-                    {items.length}
-                  </span>
-                </h3>
-              )}
-              <div className="space-y-2">
-                {items.map((item, i) => (
-                  <RequirementRow key={`${heading}-${i}`} item={item} />
+              <div className="card divide-y overflow-hidden">
+                {visible.map((item, index) => (
+                  <RequirementRow
+                    key={`${item.requirement}-${index}`}
+                    item={item}
+                    onCite={openCitation}
+                    hasSources={Boolean(sources.notification || sources.bid)}
+                  />
                 ))}
+                {!visible.length ? (
+                  <p className="px-5 py-8 text-center text-sm text-fg-muted">
+                    No requirements in this category.
+                  </p>
+                ) : null}
               </div>
+            </>
+          )}
+        </div>
+
+        <aside className="order-1 space-y-5 lg:order-2">
+          <CompletionMeter completion={completion} verdict={verdict} />
+          <DataQualityBanner quality={data_quality} />
+          {!report.score_preview.available ? (
+            <section className="card p-5">
+              <h2 className="label">Score preview</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">
+                {report.score_preview.unavailable_reason ??
+                  "This tender does not publish scoring weightings, so no score is shown."}
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-fg-muted">
+                Inventing one would be a number you could not trace to a clause.
+              </p>
             </section>
-          ))}
-          {visible.length === 0 && (
-            <p className="py-10 text-center text-sm text-[hsl(var(--fg-muted))]">
-              Nothing in this category.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function RequirementRow({ item }: { item: GapItem }) {
-  const [open, setOpen] = useState(false);
-  const provenance = item.notification_provenance;
-  const hasDetail =
-    !!provenance?.source_snippet || !!item.submission_provenance?.source_snippet;
-
-  return (
-    <Card
-      className={`overflow-hidden ${
-        item.severity === "disqualifying"
-          ? "border-l-2 border-l-[hsl(var(--bad))]"
-          : ""
-      }`}
-    >
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 break-anywhere text-sm font-medium leading-snug">
-            {item.requirement}
-          </p>
-          <StatusChip status={item.status} />
-        </div>
-
-        <p className="mt-1.5 break-anywhere text-sm text-[hsl(var(--fg-muted))]">
-          {item.explanation}
-        </p>
-
-        {(item.required_value || item.found_value) && (
-          <div className="mt-3 grid grid-cols-1 gap-3 rounded-lg bg-[hsl(var(--surface-2))] p-3 text-xs sm:grid-cols-2">
-            <div className="min-w-0">
-              <p className="label">Tender requires</p>
-              <p className="tnum mt-0.5 break-anywhere font-medium">
-                {item.required_value ?? "—"}
-              </p>
-            </div>
-            <div className="min-w-0">
-              <p className="label">Your bid shows</p>
-              <p
-                className={`tnum mt-0.5 break-anywhere font-medium ${
-                  item.status === "missing" ? "text-[hsl(var(--bad))]" : ""
-                }`}
-              >
-                {item.found_value ?? "not found"}
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-[hsl(var(--fg-subtle))]">
-          {provenance?.clause_ref && (
-            <span className="font-mono">clause {provenance.clause_ref}</span>
-          )}
-          {provenance?.source_page && <span>page {provenance.source_page}</span>}
-          {/* An embedding match is a guess with a number on it. Show the number
-              rather than presenting the match as settled. */}
-          {item.match_method === "embedding" && item.match_score != null && (
-            <Chip tone="warn">name similarity {item.match_score.toFixed(2)}</Chip>
-          )}
-          {!item.is_mandatory && <Chip>desirable, not mandatory</Chip>}
-          {hasDetail && (
-            <button
-              onClick={() => setOpen((o) => !o)}
-              className="ml-auto underline-offset-2 hover:text-fg hover:underline"
-            >
-              {open ? "Hide source" : "Show source text"}
-            </button>
-          )}
-        </div>
+          ) : null}
+        </aside>
       </div>
 
-      {open && (
-        <div className="animate-rise space-y-3 border-t bg-[hsl(var(--surface-2))] p-4">
-          {provenance?.source_snippet && (
-            <Quote label="From the tender" text={provenance.source_snippet} />
-          )}
-          {item.submission_provenance?.source_snippet && (
-            <Quote label="From your bid" text={item.submission_provenance.source_snippet} />
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function Quote({ label, text }: { label: string; text: string }) {
-  return (
-    <div>
-      <p className="label">{label}</p>
-      {/* Verbatim and visibly quoted: the point is that the reader can check it
-          against the source document, so it is never paraphrased or trimmed. */}
-      <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 text-xs italic leading-relaxed text-[hsl(var(--fg-muted))] break-anywhere">
-        {text}
-      </blockquote>
+      <CitationViewer target={citation} onClose={() => setCitation(null)} />
     </div>
   );
 }
 
-
-const ACTION_GROUPS: {
-  key: ActionGroup;
-  title: string;
-  blurb: string;
-  tone: Tone;
-  openByDefault: boolean;
-}[] = [
-  {
-    key: "hard_fail",
-    title: "You do not meet these",
-    blurb:
-      "These cannot be fixed by attaching a document. Unless the figures are wrong, this tender is not open to you as a sole bidder.",
-    tone: "bad",
-    openByDefault: true,
-  },
-  {
-    key: "clarify",
-    title: "State these clearly",
-    blurb:
-      "Your bid does not say, or says it in a form we could not read. Put the figure in plain digits.",
-    tone: "warn",
-    openByDefault: true,
-  },
-  {
-    key: "upload",
-    title: "Documents to attach",
-    blurb: "Each of these is required and was not found in your bid.",
-    tone: "warn",
-    openByDefault: false,
-  },
-  {
-    key: "verify",
-    title: "Check these yourself",
-    blurb:
-      "Formatting, signing, and requirements that may not apply to you. We cannot verify these from the text.",
-    tone: "info",
-    openByDefault: false,
-  },
-];
-
-/**
- * The action list, grouped by fixability.
- *
- * A flat list ranked by severity is useless on a real tender: every unmet
- * mandatory requirement is "disqualifying", so a single unfixable failure sits
- * in a run of forty document uploads. Splitting them means the vendor sees "you
- * do not meet the turnover floor" before "attach Form FIN-2", which is the
- * order in which those two facts matter.
- */
-function ActionList({ actions }: { actions: ActionItem[] }) {
-  if (actions.length === 0) {
-    return (
-      <Card className="p-5">
-        <p className="text-sm">
-          Nothing to do — every requirement we could check is satisfied.
-        </p>
-      </Card>
-    );
-  }
-
-  const known = new Set(ACTION_GROUPS.map((g) => g.key));
-  // Anything the client does not recognise still has to be shown. A field the
-  // API stopped sending, or a group added server-side, must not silently blank
-  // the most important section of the report.
-  const ungrouped = actions.filter((a) => !known.has(a.group));
-
-  return (
-    <div className="space-y-3">
-      {ACTION_GROUPS.map((group) => {
-        const items = actions.filter((a) => a.group === group.key);
-        if (items.length === 0) return null;
-        return <ActionGroupCard key={group.key} group={group} items={items} />;
-      })}
-      {ungrouped.length > 0 && (
-        <ActionGroupCard
-          group={{
-            key: "verify",
-            title: "What to do next",
-            blurb: "Ordered by what will stop your bid first.",
-            tone: "warn",
-            openByDefault: true,
-          }}
-          items={ungrouped}
-        />
-      )}
-    </div>
-  );
-}
-
-function ActionGroupCard({
-  group,
-  items,
+function Stat({
+  label,
+  value,
+  marker,
+  colour,
 }: {
-  group: (typeof ACTION_GROUPS)[number];
-  items: ActionItem[];
+  label: string;
+  value: number;
+  marker: string;
+  colour: string;
 }) {
-  // Long groups collapse by default so a 44-item upload list does not push the
-  // one unfixable failure off the screen.
-  const [open, setOpen] = useState(group.openByDefault || items.length <= 6);
-
   return (
-    <Card className={`overflow-hidden border-l-2 ${TONE_EDGE[group.tone]}`}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-start justify-between gap-4 p-5 text-left transition-colors hover:bg-[hsl(var(--surface-2))]"
-      >
-        <div className="min-w-0">
-          <p className={`text-sm font-semibold ${TONE_TEXT[group.tone]}`}>
-            {group.title}
-            <span className="tnum ml-2 font-normal opacity-70">{items.length}</span>
-          </p>
-          <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">{group.blurb}</p>
-        </div>
-        <span className="shrink-0 text-xs text-[hsl(var(--fg-subtle))]">{open ? "−" : "+"}</span>
-      </button>
-
-      {open && (
-        <ol className="animate-rise divide-y border-t">
-          {items.map((action, i) => (
-            <li key={i} className="flex items-start gap-3 px-5 py-2.5">
-              <span className="tnum mt-0.5 w-5 shrink-0 text-right text-xs text-[hsl(var(--fg-subtle))]">
-                {i + 1}
-              </span>
-              <span className="min-w-0 flex-1 break-anywhere text-sm">
-                {action.action}
-                {action.clause_ref && (
-                  <span className="ml-2 font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
-                    {action.clause_ref}
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Card>
+    <div className="px-5 py-3.5">
+      <dt className={`flex items-center gap-1.5 label ${value ? colour : ""}`}>
+        <span className={`marker ${marker}`} aria-hidden />
+        {label}
+      </dt>
+      <dd className={`tnum mt-1 text-2xl font-semibold ${value ? colour : "text-fg-subtle"}`}>
+        {value}
+      </dd>
+    </div>
   );
 }
+
+function RequirementRow({
+  item,
+  onCite,
+  hasSources,
+}: {
+  item: GapItem;
+  onCite: (side: "notification" | "bid", item: GapItem) => void;
+  hasSources: boolean;
+}) {
+  const [why, setWhy] = useState(false);
+  const blocking = item.severity === "disqualifying";
+  const state = STATE[item.status];
+
+  return (
+    <article
+      className="px-[var(--row-x)] py-[var(--row-y)]"
+      data-status={item.status}
+    >
+      <div className="flex items-start gap-3">
+        <span className={`mt-[5px] ${blocking ? "text-[hsl(var(--bad))]" : state.colour}`}>
+          <span className={`marker ${blocking ? "marker-fail" : state.marker}`} aria-hidden />
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="break-anywhere min-w-0 text-[13.5px] font-medium leading-snug">
+              {item.requirement}
+            </h3>
+            <StateTag status={item.status} blocking={blocking} />
+          </div>
+
+          <p className="mt-1 text-[13px] leading-relaxed text-fg-muted">
+            {item.explanation}
+          </p>
+
+          {/* Required and found sit side by side so the comparison the verdict
+              rests on is the thing the eye lands on, with each side carrying
+              its own source. */}
+          {item.required_value || item.found_value ? (
+            <dl className="mt-2.5 grid gap-x-6 gap-y-1.5 text-[12.5px] sm:grid-cols-2">
+              {item.required_value ? (
+                <div>
+                  <dt className="label !tracking-normal !normal-case">Tender asks</dt>
+                  <dd className="mt-0.5">
+                    {hasSources ? (
+                      <Cited
+                        provenance={item.notification_provenance}
+                        onOpen={() => onCite("notification", item)}
+                      >
+                        <Amount value={item.required_value} />
+                      </Cited>
+                    ) : (
+                      <Amount value={item.required_value} />
+                    )}
+                  </dd>
+                </div>
+              ) : null}
+              {item.found_value ? (
+                <div>
+                  <dt className="label !tracking-normal !normal-case">Your bid</dt>
+                  <dd className="mt-0.5">
+                    {hasSources && item.submission_provenance?.source_page ? (
+                      <Cited
+                        provenance={item.submission_provenance}
+                        onOpen={() => onCite("bid", item)}
+                      >
+                        <Amount value={item.found_value} />
+                      </Cited>
+                    ) : (
+                      <Amount value={item.found_value} />
+                    )}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+
+          {item.match_method ? (
+            <button
+              className="ref mt-2 text-fg-subtle underline-offset-2 hover:text-fg hover:underline"
+              onClick={() => setWhy((value) => !value)}
+            >
+              matched by {item.match_method}
+              {item.match_score !== null ? ` · ${item.match_score.toFixed(2)}` : ""}
+            </button>
+          ) : null}
+
+          {why && item.match_method ? (
+            <p className="mt-2 rounded border-l-2 border-[hsl(var(--border-strong))] bg-[hsl(var(--surface-2))] px-3 py-2 text-xs leading-relaxed text-fg-muted">
+              {MATCH_EXPLANATION[item.match_method] ?? "Matched by name comparison."}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+const MATCH_EXPLANATION: Record<string, string> = {
+  exact: "The names are identical once punctuation and filler are removed.",
+  alias:
+    "A curated synonym table for standard Indian tender documents matched these two names — for example “GST Registration Certificate” and “Goods & Services Tax Certificate”.",
+  lexical:
+    "Known vocabulary matched them — “statutory auditor” and “chartered accountant” are the same role, and spelling and plurals are folded before comparison.",
+  embedding:
+    "No table covered these names, so they were compared by meaning. The score is cosine similarity; anything below the acceptance floor is shown for confirmation rather than counted as met.",
+};

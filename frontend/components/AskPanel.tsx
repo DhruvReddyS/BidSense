@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { AskResponse } from "@/lib/types";
+import type { AskResponse, Citation } from "@/lib/types";
+import { CitationViewer, type CitationTarget } from "./CitationViewer";
 import { Card, Chip } from "./ui";
 
 interface Turn {
@@ -29,6 +30,7 @@ export function AskPanel({
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [busy, setBusy] = useState(false);
+  const [citation, setCitation] = useState<CitationTarget | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,9 +64,9 @@ export function AskPanel({
         <div>
           <h2 className="text-sm font-semibold tracking-tight">Ask this tender</h2>
           <p className="mt-1 max-w-lg text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
-            Answers come only from the uploaded document and every one cites the
-            clause it came from. If the document does not say, the answer says
-            so rather than filling the gap.
+            Every answer is drawn from the uploaded document and carries the
+            clause it came from. Where the document does not say, the answer
+            says so rather than filling the gap.
           </p>
         </div>
         {turns.length > 0 && (
@@ -95,22 +97,19 @@ export function AskPanel({
       <div className="mt-5 flex-1 space-y-6">
         {turns.map((turn, i) => (
           <div key={i} className="animate-rise">
-            <div className="flex gap-2.5">
-              <span
-                className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[hsl(var(--surface-2))] text-[10px] font-semibold text-[hsl(var(--fg-muted))]"
-                aria-hidden
-              >
-                Q
-              </span>
-              <p className="text-sm font-medium leading-snug">{turn.question}</p>
-            </div>
-            <div className="mt-2.5 pl-[1.9rem]">
+            {/* No avatar, no bubble. This is a question put to a document and
+                an answer drawn from it — the moment it looks like a chat
+                transcript, a reader starts treating the answer as opinion. */}
+            <p className="border-l-2 border-[hsl(var(--border-strong))] pl-3 text-sm font-medium leading-snug">
+              {turn.question}
+            </p>
+            <div className="mt-3 pl-3">
               {turn.error ? (
                 <p className="rounded-lg border border-[hsl(var(--bad-border))] bg-[hsl(var(--bad-soft))] px-3 py-2 text-sm text-[hsl(var(--bad))]">
                   {turn.error}
                 </p>
               ) : turn.response ? (
-                <Answer response={turn.response} />
+                <Answer response={turn.response} onCite={setCitation} />
               ) : (
                 <div className="space-y-2">
                   <div className="h-4 w-3/4 skeleton" />
@@ -146,19 +145,64 @@ export function AskPanel({
           {busy ? "…" : "Ask"}
         </button>
       </form>
+
+      <CitationViewer target={citation} onClose={() => setCitation(null)} />
     </Card>
   );
 }
 
-function Answer({ response }: { response: AskResponse }) {
-  const { answer, grounded } = response;
-  const [open, setOpen] = useState(false);
+/**
+ * How well retrieval matched the question, said out loud.
+ *
+ * A confident-sounding answer built on loosely related passages is the failure
+ * citations were meant to prevent, and citations alone do not prevent it — the
+ * citations are real, they are just not about the question. `none` never
+ * reaches here: the model is not called at all below the floor.
+ */
+const CONFIDENCE_META: Record<
+  string,
+  { label: string; tone: "ok" | "warn" | "neutral" } | undefined
+> = {
+  high: { label: "Strong match", tone: "ok" },
+  low: { label: "Weak match", tone: "warn" },
+  none: { label: "No match", tone: "neutral" },
+};
+
+function Answer({
+  response,
+  onCite,
+}: {
+  response: AskResponse;
+  onCite: (target: CitationTarget) => void;
+}) {
+  const { answer, grounded, sources } = response;
+  const [open, setOpen] = useState(true);
+  const confidence = CONFIDENCE_META[answer.confidence];
+
+  const openCitation = (citation: Citation) =>
+    onCite({
+      contentHash:
+        citation.doc_kind === "submission" ? sources.bid : sources.notification,
+      page: citation.source_page,
+      snippet: citation.text,
+      clauseRef: citation.clause_ref,
+      documentLabel:
+        citation.source_file ??
+        (citation.doc_kind === "submission" ? "Your bid" : "This tender"),
+    });
 
   return (
     <div>
       <p className="whitespace-pre-wrap break-anywhere text-sm leading-relaxed">
         {answer.answer}
       </p>
+
+      {/* Weak retrieval is stated beside the answer, not buried. */}
+      {answer.caveat ? (
+        <p className="mt-2 rounded-lg border border-[hsl(var(--warn-border))] bg-[hsl(var(--warn-soft))] px-3 py-2 text-xs leading-relaxed text-[hsl(var(--fg))]">
+          {answer.caveat}
+        </p>
+      ) : null}
 
       {/* An ungrounded answer looks identical to a grounded one. Marking it is
           the difference between a citation and a claim. */}
@@ -173,28 +217,48 @@ function Answer({ response }: { response: AskResponse }) {
 
       {answer.citations.length > 0 && (
         <div className="mt-3">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-2 text-xs text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]"
-          >
-            <Chip tone="ok">
-              {answer.citations.length} source
-              {answer.citations.length === 1 ? "" : "s"}
-            </Chip>
-            <span className="underline-offset-2 hover:underline">
-              {open ? "hide" : "show"}
-            </span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {confidence ? (
+              <Chip tone={confidence.tone}>{confidence.label}</Chip>
+            ) : null}
+            <button
+              onClick={() => setOpen((o) => !o)}
+              className="flex items-center gap-2 text-xs text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]"
+            >
+              <Chip tone="ok">
+                {answer.citations.length} source
+                {answer.citations.length === 1 ? "" : "s"}
+              </Chip>
+              <span className="underline-offset-2 hover:underline">
+                {open ? "hide" : "show"}
+              </span>
+            </button>
+          </div>
 
           {open && (
-            <ol className="animate-rise mt-2 space-y-2.5">
+            <ol className="animate-rise mt-2.5 space-y-2">
               {answer.citations.map((c) => (
-                <li key={c.index} className="text-xs">
-                  <span className="font-mono text-[hsl(var(--fg-subtle))]">[{c.index}]</span>{" "}
-                  <span className="text-[hsl(var(--fg-muted))]">{c.label}</span>
-                  <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 italic leading-relaxed text-[hsl(var(--fg-muted))] break-anywhere">
-                    {c.text.length > 420 ? `${c.text.slice(0, 420)}…` : c.text}
-                  </blockquote>
+                <li key={c.index}>
+                  <button
+                    onClick={() => openCitation(c)}
+                    className="cited group w-full !items-start rounded border-l-2
+                               border-[hsl(var(--border))] py-1 pl-3 text-left
+                               hover:border-[hsl(var(--accent))]"
+                    title="Open this passage on its page in the source document"
+                  >
+                    <span className="block min-w-0 flex-1">
+                      <span className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="src !border-transparent !bg-transparent !px-0">
+                          [{c.index}]
+                        </span>
+                        <span className="ref text-[hsl(var(--fg-muted))]">{c.label}</span>
+                        <span className="go">open ↗</span>
+                      </span>
+                      <span className="break-anywhere mt-1 block text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
+                        {c.text.length > 420 ? `${c.text.slice(0, 420)}…` : c.text}
+                      </span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ol>

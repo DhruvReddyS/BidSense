@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { GapReport } from "@/components/GapReport";
+import { LiveGapReport } from "@/components/LiveGapReport";
 import { ErrorNote } from "@/components/ui";
 import type { GapReportResponse } from "@/lib/types";
 
@@ -48,7 +48,7 @@ export default async function BidReportPage({
         </p>
       </div>
 
-      {error ? <ErrorNote>{error}</ErrorNote> : report && <GapReport data={report} />}
+      {error ? <ErrorNote>{error}</ErrorNote> : report && <LiveGapReport initial={report} />}
     </div>
   );
 }

@@ -77,24 +77,43 @@ def find_highlight_boxes(words: list[dict], snippet: str) -> list[tuple[float, f
     if not flat:
         return []
 
-    size = len(target)
-    wanted = set(target)
-    best_score, best_span = 0.0, None
+    # Order-aware alignment, not a bag-of-words window.
+    #
+    # A fixed-length window scored on set overlap cannot tell WHERE the words
+    # are, only how many are present -- so on a real clause reading "...for the
+    # past 3 (three) financial years. Average Annual financial turnover during
+    # the last 3 (three) financial years ending 2024-25..." it locks onto the
+    # tail of the PREVIOUS sentence, which shares every distinctive word. The
+    # highlight then starts a line early and stops a line short, which reads as
+    # a bug the moment anyone zooms in.
+    #
+    # difflib finds the longest contiguous run of tokens common to both
+    # sequences and recurses either side, so it is sensitive to order. Stray
+    # one-word blocks far from the main match are dropped before the span is
+    # taken, or a single "the" elsewhere on the page would stretch the
+    # highlight across half of it.
+    import difflib
 
-    # A sliding window the length of the snippet. Scored on set overlap rather
-    # than exact sequence, because PDF extraction reorders words across a line
-    # break often enough that an exact-sequence-only matcher misses real hits.
-    for start in range(0, max(1, len(flat) - size + 1)):
-        window = flat[start : start + size]
-        score = sum(1 for token, _ in window if token in wanted) / size
-        if score > best_score:
-            best_score, best_span = score, (window[0][1], window[-1][1])
-
-    if best_span is None or best_score < MIN_MATCH_RATIO:
-        logger.debug("no highlight: best window scored %.2f", best_score)
+    page_tokens = [token for token, _ in flat]
+    matcher = difflib.SequenceMatcher(None, page_tokens, target, autojunk=False)
+    blocks = [b for b in matcher.get_matching_blocks() if b.size > 0]
+    if not blocks:
         return []
 
-    first, last = best_span
+    anchor = max(blocks, key=lambda b: b.size)
+    # Within one snippet-length of the longest block: near enough to be the same
+    # passage, far enough to tolerate a word the extractor split or reordered.
+    reach = max(len(target), 8)
+    near = [b for b in blocks if abs(b.a - anchor.a) <= reach]
+
+    matched = sum(b.size for b in near)
+    if matched / len(target) < MIN_MATCH_RATIO:
+        logger.debug("no highlight: aligned %d/%d tokens", matched, len(target))
+        return []
+
+    first = flat[min(b.a for b in near)][1]
+    last = flat[max(b.a + b.size - 1 for b in near)][1]
+
     run = words[first : last + 1]
     if not run:
         return []
@@ -112,6 +131,10 @@ def find_highlight_boxes(words: list[dict], snippet: str) -> list[tuple[float, f
     if line:
         boxes.append(_bbox(line))
     return boxes
+
+
+def _in_target(word: dict, wanted: set[str]) -> bool:
+    return any(token in wanted for token in _tokens(word["text"]))
 
 
 def _bbox(words: list[dict]) -> tuple[float, float, float, float]:
