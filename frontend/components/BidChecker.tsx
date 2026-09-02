@@ -105,7 +105,7 @@ export function BidChecker({
               disabled={busy}
               className="input mt-1.5"
             />
-            <p className="mt-1.5 text-xs text-fg-subtle">
+            <p className="mt-1.5 text-xs text-[hsl(var(--fg-subtle))]">
               Any identifier for this bid. Used to look it up again later.
             </p>
             <button

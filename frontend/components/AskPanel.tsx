@@ -60,7 +60,7 @@ export function AskPanel({
     <Card className="flex min-h-[26rem] flex-col p-5">
       <div>
         <h2 className="text-sm font-semibold tracking-tight">Ask this tender</h2>
-        <p className="mt-0.5 text-xs text-fg-muted">
+        <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">
           Answers come only from the uploaded document, and every one cites the
           clause it came from. If the document does not say, the answer says so.
         </p>
@@ -156,7 +156,7 @@ function Answer({ response }: { response: AskResponse }) {
         <div className="mt-3">
           <button
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-2 text-xs text-fg-muted hover:text-fg"
+            className="flex items-center gap-2 text-xs text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]"
           >
             <Chip tone="ok">
               {answer.citations.length} source
@@ -171,9 +171,9 @@ function Answer({ response }: { response: AskResponse }) {
             <ol className="animate-rise mt-2 space-y-2.5">
               {answer.citations.map((c) => (
                 <li key={c.index} className="text-xs">
-                  <span className="font-mono text-fg-subtle">[{c.index}]</span>{" "}
-                  <span className="text-fg-muted">{c.label}</span>
-                  <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 italic leading-relaxed text-fg-muted break-anywhere">
+                  <span className="font-mono text-[hsl(var(--fg-subtle))]">[{c.index}]</span>{" "}
+                  <span className="text-[hsl(var(--fg-muted))]">{c.label}</span>
+                  <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 italic leading-relaxed text-[hsl(var(--fg-muted))] break-anywhere">
                     {c.text.length > 420 ? `${c.text.slice(0, 420)}…` : c.text}
                   </blockquote>
                 </li>
@@ -184,7 +184,7 @@ function Answer({ response }: { response: AskResponse }) {
       )}
 
       {!answer.answered && answer.retrieved.length > 0 && (
-        <p className="mt-2 text-xs text-fg-subtle">
+        <p className="mt-2 text-xs text-[hsl(var(--fg-subtle))]">
           {answer.retrieved.length} passages were searched; none contained the answer.
         </p>
       )}

@@ -64,7 +64,7 @@ export function JobProgress({
       <div className="flex items-baseline justify-between gap-4">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{job.file_name}</p>
-          <p className="mt-0.5 text-xs text-fg-muted">
+          <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">
             {failed
               ? "Extraction failed"
               : finished
@@ -80,7 +80,7 @@ export function JobProgress({
             {job.status === "partial" ? "Partly read" : "Done"}
           </Chip>
         ) : (
-          <span className="tnum text-xs text-fg-muted">
+          <span className="tnum text-xs text-[hsl(var(--fg-muted))]">
             {job.steps_done}/{job.steps_total ?? "?"}
           </span>
         )}
@@ -100,14 +100,14 @@ export function JobProgress({
       </div>
 
       {!finished && !failed && (
-        <p className="text-xs text-fg-subtle">
+        <p className="text-xs text-[hsl(var(--fg-subtle))]">
           Large tenders take two to three minutes. You can leave this page — the
           extraction continues on the server.
         </p>
       )}
 
       {failed && job.error && (
-        <pre className="max-h-32 overflow-auto rounded-lg border bg-[hsl(var(--surface-2))] p-3 text-[11px] leading-relaxed text-fg-muted break-anywhere whitespace-pre-wrap">
+        <pre className="max-h-32 overflow-auto rounded-lg border bg-[hsl(var(--surface-2))] p-3 text-[11px] leading-relaxed text-[hsl(var(--fg-muted))] break-anywhere whitespace-pre-wrap">
           {job.error}
         </pre>
       )}
@@ -137,7 +137,7 @@ function JobResultSummary({ result }: { result: NonNullable<JobStatus["result"]>
             {errors.length} section{errors.length === 1 ? "" : "s"} could not be read.
             What was read has been saved; the rest is missing from this record.
           </p>
-          <ul className="mt-1.5 space-y-1 text-[11px] text-fg-muted">
+          <ul className="mt-1.5 space-y-1 text-[11px] text-[hsl(var(--fg-muted))]">
             {errors.map((e, i) => (
               <li key={i} className="break-anywhere">
                 {e.split(":")[0]}
@@ -148,8 +148,8 @@ function JobResultSummary({ result }: { result: NonNullable<JobStatus["result"]>
       )}
 
       {warnings.length > 0 && (
-        <details className="text-xs text-fg-muted">
-          <summary className="cursor-pointer select-none hover:text-fg">
+        <details className="text-xs text-[hsl(var(--fg-muted))]">
+          <summary className="cursor-pointer select-none hover:text-[hsl(var(--fg))]">
             {warnings.length} parsing warning{warnings.length === 1 ? "" : "s"}
           </summary>
           <ul className="mt-1.5 space-y-1 pl-4">

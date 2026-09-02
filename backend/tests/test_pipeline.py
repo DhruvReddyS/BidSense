@@ -320,3 +320,82 @@ def test_a_shell_row_from_a_failed_run_donates_its_bids(pdf, clean):
         assert len(rows) == 1
         assert rows[0].tender_id == TENDER_ID
         assert {s.vendor_id for s in rows[0].submissions} == {"V-77"}
+
+
+@live
+@embed
+def test_reingesting_a_bid_keeps_a_stable_row_id(pdf, clean):
+    """Vector chunks are purged by submission id. A churning id means the purge
+    cannot find the previous chunks, which forced a looser filter that could
+    delete a vendor's chunks across every tender they had bid on."""
+    ingest_notification(pdf, llm=StubLLM())
+    first = ingest_submission(pdf, vendor_id="V-04", tender_id=TENDER_ID, llm=StubLLM())
+    second = ingest_submission(pdf, vendor_id="V-04", tender_id=TENDER_ID, llm=StubLLM())
+
+    assert first.row_id == second.row_id
+
+    with session_scope() as session:
+        rows = session.scalars(
+            select(VendorSubmissionRow).where(VendorSubmissionRow.vendor_id == "V-04")
+        ).all()
+        assert len(rows) == 1
+        assert len(rows[0].turnover) == 3      # replaced wholesale, not doubled
+
+
+@live
+@embed
+def test_reingesting_one_bid_leaves_another_vendors_chunks_alone(pdf, clean):
+    """The purge must be scoped to this submission. Scoping by vendor_id, with a
+    None tender_id dropped by build_filter, deleted far more than intended."""
+    ingest_notification(pdf, llm=StubLLM())
+    ingest_submission(pdf, vendor_id="V-AAA", tender_id=TENDER_ID, llm=StubLLM())
+    ingest_submission(pdf, vendor_id="V-BBB", tender_id=TENDER_ID, llm=StubLLM())
+
+    before, _ = get_client().scroll(
+        settings.qdrant_collection,
+        scroll_filter=build_filter(vendor_id="V-BBB"),
+        limit=200,
+    )
+    assert before
+
+    ingest_submission(pdf, vendor_id="V-AAA", tender_id=TENDER_ID, llm=StubLLM())
+
+    after, _ = get_client().scroll(
+        settings.qdrant_collection,
+        scroll_filter=build_filter(vendor_id="V-BBB"),
+        limit=200,
+    )
+    assert len(after) == len(before), "re-ingesting V-AAA disturbed V-BBB's chunks"
+
+
+@live
+@embed
+def test_a_bid_with_no_tender_link_purges_only_itself(pdf, clean):
+    """The specific case the loose filter got wrong: with tender_id None,
+    build_filter omitted it entirely and the purge matched on vendor_id alone."""
+    ingest_notification(pdf, llm=StubLLM())
+    linked = ingest_submission(pdf, vendor_id="V-DUP", tender_id=TENDER_ID, llm=StubLLM())
+    orphan = ingest_submission(pdf, vendor_id="V-DUP", tender_id=None, llm=StubLLM())
+    assert linked.row_id != orphan.row_id
+
+    linked_chunks, _ = get_client().scroll(
+        settings.qdrant_collection,
+        scroll_filter=build_filter(submission_id=str(linked.row_id)),
+        limit=200,
+    )
+    assert linked_chunks, "the linked bid should have chunks"
+
+    # Re-ingest the unlinked one; the linked one must be untouched.
+    ingest_submission(pdf, vendor_id="V-DUP", tender_id=None, llm=StubLLM())
+
+    still, _ = get_client().scroll(
+        settings.qdrant_collection,
+        scroll_filter=build_filter(submission_id=str(linked.row_id)),
+        limit=200,
+    )
+    assert len(still) == len(linked_chunks)
+
+    with session_scope() as session:
+        session.execute(
+            text("DELETE FROM vendor_submissions WHERE vendor_id = 'V-DUP'")
+        )

@@ -151,14 +151,14 @@ export function GapReport({ data }: { data: GapReportResponse }) {
               <li key={i} className="flex items-center justify-between gap-4 py-2.5">
                 <span className="min-w-0 break-anywhere text-sm">{item.factor}</span>
                 <span className="flex shrink-0 items-center gap-3">
-                  <span className="tnum text-sm text-fg-muted">{item.weightage}%</span>
+                  <span className="tnum text-sm text-[hsl(var(--fg-muted))]">{item.weightage}%</span>
                   <StatusChip status={item.status} />
                 </span>
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-fg-muted">
+          <p className="text-sm text-[hsl(var(--fg-muted))]">
             {report.score_preview.unavailable_reason}
           </p>
         )}
@@ -200,7 +200,7 @@ export function GapReport({ data }: { data: GapReportResponse }) {
           })}
           <button
             onClick={() => setGroup((g) => !g)}
-            className="ml-auto text-xs text-fg-muted underline-offset-2 hover:text-fg hover:underline"
+            className="ml-auto text-xs text-[hsl(var(--fg-muted))] underline-offset-2 hover:text-fg hover:underline"
           >
             {group ? "Show as one list" : "Group by type"}
           </button>
@@ -210,7 +210,7 @@ export function GapReport({ data }: { data: GapReportResponse }) {
           {grouped.map(([heading, items]) => (
             <section key={heading}>
               {group && (
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[hsl(var(--fg-subtle))]">
                   {heading}
                   <span className="tnum ml-2 font-normal opacity-60">
                     {items.length}
@@ -225,7 +225,7 @@ export function GapReport({ data }: { data: GapReportResponse }) {
             </section>
           ))}
           {visible.length === 0 && (
-            <p className="py-10 text-center text-sm text-fg-muted">
+            <p className="py-10 text-center text-sm text-[hsl(var(--fg-muted))]">
               Nothing in this category.
             </p>
           )}
@@ -257,7 +257,7 @@ function RequirementRow({ item }: { item: GapItem }) {
           <StatusChip status={item.status} />
         </div>
 
-        <p className="mt-1.5 break-anywhere text-sm text-fg-muted">
+        <p className="mt-1.5 break-anywhere text-sm text-[hsl(var(--fg-muted))]">
           {item.explanation}
         </p>
 
@@ -282,7 +282,7 @@ function RequirementRow({ item }: { item: GapItem }) {
           </div>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-fg-subtle">
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-[hsl(var(--fg-subtle))]">
           {provenance?.clause_ref && (
             <span className="font-mono">clause {provenance.clause_ref}</span>
           )}
@@ -324,7 +324,7 @@ function Quote({ label, text }: { label: string; text: string }) {
       <p className="label">{label}</p>
       {/* Verbatim and visibly quoted: the point is that the reader can check it
           against the source document, so it is never paraphrased or trimmed. */}
-      <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 text-xs italic leading-relaxed text-fg-muted break-anywhere">
+      <blockquote className="mt-1 border-l-2 border-[hsl(var(--border-strong))] pl-3 text-xs italic leading-relaxed text-[hsl(var(--fg-muted))] break-anywhere">
         {text}
       </blockquote>
     </div>
@@ -444,22 +444,22 @@ function ActionGroupCard({
             {group.title}
             <span className="tnum ml-2 font-normal opacity-70">{items.length}</span>
           </p>
-          <p className="mt-1 text-xs text-fg-muted">{group.blurb}</p>
+          <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">{group.blurb}</p>
         </div>
-        <span className="shrink-0 text-xs text-fg-subtle">{open ? "−" : "+"}</span>
+        <span className="shrink-0 text-xs text-[hsl(var(--fg-subtle))]">{open ? "−" : "+"}</span>
       </button>
 
       {open && (
         <ol className="animate-rise divide-y border-t">
           {items.map((action, i) => (
             <li key={i} className="flex items-start gap-3 px-5 py-2.5">
-              <span className="tnum mt-0.5 w-5 shrink-0 text-right text-xs text-fg-subtle">
+              <span className="tnum mt-0.5 w-5 shrink-0 text-right text-xs text-[hsl(var(--fg-subtle))]">
                 {i + 1}
               </span>
               <span className="min-w-0 flex-1 break-anywhere text-sm">
                 {action.action}
                 {action.clause_ref && (
-                  <span className="ml-2 font-mono text-[11px] text-fg-subtle">
+                  <span className="ml-2 font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
                     {action.clause_ref}
                   </span>
                 )}

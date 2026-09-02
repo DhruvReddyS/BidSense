@@ -42,7 +42,7 @@ export default async function BidReportPage({
         <h1 className="mt-3 text-2xl font-semibold tracking-tight">
           Compliance report
         </h1>
-        <p className="mt-1 break-anywhere text-sm text-fg-muted">
+        <p className="mt-1 break-anywhere text-sm text-[hsl(var(--fg-muted))]">
           {report?.report.vendor_name ?? vendorId} · checked against{" "}
           <span className="font-mono text-xs">{tenderId}</span>
         </p>

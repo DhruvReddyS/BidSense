@@ -153,7 +153,7 @@ export function SectionTitle({
     <div className="mb-4 flex items-start justify-between gap-4">
       <div>
         <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-        {hint && <p className="mt-0.5 text-xs text-fg-muted">{hint}</p>}
+        {hint && <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">{hint}</p>}
       </div>
       {right}
     </div>
@@ -172,7 +172,7 @@ export function EmptyState({
   return (
     <div className="rounded-xl border border-dashed px-6 py-14 text-center">
       <p className="text-sm font-medium">{title}</p>
-      <p className="mx-auto mt-1 max-w-md text-sm text-fg-muted">{body}</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-[hsl(var(--fg-muted))]">{body}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );

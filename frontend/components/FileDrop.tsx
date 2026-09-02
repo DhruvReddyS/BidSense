@@ -69,7 +69,7 @@ export function FileDrop({
           ${disabled ? "pointer-events-none opacity-50" : ""}`}
       >
         <svg
-          className="mb-3 h-8 w-8 text-fg-subtle"
+          className="mb-3 h-8 w-8 text-[hsl(var(--fg-subtle))]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -85,14 +85,14 @@ export function FileDrop({
         {name ? (
           <>
             <p className="text-sm font-medium break-anywhere">{name}</p>
-            <p className="mt-0.5 text-xs text-fg-muted">
+            <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">
               {(size / 1024 / 1024).toFixed(1)} MB · click to replace
             </p>
           </>
         ) : (
           <>
             <p className="text-sm font-medium">{label}</p>
-            {hint && <p className="mt-1 text-xs text-fg-muted">{hint}</p>}
+            {hint && <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">{hint}</p>}
           </>
         )}
       </div>

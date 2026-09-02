@@ -24,7 +24,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
           title="Eligibility criteria"
           hint="Conditions you must satisfy for your bid to be considered."
           right={
-            <span className="tnum text-xs text-fg-muted">
+            <span className="tnum text-xs text-[hsl(var(--fg-muted))]">
               {tender.eligibility_criteria.length}
             </span>
           }
@@ -48,7 +48,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
           title="Required documents"
           hint="Papers that must accompany your bid."
           right={
-            <span className="tnum text-xs text-fg-muted">
+            <span className="tnum text-xs text-[hsl(var(--fg-muted))]">
               {tender.mandatory_documents.length}
             </span>
           }
@@ -61,7 +61,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
                 {doc.doc_name}
               </span>
               {doc.provenance.clause_ref && (
-                <span className="shrink-0 font-mono text-[11px] text-fg-subtle">
+                <span className="shrink-0 font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
                   {doc.provenance.clause_ref}
                 </span>
               )}
@@ -91,7 +91,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
             }
           />
           {tender.evaluation_criteria.length === 0 ? (
-            <p className="text-sm text-fg-muted">
+            <p className="text-sm text-[hsl(var(--fg-muted))]">
               No evaluation criteria are published in this document.
             </p>
           ) : (
@@ -99,7 +99,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
               {tender.evaluation_criteria.map((c, i) => (
                 <li key={i} className="flex items-center justify-between gap-3 py-2">
                   <span className="min-w-0 break-anywhere text-sm">{c.factor}</span>
-                  <span className="tnum shrink-0 text-sm text-fg-muted">
+                  <span className="tnum shrink-0 text-sm text-[hsl(var(--fg-muted))]">
                     {c.weightage_if_stated === null
                       ? "not stated"
                       : `${c.weightage_if_stated}%`}
@@ -116,7 +116,7 @@ export function RequirementsView({ tender }: { tender: TenderDetail }) {
             hint="Formatting and procedure. These need your own eye — they are usually visual."
           />
           {tender.submission_format_rules.length === 0 ? (
-            <p className="text-sm text-fg-muted">None extracted.</p>
+            <p className="text-sm text-[hsl(var(--fg-muted))]">None extracted.</p>
           ) : (
             <ul className="space-y-2">
               {tender.submission_format_rules.map((r, i) => (
@@ -142,9 +142,11 @@ function CriterionRow({ criterion }: { criterion: EligibilityCriterion }) {
         : null;
 
   return (
-    <li className="py-3">
+    <li className="group py-3.5">
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 break-anywhere text-sm">{criterion.criterion}</p>
+        <p className="min-w-0 break-anywhere text-sm leading-snug">
+          {criterion.criterion}
+        </p>
         <div className="flex shrink-0 gap-1.5">
           {!criterion.is_mandatory && <Chip>desirable</Chip>}
           <Chip tone={criterion.type === "numeric" ? "accent" : "neutral"}>
@@ -153,21 +155,25 @@ function CriterionRow({ criterion }: { criterion: EligibilityCriterion }) {
         </div>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
         {threshold ? (
-          <span className="tnum font-medium">{threshold}</span>
+          <span className="tnum rounded-md bg-[hsl(var(--surface-2))] px-2 py-0.5 font-semibold">
+            {threshold}
+          </span>
         ) : criterion.threshold_raw ? (
           // Shown as printed, uninterpreted: we could not resolve it to a
           // number, and displaying a guess would be worse than showing the text.
-          <span className="text-fg-muted">
-            “{criterion.threshold_raw}” — could not be read as a number
+          <span className="rounded-md bg-[hsl(var(--neutral-soft))] px-2 py-0.5 text-[hsl(var(--fg-muted))]">
+            “{criterion.threshold_raw}” — not readable as a number
           </span>
         ) : null}
         {threshold && criterion.threshold_raw && (
-          <span className="text-fg-subtle">as printed: {criterion.threshold_raw}</span>
+          <span className="text-[hsl(var(--fg-subtle))]">
+            as printed: {criterion.threshold_raw}
+          </span>
         )}
-        <span className="ml-auto font-mono text-[11px] text-fg-subtle">
-          {criterion.provenance.clause_ref && `clause ${criterion.provenance.clause_ref}`}
+        <span className="ml-auto shrink-0 font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
+          {criterion.provenance.clause_ref && `cl ${criterion.provenance.clause_ref}`}
           {criterion.provenance.source_page && ` · p${criterion.provenance.source_page}`}
         </span>
       </div>

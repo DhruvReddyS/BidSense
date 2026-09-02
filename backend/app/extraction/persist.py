@@ -185,7 +185,14 @@ def save_submission(
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
 ) -> VendorSubmissionRow:
-    """Insert or replace a vendor submission, keyed by (notification, vendor_id)."""
+    """Insert or update a vendor submission, keyed by (notification, vendor_id).
+
+    Updated in place rather than deleted and recreated, for the same reason as
+    notifications: the row id is referenced elsewhere. Vector chunks are purged
+    by submission id, and a churning id means the purge cannot find the previous
+    chunks -- which forced a looser filter that could delete a vendor's chunks
+    across every tender they had bid on.
+    """
     if notification_id is None and submission.tender_id:
         notification_id = session.scalar(
             select(TenderNotificationRow.id).where(
@@ -193,35 +200,46 @@ def save_submission(
             )
         )
 
-    existing = session.scalar(
+    row = session.scalar(
         select(VendorSubmissionRow).where(
             VendorSubmissionRow.vendor_id == submission.vendor_id,
             VendorSubmissionRow.notification_id == notification_id,
         )
     )
-    if existing is not None:
-        logger.info("Replacing existing extraction for vendor %s", submission.vendor_id)
-        session.delete(existing)
-        session.flush()
+    if row is None:
+        row = VendorSubmissionRow()
+        session.add(row)
+    else:
+        logger.info("Updating existing extraction for vendor %s", submission.vendor_id)
 
-    row = VendorSubmissionRow(
-        vendor_id=submission.vendor_id,
-        vendor_name=submission.vendor_name,
-        notification_id=notification_id,
-        years_in_business=submission.years_in_business,
-        pricing_summary=submission.pricing_summary,
-        quoted_price_raw=submission.quoted_price.raw_text if submission.quoted_price else None,
-        quoted_price_inr=(
-            submission.quoted_price.amount_inr if submission.quoted_price else None
-        ),
-        is_blacklisted=submission.is_blacklisted,
-        debarment_disclosure=submission.debarment_disclosure,
-        status=submission.status,
-        elimination_reason=submission.elimination_reason,
-        has_technical_approach=bool(submission.technical_approach_text),
-        source_file=source_file,
-        owner_user_id=owner_user_id,
+    row.vendor_id = submission.vendor_id
+    row.vendor_name = submission.vendor_name
+    row.notification_id = notification_id
+    row.years_in_business = submission.years_in_business
+    row.pricing_summary = submission.pricing_summary
+    row.quoted_price_raw = (
+        submission.quoted_price.raw_text if submission.quoted_price else None
     )
+    row.quoted_price_inr = (
+        submission.quoted_price.amount_inr if submission.quoted_price else None
+    )
+    row.is_blacklisted = submission.is_blacklisted
+    row.debarment_disclosure = submission.debarment_disclosure
+    row.status = submission.status
+    row.elimination_reason = submission.elimination_reason
+    row.has_technical_approach = bool(submission.technical_approach_text)
+    if source_file:
+        row.source_file = source_file
+    if owner_user_id:
+        row.owner_user_id = owner_user_id
+
+    # Children are replaced wholesale, not merged: a partial merge would leave
+    # figures from a previous, possibly wrong, extraction silently in force.
+    row.turnover.clear()
+    row.certifications.clear()
+    row.past_projects.clear()
+    row.documents_submitted.clear()
+    session.flush()
 
     for entry in submission.turnover:
         row.turnover.append(
@@ -263,7 +281,6 @@ def save_submission(
             )
         )
 
-    session.add(row)
     session.flush()
     return row
 
@@ -391,9 +408,9 @@ def index_submission(
             "source_file": document.file_name,
         },
         owner_key=f"submission:{row_id}",
-        stale_filter=build_filter(
-            doc_kind=DocumentKind.SUBMISSION,
-            vendor_id=submission.vendor_id,
-            tender_id=submission.tender_id,
-        ),
+        # Scoped to this submission alone. Scoping by vendor_id instead would,
+        # for a bid with no tender link, delete that vendor's chunks across
+        # every tender they had bid on -- build_filter simply omits a None
+        # tender_id rather than narrowing on it.
+        stale_filter=build_filter(submission_id=str(row_id)),
     )
