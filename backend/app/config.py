@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     # Tender notifications run long; the default 4k context silently truncates
     # them, which looks like a model that "missed" clauses on later pages.
     ollama_num_ctx: int = 40960
+    # Seconds. A local model on a loaded machine is slow but not unbounded --
+    # the same argument as gemini_timeout_ms, at local speeds.
+    ollama_timeout_s: int = 300
+    # Fewer than the hosted path: a local retry re-runs generation on hardware
+    # that is already the bottleneck.
+    ollama_retries: int = 2
     llm_temperature: float = 0.0
     # Real tenders yield long lists -- a 382-page notification can produce
     # dozens of eligibility criteria, each with a verbatim snippet. 8k truncates

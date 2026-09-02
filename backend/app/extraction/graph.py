@@ -106,7 +106,14 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
     # Each extractor reads only the pages likely to hold its field group. On a
     # 382-page tender, sending the whole document either truncates silently or
     # buries three relevant clauses in 380 pages of contract boilerplate.
-    text, pages = select_pages(state["document"], node)
+    # The budget comes from the PROVIDER, not from a constant. A selection sized
+    # for a hosted context silently overflows a local one -- the request
+    # succeeds and the model answers from whatever survived the truncation,
+    # which looks exactly like a model that missed the clause.
+    budget = getattr(llm, "input_char_budget", None)
+    text, pages = select_pages(
+        state["document"], node, **({"char_budget": budget} if budget else {})
+    )
     logger.debug("%s: reading pages %s", node, pages)
     _notify(state, node, "start")
 

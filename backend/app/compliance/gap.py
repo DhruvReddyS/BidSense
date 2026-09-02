@@ -25,6 +25,7 @@ from app.compliance.matching import (
     canonical_form,
     match_document,
     normalise,
+    prewarm,
 )
 from app.compliance.requirements import Applicability, Requirement, deduplicate
 from app.compliance.models import (
@@ -139,14 +140,47 @@ def _check_documents(
 
     haystack = [n for n in present_names + certificate_names if not contradicted(n)]
 
-    items: list[GapItem] = []
-    for requirement in _collect_requirements(notification):
+    requirements = _collect_requirements(notification)
+
+    # Two passes, so the embedding model is called ONCE for the whole report.
+    #
+    # The cheap tiers (exact, alias, vocabulary) settle most requirements
+    # without a model at all -- on the GHMC tender, 44 of 49. Running them first
+    # for everything identifies precisely which names still need embedding, and
+    # those are then embedded together.
+    #
+    # Trickling them in was measured at 37 separate calls for one report, 36 of
+    # them a batch of one. A sentence-transformer amortises tokenisation across
+    # a batch and runs it as a single forward pass, so batch-of-one is close to
+    # the worst way to ask for an embedding. Pre-embedding everything up front
+    # would be one call too, but would pay for the 44 names that never needed it.
+    settled: dict[int, MatchResult] = {}
+    pending: list[int] = []
+    for index, requirement in enumerate(requirements):
         result = match_document(
             requirement.primary.doc_name,
             haystack,
             extra_aliases=requirement.aliases,
-            use_embeddings=use_embeddings,
+            use_embeddings=False,
         )
+        if result.matched:
+            settled[index] = result
+        else:
+            pending.append(index)
+
+    if pending and use_embeddings:
+        prewarm([requirements[i].primary.doc_name for i in pending] + haystack)
+
+    items: list[GapItem] = []
+    for index, requirement in enumerate(requirements):
+        result = settled.get(index)
+        if result is None:
+            result = match_document(
+                requirement.primary.doc_name,
+                haystack,
+                extra_aliases=requirement.aliases,
+                use_embeddings=use_embeddings,
+            )
         items.append(_document_item(requirement, result, declared_absent))
     return items
 

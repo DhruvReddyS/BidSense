@@ -23,6 +23,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.llm import LLMError, LLMProvider, get_llm
+from app.llm.cleanup import strip_thinking
 from app.rag.retrieve import RetrievedChunk
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ def _sentences(text: str) -> list[str]:
 
 
 def strip_reasoning_preamble(text: str) -> str:
-    """Drop leading narration sentences.
+    """Drop a reasoning block, then any leading narration sentences.
 
     A sentence is only dropped when it opens like narration AND carries no
     substantive content -- no digits once citation markers are removed. That
@@ -145,6 +146,10 @@ def strip_reasoning_preamble(text: str) -> str:
     Never returns empty: an answer that is entirely narration is handed back
     unchanged rather than blanked.
     """
+    # Tags first. A reasoning block is delimited explicitly, and reading the
+    # delimiter beats guessing sentence by sentence whether "First, I notice the
+    # source [1] states ..." is narration or the answer.
+    text = strip_thinking(text)
     sentences = _sentences(text.strip())
     index = 0
     while index < len(sentences):

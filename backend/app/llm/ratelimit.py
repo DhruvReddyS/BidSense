@@ -72,20 +72,68 @@ def is_daily_quota_exhausted(exc: Exception) -> bool:
     return "429" in text and "PerDay" in text
 
 
-def _is_transient(exc: Exception) -> bool:
-    """Retryable: quota exhaustion and temporary server overload.
+# Transport failures, matched by TYPE rather than by message text.
+#
+# String matching cannot see these. A dropped connection surfaces as
+# `httpx.ReadError: [Errno 54] Connection reset by peer` -- no status code, no
+# "UNAVAILABLE", nothing the marker list below would catch -- and it is the most
+# ordinary transient failure there is. Before this, a reset connection ended a
+# document's extraction outright while a 503 from the same server was retried.
+def _transport_error_types() -> tuple[type[BaseException], ...]:
+    types: list[type[BaseException]] = [
+        ConnectionError,      # builtin; covers ConnectionReset/Aborted/Refused
+        TimeoutError,         # builtin; socket and asyncio timeouts alias to this
+    ]
+    try:
+        import httpx
 
-    Deliberately narrow. A schema-validation failure or a bad request is not
-    retried -- doing so burns quota and delays the report that something is
-    genuinely wrong.
+        types.append(httpx.TransportError)
+    except Exception:                       # pragma: no cover - httpx is a dep
+        pass
+    try:
+        import requests
+
+        types.append(requests.exceptions.ConnectionError)
+        types.append(requests.exceptions.Timeout)
+    except Exception:                       # pragma: no cover - optional
+        pass
+    return tuple(types)
+
+
+_TRANSPORT_ERRORS = _transport_error_types()
+
+# Server-side conditions that clear on their own, matched in the message because
+# the SDKs surface them as generic exceptions carrying the status in the text.
+_TRANSIENT_MARKERS = (
+    "429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "500 INTERNAL",
+    "502", "504", "Bad Gateway", "Gateway Time", "Service Unavailable",
+    "Connection reset", "Connection aborted", "Server disconnected",
+    "Temporary failure in name resolution", "EOF occurred",
+)
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Retryable: transport failures, quota pressure and temporary overload.
+
+    Deliberately narrow on everything else. A schema-validation failure or a bad
+    request is not retried -- doing so burns quota and delays the report that
+    something is genuinely wrong. Nor is a daily cap: it does not clear today.
     """
     if is_daily_quota_exhausted(exc):
         return False        # retrying a daily cap just burns the clock
+
+    # Walk the cause chain: SDKs wrap transport errors in their own exception
+    # types, and the interesting one is usually two levels down.
+    seen = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, _TRANSPORT_ERRORS):
+            return True
+        current = current.__cause__ or current.__context__
+
     text = str(exc)
-    return any(
-        marker in text
-        for marker in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "500 INTERNAL")
-    )
+    return any(marker.lower() in text.lower() for marker in _TRANSIENT_MARKERS)
 
 
 def _suggested_delay(exc: Exception, attempt: int) -> float:

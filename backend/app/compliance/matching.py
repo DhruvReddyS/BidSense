@@ -36,6 +36,7 @@ score; the band only changes what a failure to match is allowed to claim.
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -452,28 +453,83 @@ def match_document(
     return MatchResult(False, None, round(best_score, 4), None)
 
 
-@lru_cache(maxsize=4096)
-def _embed_one(text: str) -> tuple[float, ...]:
-    """Embed a single document name, cached across the whole process.
+# Name -> vector, for the life of the process. Guarded because a gap report can
+# be built on a worker thread while another is running.
+_VECTORS: dict[str, tuple[float, ...]] = {}
+_VECTOR_LOCK = threading.Lock()
 
-    Caching per NAME rather than per (requirement, haystack) pair matters a
-    great deal. A gap report checks every requirement against the same list of
-    submitted documents, so a pair-keyed cache re-embeds that list once per
-    requirement: on a real tender with 49 requirements and 50 enclosed documents
-    that is ~2,500 embeddings where 99 distinct ones exist. The report took
-    minutes as a result.
+
+def _embed_many(names: tuple[str, ...]) -> None:
+    """Embed every name not already cached, in ONE call.
+
+    Two separate wins, and the second was still outstanding after the first:
+
+    1. Cache per NAME, not per (requirement, haystack) pair. A gap report checks
+       every requirement against the same enclosure list, so a pair-keyed cache
+       re-embeds that list once per requirement -- on the GHMC tender, ~2,500
+       embeddings where 99 distinct ones exist. The report took minutes.
+
+    2. Embed the misses TOGETHER. Fixing (1) left 85 calls to the model, each
+       with a batch of one, because the cache was consulted one name at a time.
+       A sentence-transformer amortises tokenisation and runs the batch as a
+       single forward pass, so 85 batches of 1 is many times the work of one
+       batch of 85 -- on CPU, which is where this runs, the difference is the
+       difference between a snappy report and a visible pause.
     """
+    with _VECTOR_LOCK:
+        missing = [n for n in dict.fromkeys(names) if n not in _VECTORS]
+    if not missing:
+        return
+
     from app.vector.embeddings import embed_passages
 
-    return tuple(embed_passages([text])[0])
+    vectors = embed_passages(missing)
+    with _VECTOR_LOCK:
+        for name, vector in zip(missing, vectors):
+            _VECTORS[name] = tuple(vector)
+
+
+def _embed_one(text: str) -> tuple[float, ...]:
+    """A single name's vector, embedding it if this is the first time."""
+    with _VECTOR_LOCK:
+        cached = _VECTORS.get(text)
+    if cached is not None:
+        return cached
+    _embed_many((text,))
+    with _VECTOR_LOCK:
+        return _VECTORS[text]
+
+
+def prewarm(names: list[str]) -> None:
+    """Embed a batch of names up front, so callers do not trickle them in.
+
+    Exposed for the gap report, which knows the whole working set before it
+    starts and can therefore pay for one forward pass instead of dozens.
+    """
+    if names:
+        _embed_many(tuple(names))
+
+
+def _clear_vector_cache() -> None:
+    """Test hook. The cache is process-lifetime by design."""
+    with _VECTOR_LOCK:
+        _VECTORS.clear()
 
 
 def _best_embedding_match(required: str, submitted: tuple[str, ...]) -> tuple[str, float]:
-    required_vec = _embed_one(required)
+    # One call covering the requirement and every candidate, rather than one per
+    # name. After the first requirement on a tender the enclosure list is
+    # already cached, so subsequent requirements embed at most themselves.
+    _embed_many((required,) + submitted)
+
+    with _VECTOR_LOCK:
+        required_vec = _VECTORS[required]
+        vectors = {name: _VECTORS[name] for name in submitted}
+
     best_name, best_score = submitted[0], -1.0
     for name in submitted:
         # Vectors are unit-normalised, so the dot product is cosine similarity.
-        score = sum(a * b for a, b in zip(required_vec, _embed_one(name)))
+        score = sum(a * b for a, b in zip(required_vec, vectors[name]))
         if score > best_score:
             best_name, best_score = name, score
     return best_name, best_score

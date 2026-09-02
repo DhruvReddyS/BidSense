@@ -2,6 +2,7 @@
 which is what Alembic autogenerate and create_all rely on."""
 
 from app.db.base import Base
+from app.db.models.cache import ExtractionCacheRow
 from app.db.models.corrigendum import ChangedFieldRow, CorrigendumRow
 from app.db.models.job import IngestJob, JobKind, JobStatus
 from app.db.models.notification import (
@@ -23,6 +24,7 @@ __all__ = [
     "ChangedFieldRow",
     "CorrigendumRow",
     "EligibilityCriterionRow",
+    "ExtractionCacheRow",
     "IngestJob",
     "JobKind",
     "JobStatus",

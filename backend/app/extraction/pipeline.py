@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.db.session import session_scope
+from app.extraction import cache as extraction_cache
 from app.extraction.graph import extract_notification, extract_submission
 from app.extraction.persist import (
     index_notification,
@@ -30,8 +31,32 @@ from app.extraction.validate import (
 from app.ingest import parse_document
 from app.llm import LLMProvider
 from app.schemas.common import DocumentKind
+from app.schemas.notification import TenderNotification
+from app.schemas.submission import VendorSubmission
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_lookup(digest: str, kind: DocumentKind):
+    """Cache reads must never be load-bearing.
+
+    `cache.lookup` already swallows a database failure, but this is an
+    optimisation and the guarantee should not depend on the optimisation being
+    bug-free. The cost of a miss is an API call; the cost of raising here is a
+    failed upload of a document that extracted perfectly well.
+    """
+    try:
+        return extraction_cache.lookup(digest, kind)
+    except Exception as exc:      # noqa: BLE001 - deliberately broad
+        logger.warning("extraction cache lookup failed, extracting normally: %s", exc)
+        return None
+
+
+def _safe_store(digest: str, kind: DocumentKind, payload: dict, **kwargs) -> None:
+    try:
+        extraction_cache.store(digest, kind, payload, **kwargs)
+    except Exception as exc:      # noqa: BLE001 - deliberately broad
+        logger.warning("could not cache extraction: %s", exc)
 
 
 def _provider_label(llm: "LLMProvider | None") -> str:
@@ -74,6 +99,10 @@ class IngestReport:
     #: attributable if we record what produced it.
     extracted_by: str | None = None
     parse_seconds: float = 0.0
+    #: True when the LLM was not called because these exact bytes had already
+    #: been extracted. Reported rather than hidden: a cache hit inherits the
+    #: quality of whatever wrote the entry, including a local fallback model.
+    from_cache: bool = False
     extract_seconds: float = 0.0
     persist_seconds: float = 0.0
 
@@ -102,8 +131,9 @@ class IngestReport:
 
     def summary(self) -> str:
         state = "OK" if self.ok else "PARTIAL"
+        cached = " [cached]" if self.from_cache else ""
         return (
-            f"[{state}] {self.file_name}: {self.identifier} | {self.pages}p "
+            f"[{state}]{cached} {self.file_name}: {self.identifier} | {self.pages}p "
             f"({self.ocr_pages} OCR) | {self.chunks_indexed} chunks | "
             f"{self.total_seconds:.1f}s | {len(self.extraction_errors)} errors, "
             f"{len(self.parse_warnings)} warnings, "
@@ -117,6 +147,7 @@ def ingest_notification(
     llm: LLMProvider | None = None,
     owner_user_id: uuid.UUID | None = None,
     index: bool = True,
+    use_cache: bool = True,
     on_node_complete=None,
 ) -> IngestReport:
     path = Path(path)
@@ -130,14 +161,39 @@ def ingest_notification(
     report.parse_warnings = document.parse_warnings
 
     started = time.perf_counter()
-    notification, result = extract_notification(
-        document, llm=llm, on_node_complete=on_node_complete
-    )
+    digest = extraction_cache.content_hash(path)
+    hit = _safe_lookup(digest, DocumentKind.NOTIFICATION) if use_cache else None
+
+    if hit is not None:
+        # Six LLM requests skipped. Against a free tier of twenty per model per
+        # day, one accidental re-upload of a tender is nearly a third of a
+        # model's quota -- and during a demo the same file gets uploaded again
+        # and again.
+        notification = TenderNotification.model_validate(hit.payload)
+        result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
+        report.from_cache = True
+        report.extracted_by = hit.model
+        logger.info(
+            "cache hit for %s (extracted by %s, served %d time(s))",
+            path.name, hit.model, hit.hits,
+        )
+    else:
+        notification, result = extract_notification(
+            document, llm=llm, on_node_complete=on_node_complete
+        )
+        report.extracted_by = _provider_label(llm)
+        if use_cache and not result["errors"]:
+            # Only a clean extraction is cached. Storing a partial one would
+            # make a transient API failure permanent for those bytes.
+            _safe_store(
+                digest, DocumentKind.NOTIFICATION, notification.model_dump(mode="json"),
+                model=report.extracted_by, source_file=path.name,
+            )
+
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
     report.identifier = notification.tender_id
-    report.extracted_by = _provider_label(llm)
     # Run BEFORE persisting, so the findings describe exactly what was stored.
     report.validation = validate_notification(notification, document)
 
@@ -163,6 +219,7 @@ def ingest_submission(
     llm: LLMProvider | None = None,
     owner_user_id: uuid.UUID | None = None,
     index: bool = True,
+    use_cache: bool = True,
     on_node_complete=None,
 ) -> IngestReport:
     path = Path(path)
@@ -176,18 +233,40 @@ def ingest_submission(
     report.parse_warnings = document.parse_warnings
 
     started = time.perf_counter()
-    submission, result = extract_submission(
-        document,
-        vendor_id=vendor_id,
-        tender_id=tender_id,
-        llm=llm,
-        on_node_complete=on_node_complete,
-    )
+    digest = extraction_cache.content_hash(path)
+    hit = _safe_lookup(digest, DocumentKind.SUBMISSION) if use_cache else None
+
+    if hit is not None:
+        submission = VendorSubmission.model_validate(hit.payload)
+        # The cached extraction is of the DOCUMENT; who is filing it and against
+        # which tender are arguments, not content. The same bid PDF can legitimately
+        # be filed by a different vendor id or against a different tender, so these
+        # are re-applied rather than restored from the entry.
+        submission.vendor_id = vendor_id
+        submission.tender_id = tender_id
+        result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
+        report.from_cache = True
+        report.extracted_by = hit.model
+        logger.info("cache hit for %s (extracted by %s)", path.name, hit.model)
+    else:
+        submission, result = extract_submission(
+            document,
+            vendor_id=vendor_id,
+            tender_id=tender_id,
+            llm=llm,
+            on_node_complete=on_node_complete,
+        )
+        report.extracted_by = _provider_label(llm)
+        if use_cache and not result["errors"]:
+            _safe_store(
+                digest, DocumentKind.SUBMISSION, submission.model_dump(mode="json"),
+                model=report.extracted_by, source_file=path.name,
+            )
+
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
     report.identifier = submission.vendor_id
-    report.extracted_by = _provider_label(llm)
     report.validation = validate_submission(submission, document)
 
     started = time.perf_counter()

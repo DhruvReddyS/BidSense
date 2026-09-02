@@ -180,3 +180,98 @@ def test_document_checklist_page_is_selected():
     _, pages = select_pages(document, "documents", use_embeddings=False)
     assert truth_pages, "expected a document checklist page in this tender"
     assert set(truth_pages) & set(pages)
+
+
+# --------------------------------------------------------------------------- #
+# The budget must come from the provider, not from a constant
+# --------------------------------------------------------------------------- #
+def test_a_local_model_gets_a_budget_sized_to_its_context_window():
+    """A selection sized for a hosted context silently overflows a local one.
+
+    Measured on the 101-page IIT tender: the header group selects 28 pages, or
+    ~17,100 tokens of prompt, against a configured 16,384-token window. The
+    request succeeds and the model answers from whatever survived the cut, which
+    is indistinguishable from a model that missed the clause.
+    """
+    from app.config import settings
+    from app.llm.ollama import OllamaProvider
+
+    original = settings.ollama_num_ctx
+    try:
+        settings.ollama_num_ctx = 16384
+        budget = OllamaProvider().input_char_budget
+    finally:
+        settings.ollama_num_ctx = original
+
+    # Room must be left for the system prompt, the JSON schema and the output --
+    # all of which come out of the SAME window on a local model.
+    assert budget < 16384 * 3.5
+    assert budget > 0
+
+
+def test_the_budget_scales_with_the_configured_window():
+    from app.config import settings
+    from app.llm.ollama import OllamaProvider
+
+    original = settings.ollama_num_ctx
+    try:
+        settings.ollama_num_ctx = 16384
+        small = OllamaProvider().input_char_budget
+        settings.ollama_num_ctx = 40960
+        large = OllamaProvider().input_char_budget
+    finally:
+        settings.ollama_num_ctx = original
+    assert large > small * 2
+
+
+def test_a_hosted_provider_declares_no_practical_limit():
+    """None is the honest answer for a model whose window dwarfs these
+    documents; inventing a number would shrink selection for no reason."""
+    from unittest.mock import patch
+
+    from app.config import settings
+
+    with patch("google.genai.Client"):
+        with patch.object(settings, "gemini_api_key", "k"):
+            from app.llm.gemini import GeminiProvider
+
+            assert GeminiProvider().input_char_budget is None
+
+
+def test_the_extraction_graph_asks_the_provider_for_its_budget():
+    """Structural. The whole point is that the constant is not consulted when a
+    provider knows better."""
+    import inspect
+
+    from app.extraction import graph
+
+    source = inspect.getsource(graph._run)
+    assert "input_char_budget" in source
+    assert "char_budget" in source
+
+
+def test_a_small_window_actually_shrinks_the_selection(tmp_path):
+    """End to end: the same document selects less text for a smaller window."""
+    from app.extraction.selection import select_pages
+    from app.ingest.models import PageText, ParsedDocument
+    from app.schemas.common import DocumentKind
+
+    document = ParsedDocument(
+        file_name="big.pdf",
+        doc_kind=DocumentKind.NOTIFICATION,
+        pages=[
+            PageText(
+                page_number=i,
+                text=("tender no. last date earnest money estimated cost " * 40)
+                if i % 5 == 0
+                else ("general conditions of contract boilerplate text " * 40),
+            )
+            for i in range(1, 61)
+        ],
+    )
+    wide, wide_pages = select_pages(document, "header", char_budget=200_000)
+    narrow, narrow_pages = select_pages(document, "header", char_budget=20_000)
+
+    assert len(narrow) < len(wide)
+    assert len(narrow) <= 20_000 * 1.2
+    assert narrow_pages, "a small budget must still select something"

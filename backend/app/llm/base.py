@@ -37,6 +37,19 @@ class LLMProvider(ABC):
     #: extractors at once there produces six timeouts instead of six results.
     max_concurrency: int = 1
 
+    @property
+    def input_char_budget(self) -> int | None:
+        """How much document text this backend can be sent in one call.
+
+        None means "no practical limit at this project's document sizes", which
+        is the honest answer for the hosted models. A local model has a hard
+        context window that the OUTPUT also comes out of, and exceeding it
+        truncates silently -- the request succeeds and the answer is drawn from
+        whatever survived the cut. Page selection asks for this so a budget
+        tuned for a hosted context is not sent to a 16k local one.
+        """
+        return None
+
     @cached_property
     def _gate(self) -> threading.Semaphore:
         return threading.Semaphore(self.max_concurrency)
