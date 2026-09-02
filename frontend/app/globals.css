@@ -32,11 +32,11 @@
   :root {
     color-scheme: light;
 
-    --bg: 40 24% 98%;
-    --bg-alt: 40 20% 96%;
-    --surface: 0 0% 100%;
-    --surface-2: 40 18% 96.5%;
-    --surface-3: 40 14% 92.5%;
+    --bg: 42 38% 96.5%;
+    --bg-alt: 42 32% 94%;
+    --surface: 44 50% 99.2%;
+    --surface-2: 42 30% 95%;
+    --surface-3: 40 22% 90%;
     --border: 40 12% 88%;
     --border-strong: 40 10% 78%;
 
@@ -45,34 +45,38 @@
     --fg-subtle: 35 6% 56%;
 
     /* Ink blue. It means one thing only: this is checkable, open the source. */
-    --accent: 216 52% 34%;
-    --accent-hover: 216 52% 27%;
-    --accent-fg: 0 0% 100%;
-    --accent-soft: 216 60% 96%;
-    --accent-border: 216 44% 83%;
+    /* Ink. Saturated enough to be a colour rather than a grey, and it still
+       means exactly one thing: this is checkable, open the source. */
+    --accent: 220 72% 32%;
+    --accent-hover: 220 76% 25%;
+    --accent-fg: 44 50% 99%;
+    --accent-soft: 220 68% 95.5%;
+    --accent-border: 220 52% 80%;
 
     /* MET — deliberately the quietest state on screen. Nothing to do here. */
-    --ok: 140 18% 35%;
-    --ok-soft: 140 26% 96%;
-    --ok-border: 140 18% 84%;
+    --ok: 150 38% 29%;
+    --ok-soft: 148 42% 94.5%;
+    --ok-border: 148 30% 80%;
 
     /* NEEDS YOUR OWN CHECK — the three-state honesty. A pencil mark, not an
        error: format rules and near-matches are for a human to settle. */
-    --warn: 42 64% 32%;
-    --warn-soft: 44 72% 95%;
-    --warn-border: 42 48% 80%;
+    /* Brass. A pencil mark in the margin, not a warning triangle. */
+    --warn: 36 78% 33%;
+    --warn-soft: 40 86% 93.5%;
+    --warn-border: 38 64% 76%;
 
     /* OUTSTANDING — work to do, not failure. Most missing documents are
        fixable before submission and the colour has to say so. */
-    --pending: 210 32% 35%;
-    --pending-soft: 210 40% 96%;
-    --pending-border: 210 28% 82%;
+    --pending: 205 48% 36%;
+    --pending-soft: 205 56% 94.5%;
+    --pending-border: 205 40% 79%;
 
     /* DOES NOT QUALIFY — the only genuinely irreversible state, and the only
        strong colour. Oxblood: serious, not alarming. */
-    --bad: 353 50% 37%;
-    --bad-soft: 353 54% 96.5%;
-    --bad-border: 353 38% 84%;
+    /* Oxblood. The one irreversible state, and the only strong colour. */
+    --bad: 352 62% 36%;
+    --bad-soft: 352 66% 95.5%;
+    --bad-border: 352 48% 81%;
 
     --info: 216 52% 34%;
     --info-soft: 216 60% 96%;
@@ -82,7 +86,39 @@
     --neutral-border: 40 12% 86%;
 
     --shadow-color: 35 25% 20%;
-    --radius: 0.6rem;
+
+    /*
+     * ONE radius, near-sharp, no exceptions. Five values were in use with no
+     * logic behind which got which, and inconsistent rounding reads as
+     * unfinished before a single other thing is judged. 3px is enough to avoid
+     * a hard CAD edge and little enough to stay in the register of a document
+     * tool rather than a consumer app. Genuine circles -- status dots -- are a
+     * SHAPE, not a corner treatment, and are the only thing that stays round.
+     */
+    --radius: 3px;
+
+    /*
+     * A hairline is not a border. Borders were doing all the structural work
+     * here, which is what made everything read as boxes; most separation should
+     * come from whitespace, and where a line IS needed it should be the
+     * quietest mark on the screen, not the same weight as a real edge.
+     */
+    --hairline: 40 16% 87%;
+
+    /*
+     * Three spacing relationships, used with intent.
+     *
+     *   tight    a label and the value it belongs to; a marker and its word.
+     *            Reads as one object.
+     *   group    items that belong to the same list.
+     *   section  unrelated regions. Big enough that no rule is needed between
+     *            them -- which is the point: whitespace replaces a border.
+     *
+     * One default gap everywhere is what makes a layout read as a template.
+     */
+    --tight: 0.375rem;
+    --group: 1rem;
+    --section: 2.75rem;
 
     /* Density, not breakpoint. A vendor checking one bid and a reviewer
        scanning fifteen have different jobs, and responsive width does not
@@ -103,11 +139,11 @@
   [data-theme="dark"] {
     color-scheme: dark;
 
-    --bg: 35 12% 8%;
-    --bg-alt: 35 11% 10%;
-    --surface: 35 10% 11.5%;
-    --surface-2: 35 9% 15%;
-    --surface-3: 35 8% 19%;
+    --bg: 36 14% 7%;
+    --bg-alt: 36 13% 9%;
+    --surface: 36 12% 10.5%;
+    --surface-2: 36 11% 14%;
+    --surface-3: 36 10% 18.5%;
     --border: 35 8% 21%;
     --border-strong: 35 7% 32%;
 
@@ -115,25 +151,25 @@
     --fg-muted: 38 7% 66%;
     --fg-subtle: 38 6% 50%;
 
-    --accent: 213 70% 70%;
-    --accent-hover: 213 76% 78%;
+    --accent: 213 88% 72%;
+    --accent-hover: 213 92% 80%;
     --accent-fg: 216 50% 10%;
     --accent-soft: 214 34% 20%;
     --accent-border: 214 32% 34%;
 
-    --ok: 142 30% 62%;
+    --ok: 148 44% 60%;
     --ok-soft: 142 20% 15%;
     --ok-border: 142 18% 27%;
 
-    --warn: 43 62% 66%;
+    --warn: 39 82% 63%;
     --warn-soft: 42 26% 15.5%;
     --warn-border: 42 26% 30%;
 
-    --pending: 210 46% 68%;
+    --pending: 205 62% 66%;
     --pending-soft: 210 26% 16%;
     --pending-border: 210 24% 31%;
 
-    --bad: 353 60% 68%;
+    --bad: 352 78% 68%;
     --bad-soft: 353 28% 16%;
     --bad-border: 353 26% 32%;
 
@@ -145,6 +181,7 @@
     --neutral-border: 35 8% 26%;
 
     --shadow-color: 35 40% 2%;
+    --hairline: 36 10% 20%;
   }
 
   * {
@@ -215,29 +252,93 @@
   h1, h2, h3 {
     letter-spacing: -0.021em;
   }
+
+  /*
+   * The serif appears only where a reader stops: a verdict, a headline figure,
+   * a tender title. At body size it would be affectation; at display size it is
+   * the difference between a report that looks generated and one that looks
+   * written. Optical sizing and a light weight keep it from reading as
+   * old-fashioned.
+   */
+  .display {
+    font-family: theme("fontFamily.display");
+    font-weight: 400;
+    letter-spacing: -0.012em;
+    font-variant-numeric: tabular-nums;
+  }
+  .display-lg {
+    font-family: theme("fontFamily.display");
+    font-weight: 400;
+    letter-spacing: -0.022em;
+    line-height: 1.06;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @layer components {
+  /*
+   * A plain surface. No shadow, no border by default -- it earns those only
+   * when it is genuinely a separately-actionable unit.
+   *
+   * `.card` previously carried border + background + shadow, and was applied to
+   * every region on the page. That is the single biggest reason the product
+   * read as boxy: nothing was distinguished, because everything was.
+   */
   .card {
-    @apply rounded-xl border bg-[hsl(var(--surface))];
+    @apply rounded bg-[hsl(var(--surface))];
+  }
+
+  /*
+   * MARGINALIA.
+   *
+   * A printed statute carries its clause numbers in the margin, not inline with
+   * the text, and a reader learns to scan that column alone. The requirement
+   * list does the same: the clause ref sits in a fixed left column in the
+   * accent, so a reader checking "which clause was that" reads down one edge
+   * instead of hunting through prose.
+   *
+   * It collapses below the breakpoint -- a phone has no margin to give -- and
+   * the ref falls inline, where the dotted rule still marks it.
+   */
+  .margin-note {
+    font-family: theme("fontFamily.mono");
+    font-size: 0.72rem;
+    line-height: 1.5;
+    color: hsl(var(--accent));
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A hairline divider. The quietest mark available -- it separates without
+     enclosing, which is what most of these regions actually need. */
+  .rule {
+    border-color: hsl(var(--hairline));
+  }
+
+  /*
+   * The ONE elevation in the system, and it is deliberately almost invisible:
+   * a tight, very low-opacity shadow that reads as "this sheet is on top of the
+   * page" rather than as a drop shadow.
+   *
+   * Used on exactly two things -- the verdict, and an open citation panel --
+   * because elevation applied everywhere is as flat as elevation applied
+   * nowhere. If a third thing ever wants it, one of these has to give it up.
+   */
+  .raised {
     box-shadow:
-      0 1px 2px -1px hsl(var(--shadow-color) / 0.07),
-      0 1px 3px 0 hsl(var(--shadow-color) / 0.05);
+      0 1px 1px hsl(var(--shadow-color) / 0.04),
+      0 4px 14px -6px hsl(var(--shadow-color) / 0.10);
   }
 
   .card-hover {
-    @apply transition-all duration-200 ease-out;
+    @apply transition-colors duration-150 ease-out;
   }
   .card-hover:hover {
-    border-color: hsl(var(--border-strong));
-    box-shadow:
-      0 2px 4px -2px hsl(var(--shadow-color) / 0.09),
-      0 8px 22px -6px hsl(var(--shadow-color) / 0.12);
-    transform: translateY(-2px);
+    background: hsl(var(--surface-2));
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2
+    @apply inline-flex items-center justify-center gap-2 rounded px-4 py-2
            text-sm font-medium transition-all duration-150
            disabled:pointer-events-none disabled:opacity-45;
   }
@@ -270,7 +371,7 @@
   }
 
   .input {
-    @apply w-full rounded-lg border bg-[hsl(var(--surface))] px-3 py-2 text-sm
+    @apply w-full rounded border bg-[hsl(var(--surface))] px-3 py-2 text-sm
            outline-none transition-all placeholder:text-[hsl(var(--fg-subtle))];
   }
   .input:focus {
@@ -284,8 +385,8 @@
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border
-           px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded
+           px-1.5 py-0.5 text-xs font-medium;
   }
 
   /*

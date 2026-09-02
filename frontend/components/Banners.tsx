@@ -30,8 +30,11 @@ export function StalenessBanner({
   return (
     <div
       role="alert"
-      className="animate-rise overflow-hidden rounded-xl border-2 border-[hsl(var(--warn-border))]
-                 bg-[hsl(var(--warn-soft))]"
+      /* The one alert that keeps an edge. It is separately actionable -- it
+         carries its own button -- and it has to survive being scrolled past,
+         which is exactly the test a border should have to pass. */
+      className="animate-rise raised rounded bg-[hsl(var(--warn-soft))]
+                 ring-1 ring-inset ring-[hsl(var(--warn-border))]"
     >
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="flex min-w-0 items-start gap-3">
@@ -97,53 +100,44 @@ export function DataQualityBanner({ quality }: { quality: DataQuality }) {
   );
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--info-border))] bg-[hsl(var(--info-soft))]">
+    /* No box. A label, a rule and the text -- the same treatment every other
+       sidebar section gets, because it is not more actionable than they are. */
+    <section>
       <button
-        className="flex w-full items-start gap-3 p-4 text-left"
+        className="rule flex w-full items-start gap-3 border-b pb-2 text-left"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
       >
-        <span
-          aria-hidden
-          className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full
-                     border border-[hsl(var(--info-border))] bg-[hsl(var(--surface))]
-                     text-xs font-bold text-[hsl(var(--info))]"
-        >
-          i
-        </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-fg">
+          <span className="label block text-[hsl(var(--warn))]">Data quality</span>
+          <span className="mt-1 block text-[13px] font-medium leading-snug">
             Check the extraction before relying on this
           </span>
-          <span className="mt-1 block text-[13px] leading-relaxed text-fg-muted">
-            {quality.banner}
-          </span>
         </span>
-        <span className="shrink-0 text-xs font-medium text-[hsl(var(--info))]">
-          {open ? "Hide" : `Show ${quality.findings.length}`}
+        <span className="ref shrink-0 text-[hsl(var(--accent))]">
+          {open ? "hide" : quality.findings.length}
         </span>
       </button>
+      <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">{quality.banner}</p>
 
       {open ? (
-        <ul className="space-y-2 border-t border-[hsl(var(--info-border))] px-4 py-3">
+        <ul className="rule mt-3 space-y-2.5 divide-y divide-[hsl(var(--hairline))]">
           {quality.findings.map((finding, index) => (
-            <li key={`${finding.field}-${index}`} className="flex gap-2.5 text-[13px]">
-              <span
-                className={`chip mt-0.5 h-fit shrink-0 ${
-                  finding.severity === "error"
-                    ? "border-[hsl(var(--bad-border))] bg-[hsl(var(--bad-soft))] text-[hsl(var(--bad))]"
-                    : "border-[hsl(var(--neutral-border))] bg-[hsl(var(--surface))] text-fg-muted"
-                }`}
-              >
-                {finding.source}
+            <li key={`${finding.field}-${index}`} className="pt-2.5 text-[12.5px] first:pt-0">
+              <span className="flex items-baseline gap-2">
+                <span
+                  className={`ref ${
+                    finding.severity === "error"
+                      ? "text-[hsl(var(--bad))]"
+                      : "text-fg-subtle"
+                  }`}
+                >
+                  {finding.source}
+                </span>
+                <span className="break-anywhere ref text-fg">{finding.field}</span>
               </span>
-              <span className="min-w-0">
-                <span className="break-anywhere font-mono text-xs text-fg">
-                  {finding.field}
-                </span>
-                <span className="mt-0.5 block leading-relaxed text-fg-muted">
-                  {finding.message}
-                </span>
+              <span className="mt-1 block leading-relaxed text-fg-muted">
+                {finding.message}
               </span>
             </li>
           ))}
@@ -151,11 +145,11 @@ export function DataQualityBanner({ quality }: { quality: DataQuality }) {
       ) : null}
 
       {errors.length && !open ? (
-        <p className="border-t border-[hsl(var(--info-border))] px-4 py-2 text-xs text-fg-muted">
+        <p className="mt-2 text-xs text-fg-subtle">
           {errors.length} value{errors.length === 1 ? " is" : "s are"} present in
           the document but were not extracted.
         </p>
       ) : null}
-    </div>
+    </section>
   );
 }

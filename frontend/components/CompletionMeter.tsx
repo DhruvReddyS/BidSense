@@ -28,7 +28,6 @@ export function CompletionMeter({
 
   return (
     <section
-      className="card p-5"
       aria-labelledby="completion-heading"
       data-testid="completion-meter"
     >
@@ -42,11 +41,11 @@ export function CompletionMeter({
       </div>
 
       <p className="mt-2.5 flex items-baseline gap-2">
-        <span className="tnum text-[2.6rem] font-semibold leading-none tracking-tight">
+        <span className="display-lg text-[3.25rem] text-[hsl(var(--ok))]">
           {satisfied}
         </span>
-        <span className="text-lg text-fg-muted">
-          of <span className="tnum font-medium text-fg">{total}</span> satisfied
+        <span className="display text-xl text-fg-muted">
+          of <span className="text-fg">{total}</span> satisfied
         </span>
       </p>
 

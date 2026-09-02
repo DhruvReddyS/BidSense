@@ -27,12 +27,25 @@ const config: Config = {
           "Inter", "Roboto", "Helvetica Neue", "Arial", "sans-serif",
         ],
         mono: [
-          "ui-monospace", "SFMono-Regular", "Menlo", "Monaco",
-          "Consolas", "monospace",
+          "var(--font-mono)", "ui-monospace", "SFMono-Regular",
+          "Menlo", "Consolas", "monospace",
         ],
+        display: ["var(--font-display)", "Georgia", "Times New Roman", "serif"],
       },
+      // One radius. Every scale step resolves to the same near-sharp value, so
+      // an accidental rounded-lg somewhere cannot reintroduce a second radius.
       borderRadius: {
+        DEFAULT: "var(--radius)",
+        sm: "var(--radius)",
+        md: "var(--radius)",
+        lg: "var(--radius)",
         xl: "var(--radius)",
+        "2xl": "var(--radius)",
+      },
+      spacing: {
+        tight: "var(--tight)",
+        group: "var(--group)",
+        section: "var(--section)",
       },
     },
   },

@@ -38,11 +38,13 @@ export function CitationViewer({
     url?: string;
     highlights?: number;
     pageCount?: number;
+    highlightAt?: number | null;
     error?: string;
     loading: boolean;
   }>({ loading: false });
   const objectUrl = useRef<string | null>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!target?.contentHash || !target.page) {
@@ -65,6 +67,7 @@ export function CitationViewer({
           url: result.url,
           highlights: result.highlights,
           pageCount: result.pageCount,
+          highlightAt: result.highlightAt,
         });
       })
       .catch((error: unknown) => {
@@ -87,6 +90,39 @@ export function CitationViewer({
       }
     };
   }, [target]);
+
+  /*
+   * Land ON the marked passage.
+   *
+   * A panel that opens at the top of a 68-page tender and leaves the highlight
+   * below the fold has technically shown the citation and practically hidden
+   * it -- the reader has to hunt for the thing they clicked to see.
+   *
+   * Done in an effect rather than the image's onLoad: a blob URL frequently
+   * finishes loading before React attaches the handler, so onLoad never fires
+   * and the scroll silently never happens. This waits for layout instead, which
+   * is the condition that actually matters.
+   */
+  useEffect(() => {
+    const at = state.highlightAt;
+    const box = scroller.current;
+    if (at == null || !box) return;
+
+    let frame = 0;
+    const settle = () => {
+      const image = box.querySelector("img");
+      if (!image || !image.offsetHeight) {
+        frame = requestAnimationFrame(settle);
+        return;
+      }
+      box.scrollTo({
+        top: Math.max(0, image.offsetTop + image.offsetHeight * at - box.clientHeight / 2),
+        behavior: "auto",
+      });
+    };
+    frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
+  }, [state.url, state.highlightAt]);
 
   useEffect(() => {
     if (!target) return;
@@ -117,7 +153,7 @@ export function CitationViewer({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="animate-rise card w-full max-w-4xl overflow-hidden">
+      <div className="animate-rise raised card w-full max-w-4xl overflow-hidden">
         <header className="flex items-start justify-between gap-4 border-b bg-[hsl(var(--surface-2))] px-5 py-3.5">
           <div className="min-w-0">
             <p className="label">Source</p>
@@ -178,7 +214,10 @@ export function CitationViewer({
           </blockquote>
         ) : null}
 
-        <div className="max-h-[65vh] overflow-auto bg-[hsl(var(--surface-2))] p-4">
+        <div
+          ref={scroller}
+          className="max-h-[65vh] overflow-auto bg-[hsl(var(--surface-2))] p-4"
+        >
           {notRetained ? (
             <Notice>
               This document was ingested before source pages were retained, so
@@ -192,7 +231,7 @@ export function CitationViewer({
           ) : state.url ? (
             <figure>
               {state.highlights === 0 ? (
-                <figcaption className="mb-3 rounded-lg border border-[hsl(var(--warn-border))] bg-[hsl(var(--warn-soft))] px-3 py-2 text-xs text-fg">
+                <figcaption className="mb-3 rounded bg-[hsl(var(--warn-soft))] px-3 py-2 text-xs text-fg">
                   The page is shown, but the exact cited wording could not be
                   located on it — read the page rather than looking for a mark.
                 </figcaption>
@@ -201,7 +240,7 @@ export function CitationViewer({
               <img
                 src={state.url}
                 alt={`Page ${target.page} of ${target.documentLabel}, with the cited passage highlighted`}
-                className="mx-auto w-full max-w-2xl rounded-lg border bg-white shadow-sm"
+                className="mx-auto w-full max-w-2xl rounded bg-white"
               />
             </figure>
           ) : null}

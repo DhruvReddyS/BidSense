@@ -28,7 +28,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // A dead backend is the single most common local failure. Say so plainly
     // instead of surfacing "Failed to fetch" to the user.
     throw new ApiError(
-      `Cannot reach the TenderIQ API at ${BASE}. Is the backend running?`,
+      `Cannot reach the BidSense API at ${BASE}. Is the backend running?`,
       0,
     );
   }
@@ -102,7 +102,13 @@ export const api = {
     contentHash: string,
     page: number,
     highlight?: string | null,
-  ): Promise<{ url: string; highlights: number; pageCount: number }> => {
+  ): Promise<{
+    url: string;
+    highlights: number;
+    pageCount: number;
+    /** Where the marked passage sits, as a fraction of page height. */
+    highlightAt: number | null;
+  }> => {
     const params = new URLSearchParams();
     if (highlight) params.set("highlight", highlight.slice(0, 2000));
     const response = await fetch(
@@ -118,10 +124,12 @@ export const api = {
       );
     }
     const blob = await response.blob();
+    const at = response.headers.get("X-Highlight-At");
     return {
       url: URL.createObjectURL(blob),
       highlights: Number(response.headers.get("X-Highlights") ?? 0),
       pageCount: Number(response.headers.get("X-Page-Count") ?? 0),
+      highlightAt: at ? Number(at) : null,
     };
   },
 

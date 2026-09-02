@@ -149,81 +149,67 @@ export function GapReport({
   }
 
   return (
-    <div className="space-y-5" data-density={dense ? "compact" : "comfortable"}>
+    <div className="space-y-section" data-density={dense ? "compact" : "comfortable"}>
       <StalenessBanner staleness={staleness} onRecheck={recheck} rechecking={rechecking} />
 
-      {/* Verdict — the answer to the question the vendor came with. */}
+      {/*
+        The verdict is the one thing on this page that is raised, and the one
+        thing given room to breathe. Everything below it exists to let a reader
+        check it, so it gets the elevation and the vertical space; a routine
+        matched requirement gets neither.
+      */}
       <section
-        className={`card overflow-hidden border-2 ${TONE_EDGE[meta.tone]}`}
+        className={`raised rounded px-6 py-6 sm:px-8 sm:py-7 ${TONE_SURFACE[meta.tone]}`}
         aria-labelledby="verdict-heading"
       >
-        <div className={`px-5 py-4 sm:px-6 sm:py-5 ${TONE_SURFACE[meta.tone]}`}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="label">Verdict</p>
-              <h2
-                id="verdict-heading"
-                className={`mt-1 text-xl font-semibold tracking-tight sm:text-2xl ${TONE_TEXT[meta.tone]}`}
-              >
-                {meta.title}
-              </h2>
-              <p className="mt-1.5 max-w-xl text-[13.5px] leading-relaxed text-fg-muted">
-                {meta.body}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <button
-                className="btn btn-ghost text-xs"
-                onClick={() => exportAs("pdf")}
-                disabled={exporting !== null}
-              >
-                {exporting === "pdf" ? "Preparing…" : "Export PDF"}
-              </button>
-              <button
-                className="btn btn-ghost text-xs"
-                onClick={() => exportAs("docx")}
-                disabled={exporting !== null}
-              >
-                {exporting === "docx" ? "Preparing…" : "Export DOCX"}
-              </button>
-            </div>
+        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+          <div className="min-w-0">
+            <p className="label">Verdict</p>
+            <h2
+              id="verdict-heading"
+              className={`display-lg mt-2 text-[2rem] sm:text-[2.6rem] ${TONE_TEXT[meta.tone]}`}
+            >
+              {meta.title}
+            </h2>
+            <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-fg-muted">
+              {meta.body}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              className="btn btn-ghost text-xs"
+              onClick={() => exportAs("pdf")}
+              disabled={exporting !== null}
+            >
+              {exporting === "pdf" ? "Preparing…" : "Export PDF"}
+            </button>
+            <button
+              className="btn btn-ghost text-xs"
+              onClick={() => exportAs("docx")}
+              disabled={exporting !== null}
+            >
+              {exporting === "docx" ? "Preparing…" : "Export DOCX"}
+            </button>
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 divide-x divide-y border-t sm:grid-cols-4 sm:divide-y-0">
-          <Stat
-            label="Cannot be fixed"
-            value={unfixable}
-            marker="marker-fail"
-            colour="text-[hsl(var(--bad))]"
-          />
-          <Stat
-            label="Outstanding"
-            value={counts.missing ?? 0}
-            marker="marker-outstanding"
-            colour="text-[hsl(var(--pending))]"
-          />
+        {/* Counts, separated by space rather than by cell borders. */}
+        <dl className="mt-7 flex flex-wrap gap-x-10 gap-y-4">
+          <Stat label="Cannot be fixed" value={unfixable} marker="marker-fail" colour="text-[hsl(var(--bad))]" />
+          <Stat label="Outstanding" value={counts.missing ?? 0} marker="marker-outstanding" colour="text-[hsl(var(--pending))]" />
           <Stat
             label="Your own check"
             value={(counts.manual_check ?? 0) + (counts.partial ?? 0) + (counts.not_assessable ?? 0)}
             marker="marker-check"
             colour="text-[hsl(var(--warn))]"
           />
-          <Stat
-            label="Met"
-            value={counts.match ?? 0}
-            marker="marker-met"
-            colour="text-[hsl(var(--ok))]"
-          />
+          <Stat label="Met" value={counts.match ?? 0} marker="marker-met" colour="text-[hsl(var(--ok))]" />
         </dl>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="order-2 min-w-0 space-y-5 lg:order-1">
-          <div
-            className="flex gap-1 rounded-lg border bg-[hsl(var(--surface-2))] p-1"
-            role="tablist"
-          >
+      <div className="grid gap-x-12 gap-y-section lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="order-2 min-w-0 space-y-group lg:order-1">
+          <div className="rule flex gap-6 border-b" role="tablist">
             {(
               [
                 ["actions", `What to do (${report.action_list.length})`],
@@ -235,10 +221,10 @@ export function GapReport({
                 role="tab"
                 aria-selected={tab === key}
                 onClick={() => setTab(key)}
-                className={`flex-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                className={`-mb-px border-b-2 pb-2.5 text-[13px] font-medium transition-colors ${
                   tab === key
-                    ? "bg-[hsl(var(--surface))] text-fg shadow-sm"
-                    : "text-fg-muted hover:text-fg"
+                    ? "border-[hsl(var(--accent))] text-fg"
+                    : "border-transparent text-fg-muted hover:text-fg"
                 }`}
               >
                 {label}
@@ -291,7 +277,11 @@ export function GapReport({
                 })}
               </div>
 
-              <div className="card divide-y overflow-hidden">
+              {/* Edge to edge inside the content column. A list inside a
+                  bordered card is the most common cheap-template tell, and the
+                  card was doing nothing the section label and whitespace above
+                  it were not already doing. */}
+              <div className="rule divide-y divide-[hsl(var(--hairline))] border-t">
                 {visible.map((item, index) => (
                   <RequirementRow
                     key={`${item.requirement}-${index}`}
@@ -310,17 +300,19 @@ export function GapReport({
           )}
         </div>
 
-        <aside className="order-1 space-y-5 lg:order-2">
+        {/* Three stacked cards became three sections separated by space. They
+            were never separately actionable; the boxes were pure default. */}
+        <aside className="order-1 space-y-section lg:order-2">
           <CompletionMeter completion={completion} verdict={verdict} />
           <DataQualityBanner quality={data_quality} />
           {!report.score_preview.available ? (
-            <section className="card p-5">
+            <section>
               <h2 className="label">Score preview</h2>
               <p className="mt-2 text-[13px] leading-relaxed text-fg-muted">
                 {report.score_preview.unavailable_reason ??
                   "This tender does not publish scoring weightings, so no score is shown."}
               </p>
-              <p className="mt-2 text-xs leading-relaxed text-fg-muted">
+              <p className="mt-2 text-[13px] leading-relaxed text-fg-subtle">
                 Inventing one would be a number you could not trace to a clause.
               </p>
             </section>
@@ -345,12 +337,14 @@ function Stat({
   colour: string;
 }) {
   return (
-    <div className="px-5 py-3.5">
-      <dt className={`flex items-center gap-1.5 label ${value ? colour : ""}`}>
+    <div>
+      {/* Label and number are one object: tight. The gap to the NEXT stat is
+          wide. That difference is what groups them without a dividing line. */}
+      <dt className={`label flex items-center gap-1.5 ${value ? colour : ""}`}>
         <span className={`marker ${marker}`} aria-hidden />
         {label}
       </dt>
-      <dd className={`tnum mt-1 text-2xl font-semibold ${value ? colour : "text-fg-subtle"}`}>
+      <dd className={`display mt-1.5 text-[2rem] leading-none ${value ? colour : "text-fg-subtle"}`}>
         {value}
       </dd>
     </div>
@@ -372,9 +366,27 @@ function RequirementRow({
 
   return (
     <article
-      className="px-[var(--row-x)] py-[var(--row-y)]"
+      className="grid grid-cols-1 gap-x-5 py-[var(--row-y)] sm:grid-cols-[5.5rem_minmax(0,1fr)]"
       data-status={item.status}
     >
+      {/* The margin column: clause ref and page, set like a printed statute so
+          a reader scanning for "which clause" reads down one edge. */}
+      <div className="hidden pt-[3px] text-right sm:block">
+        {marginLabel(item.notification_provenance) ? (
+          <button
+            className="margin-note truncate block w-full hover:opacity-100 hover:underline"
+            onClick={() => hasSources && onCite("notification", item)}
+            title={
+              item.notification_provenance?.clause_ref
+                ? `Clause ${item.notification_provenance.clause_ref}`
+                : "Open in the tender"
+            }
+          >
+            {marginLabel(item.notification_provenance)}
+          </button>
+        ) : null}
+      </div>
+
       <div className="flex items-start gap-3">
         <span className={`mt-[5px] ${blocking ? "text-[hsl(var(--bad))]" : state.colour}`}>
           <span className={`marker ${blocking ? "marker-fail" : state.marker}`} aria-hidden />
@@ -453,6 +465,25 @@ function RequirementRow({
       </div>
     </article>
   );
+}
+
+/**
+ * What goes in the margin column.
+ *
+ * Real clause refs are not all "28.1 vi)". The GHMC tender yields refs like
+ * "5.4.2 Form ELI - 2: JV / Consortium Information Sheet" -- a heading, not a
+ * number -- and those wrap to four lines in a margin sized for a numeral,
+ * which looks broken rather than considered.
+ *
+ * So the margin takes whatever is genuinely scannable: a short ref if there is
+ * one, otherwise the page number, which is always short and always useful. The
+ * full ref is never lost -- it stays on the row and in the title.
+ */
+function marginLabel(provenance: { clause_ref: string | null; source_page: number | null } | null | undefined) {
+  const ref = provenance?.clause_ref?.trim();
+  if (ref && ref.length <= 14) return ref;
+  if (provenance?.source_page) return `p${provenance.source_page}`;
+  return ref ? `${ref.slice(0, 12)}…` : null;
 }
 
 const MATCH_EXPLANATION: Record<string, string> = {

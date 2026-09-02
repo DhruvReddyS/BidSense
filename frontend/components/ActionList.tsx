@@ -84,13 +84,13 @@ export function ActionList({
 
   if (!actions.length) {
     return (
-      <section className="card p-6 text-center">
-        <p className="text-sm font-medium">Nothing outstanding.</p>
-        <p className="mt-1 text-[13px] text-fg-muted">
-          Every requirement we could check is satisfied. Formatting and signing
-          are still yours to verify.
-        </p>
-      </section>
+      <p className="py-10 text-center text-sm text-fg-muted">
+        Every requirement we could check is satisfied.
+        <br />
+        <span className="text-fg-subtle">
+          Formatting and signing are still yours to verify.
+        </span>
+      </p>
     );
   }
 
@@ -98,67 +98,70 @@ export function ActionList({
   const conditional = actions.filter((action) => action.applies_only_if);
 
   return (
-    <section className="space-y-4" aria-label="What to do next">
+    <div className="space-y-section" aria-label="What to do next">
       {GROUPS.map((group) => {
         const items = unconditional.filter((action) => action.group === group.key);
         if (!items.length) return null;
         const tone = TONE[group.tone];
 
         return (
-          <div key={group.key} className={`card overflow-hidden ${tone.border}`}>
-            <header className={`border-b px-5 py-3 ${tone.bg} ${tone.border}`}>
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`tnum flex h-6 min-w-6 items-center justify-center rounded-full
-                              border bg-[hsl(var(--surface))] px-1.5 text-xs font-bold
-                              ${tone.border} ${tone.fg}`}
-                >
-                  {items.length}
-                </span>
-                <h3 className="text-sm font-semibold">{group.heading}</h3>
-              </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-fg-muted">{group.blurb}</p>
+          <section key={group.key}>
+            {/*
+              A section label and a rule, not a tinted card. Four groups meant
+              four bordered boxes stacked inside the tab panel -- boxes within a
+              box, which is the single thing that made this screen read as
+              cheap. The heading and the whitespace above it do the same
+              separating work, and the colour still lands where it matters:
+              on the count and the marker.
+            */}
+            <header className="rule flex items-baseline gap-2.5 border-b pb-2">
+              <span className={`tnum text-[15px] font-semibold ${tone.fg}`}>
+                {items.length}
+              </span>
+              <h3 className="text-[13px] font-semibold tracking-tight">{group.heading}</h3>
             </header>
-            <ol className="divide-y">
+            <p className="mt-2 text-xs leading-relaxed text-fg-muted">{group.blurb}</p>
+
+            <ol className="rule mt-3 divide-y divide-[hsl(var(--hairline))]">
               {items.map((action, index) => (
                 <Row key={`${group.key}-${index}`} action={action} onCite={onCite} />
               ))}
             </ol>
-          </div>
+          </section>
         );
       })}
 
       {conditional.length ? (
-        <div className="card overflow-hidden">
+        <section>
           <button
-            className="flex w-full items-center justify-between gap-3 px-5 py-3 text-left"
+            className="rule flex w-full items-baseline gap-2.5 border-b pb-2 text-left"
             onClick={() => setShowConditional((value) => !value)}
             aria-expanded={showConditional}
           >
-            <span className="min-w-0">
-              <span className="block text-sm font-medium">
-                {conditional.length} item{conditional.length === 1 ? "" : "s"} that may
-                not apply to you
-              </span>
-              <span className="mt-0.5 block text-xs text-fg-muted">
-                Joint-venture and concession paperwork. Ignore these if you are
-                bidding on your own.
-              </span>
+            <span className="tnum text-[15px] font-semibold text-fg-subtle">
+              {conditional.length}
             </span>
-            <span className="shrink-0 text-xs font-medium text-[hsl(var(--accent))]">
-              {showConditional ? "Hide" : "Show"}
+            <h3 className="flex-1 text-[13px] font-semibold tracking-tight text-fg-muted">
+              May not apply to you
+            </h3>
+            <span className="ref text-[hsl(var(--accent))]">
+              {showConditional ? "hide" : "show"}
             </span>
           </button>
+          <p className="mt-2 text-xs leading-relaxed text-fg-muted">
+            Joint-venture and concession paperwork. Ignore these if you are
+            bidding on your own.
+          </p>
           {showConditional ? (
-            <ol className="divide-y border-t">
+            <ol className="rule mt-3 divide-y divide-[hsl(var(--hairline))]">
               {conditional.map((action, index) => (
                 <Row key={`cond-${index}`} action={action} onCite={onCite} conditional />
               ))}
             </ol>
           ) : null}
-        </div>
+        </section>
       ) : null}
-    </section>
+    </div>
   );
 }
 
@@ -172,26 +175,35 @@ function Row({
   conditional?: boolean;
 }) {
   return (
-    <li className="flex items-start gap-3 px-5 py-3.5">
-      <span
-        aria-hidden
-        className={`mt-[3px] h-4 w-4 shrink-0 rounded border-2 ${
-          conditional ? "border-[hsl(var(--border-strong))]" : "border-[hsl(var(--border-strong))]"
-        }`}
-      />
-      <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed">{action.action}</p>
-      {action.clause_ref ? (
-        <button
-          className="chip shrink-0 border-transparent bg-[hsl(var(--surface-2))] font-mono
-                     text-[11px] text-fg-muted transition-colors
-                     hover:border-[hsl(var(--accent-border))] hover:bg-[hsl(var(--accent-soft))]
-                     hover:text-[hsl(var(--accent))]"
-          onClick={() => onCite?.(action)}
-          title="Show this clause in the tender"
-        >
-          {action.clause_ref}
-        </button>
-      ) : null}
+    <li className="grid grid-cols-1 gap-x-5 py-[var(--row-y)] sm:grid-cols-[5.5rem_minmax(0,1fr)]">
+      {/* Clause in the margin, as a printed statute sets it -- a reader
+          checking "which clause was that" scans one column instead of hunting
+          through prose. */}
+      <div className="hidden pt-px text-right sm:block">
+        {action.clause_ref ? (
+          <button
+            className="margin-note block w-full truncate hover:opacity-100 hover:underline"
+            onClick={() => onCite?.(action)}
+            title={`Clause ${action.clause_ref}`}
+          >
+            {action.clause_ref.length <= 14
+              ? action.clause_ref
+              : `${action.clause_ref.slice(0, 12)}…`}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className={`mt-[5px] h-3.5 w-3.5 shrink-0 rounded-[2px] border ${
+            conditional
+              ? "border-[hsl(var(--border))]"
+              : "border-[hsl(var(--border-strong))]"
+          }`}
+        />
+        <p className="min-w-0 flex-1 text-[13.5px] leading-relaxed">{action.action}</p>
+      </div>
     </li>
   );
 }

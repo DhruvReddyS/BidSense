@@ -1,6 +1,6 @@
-# TenderIQ
+# BidSense
 
-Tender intelligence platform. Build spec: [TenderIQ_Scope_v2.md](TenderIQ_Scope_v2.md).
+Tender intelligence platform. Build spec: [BidSense_Scope_v2.md](BidSense_Scope_v2.md).
 
 **Status: Phases 0–2 complete.** Schema and stores, ingestion and extraction, and the Part 1 vendor tool (gap report, RAG Q&A, Next.js frontend). Phase 3 (company-side elimination) not started.
 

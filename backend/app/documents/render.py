@@ -50,6 +50,11 @@ class PageRender:
     #: How many passages were highlighted. Zero is a legitimate answer, and the
     #: UI says so rather than implying the page was marked.
     highlights: int
+    #: Where the first highlight sits, as a fraction of page height. The viewer
+    #: scrolls to it: a panel that opens at the top of a 68-page tender and
+    #: leaves the marked passage below the fold has technically shown the
+    #: citation and practically hidden it.
+    highlight_at: float | None = None
 
 
 _WORD = re.compile(r"[^\W_]+", re.UNICODE)
@@ -211,6 +216,14 @@ def render_page(
             )
         image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
 
+    # Midpoint of the first marked line, in page-height fractions.
+    highlight_at = None
+    if boxes:
+        page_height_pt = image.height / (dpi / 72.0)
+        first_top, first_bottom = boxes[0][1], boxes[0][3]
+        highlight_at = round(((first_top + first_bottom) / 2) / page_height_pt, 4)
+        highlight_at = min(max(highlight_at, 0.0), 1.0)
+
     buffer = io.BytesIO()
     image.save(buffer, "PNG", optimize=True)
     return PageRender(
@@ -220,4 +233,5 @@ def render_page(
         width=image.width,
         height=image.height,
         highlights=len(boxes),
+        highlight_at=highlight_at,
     )

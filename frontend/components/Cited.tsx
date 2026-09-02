@@ -6,7 +6,7 @@ import type { CheckStatus, Provenance } from "@/lib/types";
  * A claim and the clause it rests on, as one unit.
  *
  * This is the product's core visual grammar rather than a formatting helper.
- * The thing TenderIQ does that a careful person with a highlighter does not is
+ * The thing BidSense does that a careful person with a highlighter does not is
  * refuse to assert anything without a page and clause behind it — so the
  * pairing is expressed identically in the gap report, the action list, the RAG
  * answer and the export, and a reader learns it once.

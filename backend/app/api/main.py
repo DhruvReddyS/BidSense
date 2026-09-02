@@ -39,7 +39,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="TenderIQ",
+    title="BidSense",
     description="Tender intelligence platform — Part 1 (vendor compliance) API.",
     version="0.3.0",
     lifespan=lifespan,
@@ -59,4 +59,4 @@ app.include_router(router)
 
 @app.get("/")
 def root() -> dict:
-    return {"name": "TenderIQ", "docs": "/docs", "health": "/api/health"}
+    return {"name": "BidSense", "docs": "/docs", "health": "/api/health"}

@@ -39,7 +39,7 @@ export default async function BidReportPage({
         >
           ← Back to tender
         </Link>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+        <h1 className="display-lg mt-3 text-[2.1rem]">
           Compliance report
         </h1>
         <p className="mt-1 break-anywhere text-sm text-[hsl(var(--fg-muted))]">

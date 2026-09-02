@@ -296,7 +296,11 @@ def document_page(
             # Zero is a real answer: the passage could not be located, and the
             # UI says so rather than implying the page was marked.
             "X-Highlights": str(rendered.highlights),
-            "Access-Control-Expose-Headers": "X-Page, X-Page-Count, X-Highlights",
+            "X-Highlight-At": (
+                "" if rendered.highlight_at is None else str(rendered.highlight_at)
+            ),
+            "Access-Control-Expose-Headers":
+                "X-Page, X-Page-Count, X-Highlights, X-Highlight-At",
         },
     )
 
