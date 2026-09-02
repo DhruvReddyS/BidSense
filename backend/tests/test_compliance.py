@@ -616,3 +616,98 @@ def test_conditional_requirements_are_verify_not_upload():
     gst = next(a for a in report.action_list if "GST" in a.requirement)
     assert jv.group is ActionGroup.VERIFY
     assert gst.group is ActionGroup.UPLOAD
+
+
+# --------------------------------------------------------------------------- #
+# Self-declared debarment (regression: a debarred bidder passed Level 1)
+# --------------------------------------------------------------------------- #
+DISCLOSURE = (
+    "We disclose that our firm was debarred by the Public Health Engineering "
+    "Department, Government of Chhattisgarh vide order dated 11.07.2023."
+)
+
+
+def _blacklist_notification():
+    return notification(
+        eligibility_criteria=[
+            EligibilityCriterion(
+                criterion="Not blacklisted or debarred", type=CriterionType.BOOLEAN
+            )
+        ]
+    )
+
+
+def test_a_bid_disclosing_its_own_debarment_is_eliminated():
+    """Section 5.8 stubs the debarment check as a manual flag, so a bid that
+    admitted debarment in its own text passed Level 1 -- a false negative found
+    by evaluating against the answer key."""
+    report = build_gap_report(
+        _blacklist_notification(),
+        submission(is_blacklisted=True, debarment_disclosure=DISCLOSURE),
+        **NO_EMBED,
+    )
+    item = next(i for i in report.items if "blacklist" in i.requirement.lower())
+    assert item.status is CheckStatus.MISSING
+    assert item.severity is Severity.DISQUALIFYING
+    # The elimination quotes the bidder rather than asserting an internal flag.
+    assert "Public Health Engineering" in item.explanation
+    assert item.submission_provenance.source_snippet == DISCLOSURE
+
+
+def test_a_manual_flag_without_a_disclosure_still_eliminates():
+    """A reviewer's knowledge of an official list must not need the bidder to
+    have confessed."""
+    report = build_gap_report(
+        _blacklist_notification(),
+        submission(is_blacklisted=True),
+        **NO_EMBED,
+    )
+    item = next(i for i in report.items if "blacklist" in i.requirement.lower())
+    assert item.status is CheckStatus.MISSING
+    assert "flagged as blacklisted" in item.explanation.lower()
+
+
+def test_liquidation_wording_is_recognised_as_a_disqualifier():
+    """HGCL words the same condition as liquidation rather than blacklisting."""
+    report = build_gap_report(
+        notification(
+            eligibility_criteria=[
+                EligibilityCriterion(
+                    criterion="The Bidder should not be under liquidation",
+                    type=CriterionType.BOOLEAN,
+                )
+            ]
+        ),
+        submission(is_blacklisted=True, debarment_disclosure="NCLT petition admitted."),
+        **NO_EMBED,
+    )
+    item = next(i for i in report.items if "liquidation" in i.requirement.lower())
+    assert item.severity is Severity.DISQUALIFYING
+
+
+def test_a_clean_declaration_is_not_read_as_a_disclosure():
+    """Nearly every bid contains a non-blacklisting declaration. Treating those
+    as admissions would eliminate the entire field."""
+    from app.extraction import llm_schemas as raw
+    from app.extraction.convert import to_submission
+
+    result = to_submission(
+        raw.RawVendorHeader(vendor_name="Clean Co", declared_debarment=None),
+        [], [], [], [],
+        vendor_id="V-1", fallback_vendor_name="Clean Co",
+    )
+    assert result.is_blacklisted is False
+    assert result.debarment_disclosure is None
+
+
+def test_extraction_turns_a_disclosure_into_the_flag():
+    from app.extraction import llm_schemas as raw
+    from app.extraction.convert import to_submission
+
+    result = to_submission(
+        raw.RawVendorHeader(vendor_name="Sunrise", declared_debarment=DISCLOSURE),
+        [], [], [], [],
+        vendor_id="V-2", fallback_vendor_name="Sunrise",
+    )
+    assert result.is_blacklisted is True
+    assert result.debarment_disclosure == DISCLOSURE

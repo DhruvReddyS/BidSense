@@ -244,6 +244,7 @@ def to_submission(
     vendor_id: str,
     fallback_vendor_name: str,
     tender_id: str | None = None,
+    is_blacklisted: bool = False,
 ) -> VendorSubmission:
     turnover_rows: list[YearlyTurnover] = []
     for item in turnover:
@@ -293,4 +294,12 @@ def to_submission(
         technical_approach_text=header.technical_approach_text,
         pricing_summary=header.pricing_summary,
         quoted_price=MoneyAmount.parse(header.quoted_price_raw),
+        # Section 5.8 stubs the debarment check as a manually-set flag, because
+        # no live debarment list is available. A bid that discloses an adverse
+        # order against itself is a different matter: that is evidence sitting
+        # in the document, and ignoring it lets a self-declared debarred bidder
+        # through Level 1. The manual flag still wins when set -- a reviewer's
+        # knowledge of an official list outranks what the bidder chose to admit.
+        is_blacklisted=is_blacklisted or bool(header.declared_debarment),
+        debarment_disclosure=header.declared_debarment,
     )

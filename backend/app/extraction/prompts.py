@@ -140,6 +140,14 @@ from an incorporation date.
 
 For quoted_price_raw, copy the bid amount exactly as printed.
 
+For declared_debarment, read the non-blacklisting declaration carefully and
+return text ONLY if the bidder admits to being debarred, blacklisted, banned, or
+under liquidation or insolvency proceedings. Nearly every bid contains a
+declaration on this subject and nearly all of them are clean -- "we have not
+been blacklisted by any department" is a clean declaration and must return null.
+A bidder disclosing an adverse order against itself is the rare case, and it is
+the only one that goes in this field.
+
 VENDOR BID:
 {text}"""
 

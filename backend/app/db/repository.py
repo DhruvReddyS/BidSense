@@ -159,6 +159,7 @@ def to_submission_schema(
         pricing_summary=row.pricing_summary,
         quoted_price=_money(row.quoted_price_raw, row.quoted_price_inr),
         is_blacklisted=row.is_blacklisted,
+        debarment_disclosure=row.debarment_disclosure,
         status=VendorStatus(row.status),
         elimination_reason=row.elimination_reason,
     )

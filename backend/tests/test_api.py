@@ -397,3 +397,69 @@ def test_unencoded_slashes_also_resolve(client, pdf, clean, stubbed):
     subs = client.get(f"/api/notifications/{TENDER_ID}/submissions")
     assert subs.status_code == 200, subs.text
     assert [s["vendor_id"] for s in subs.json()] == ["V-04"]
+
+
+# --------------------------------------------------------------------------- #
+# Wedged jobs (regression: an extraction ran 5 hours at 0% CPU)
+# --------------------------------------------------------------------------- #
+@live
+def test_a_wedged_job_is_reported_failed_not_running_for_ever(client):
+    """Without this, a client polls a stuck job indefinitely with no way to tell
+    "slow" from "stuck". The startup reaper only catches jobs orphaned by a
+    restart; this catches one whose process is alive but hung."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.api.jobs import STALE_AFTER_SECONDS
+    from app.db.models import IngestJob, JobKind, JobStatus
+
+    with session_scope() as session:
+        job = IngestJob(
+            kind=JobKind.NOTIFICATION,
+            status=JobStatus.RUNNING,
+            file_name="wedged.pdf",
+            steps_done=2,
+            steps_total=6,
+            started_at=datetime.now(timezone.utc)
+            - timedelta(seconds=STALE_AFTER_SECONDS + 120),
+        )
+        session.add(job)
+        session.flush()
+        job_id = str(job.id)
+
+    body = client.get(f"/api/jobs/{job_id}").json()
+    assert body["status"] == "failed"
+    assert body["stage"] == "timed out"
+    assert "2/6 sections" in body["error"]
+    assert "Re-upload" in body["error"]
+
+    with session_scope() as session:
+        session.execute(
+            text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id}
+        )
+
+
+@live
+def test_a_recently_started_job_is_left_alone(client):
+    """Extraction legitimately takes minutes. The watchdog must not shoot a job
+    that is merely being paced by the free-tier quota."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import IngestJob, JobKind, JobStatus
+
+    with session_scope() as session:
+        job = IngestJob(
+            kind=JobKind.NOTIFICATION,
+            status=JobStatus.RUNNING,
+            file_name="slow.pdf",
+            started_at=datetime.now(timezone.utc) - timedelta(minutes=4),
+        )
+        session.add(job)
+        session.flush()
+        job_id = str(job.id)
+
+    assert client.get(f"/api/jobs/{job_id}").json()["status"] == "running"
+
+    with session_scope() as session:
+        session.execute(
+            text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id}
+        )

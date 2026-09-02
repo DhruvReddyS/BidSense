@@ -423,16 +423,31 @@ def _check_boolean(criterion: EligibilityCriterion, submission: VendorSubmission
     )
     lowered = criterion.criterion.lower()
 
-    if "blacklist" in lowered or "debar" in lowered:
+    if any(word in lowered for word in ("blacklist", "debar", "liquidation", "banned")):
         if submission.is_blacklisted:
+            # Quote the bidder's own words when they disclosed it. An
+            # elimination that says "you declared this yourself, here it is" is
+            # far harder to dispute than one asserting an internal flag.
+            disclosed = submission.debarment_disclosure
             return GapItem(
                 status=CheckStatus.MISSING,
                 severity=Severity.DISQUALIFYING,
                 required_value="Not blacklisted or debarred",
-                found_value="Flagged as blacklisted",
+                found_value=(
+                    "Declared in your own bid" if disclosed else "Flagged as blacklisted"
+                ),
                 explanation=(
-                    "You are flagged as blacklisted or debarred, which this tender "
-                    "treats as a disqualifying condition."
+                    "Your bid discloses that you are debarred or under "
+                    f"insolvency proceedings: \u201c{disclosed.strip()[:220]}\u201d "
+                    "This tender treats that as a disqualifying condition."
+                    if disclosed
+                    else (
+                        "You are flagged as blacklisted or debarred, which this "
+                        "tender treats as a disqualifying condition."
+                    )
+                ),
+                submission_provenance=(
+                    Provenance(source_snippet=disclosed) if disclosed else None
                 ),
                 **base,
             )

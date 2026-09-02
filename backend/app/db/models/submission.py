@@ -63,8 +63,11 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
     quoted_price_raw: Mapped[str | None] = mapped_column(Text)
     quoted_price_inr: Mapped[Decimal | None] = mapped_column(Money)
 
-    # Section 5.8 -- manually set / seeded, hard-fail in the rule engine.
+    # Section 5.8 -- hard-fail in the rule engine. Set by a reviewer from an
+    # official list, or derived from the bidder's own disclosure below.
     is_blacklisted: Mapped[bool] = mapped_column(default=False, nullable=False, index=True)
+    # The bidder's own words, kept so an elimination can quote them.
+    debarment_disclosure: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[VendorStatus] = mapped_column(
         vendor_status_enum, nullable=False, default=VendorStatus.PENDING

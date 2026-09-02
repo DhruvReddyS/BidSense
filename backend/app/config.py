@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     gemini_fallback_models: str = "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash"
     gemini_rpm: int = 5
     gemini_retries: int = 4
+    # Milliseconds. Generous enough for a large structured extraction, bounded
+    # enough that a stalled connection cannot hold a worker for ever.
+    gemini_timeout_ms: int = 180_000
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3-14b-40k:latest"
     # Qwen3 reasons before answering. Thinking roughly quadruples latency but

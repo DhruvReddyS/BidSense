@@ -128,6 +128,7 @@ def _default_script() -> dict:
                 "Our delivery methodology follows a four-phase rollout beginning "
                 "with a site survey across all twelve district offices."
             ),
+            declared_debarment=None,
         ),
         "TurnoverList": raw.TurnoverList(
             items=[

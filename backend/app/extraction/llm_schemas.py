@@ -170,6 +170,16 @@ class RawVendorHeader(BaseModel):
             "verbatim and in full. This is free text for the vector store."
         ),
     )
+    declared_debarment: str | None = Field(
+        default=None,
+        description=(
+            "Verbatim text of any statement that the bidder IS currently "
+            "debarred, blacklisted, banned, or under liquidation or insolvency "
+            "proceedings. Return null when the bid declares the opposite -- "
+            "'we have not been blacklisted' is a clean declaration, not a "
+            "disclosure. Only a positive admission goes here."
+        ),
+    )
 
 
 class TurnoverList(BaseModel):

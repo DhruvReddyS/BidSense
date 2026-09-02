@@ -99,7 +99,19 @@ class VendorSubmission(SchemaModel):
 
     is_blacklisted: bool = Field(
         default=False,
-        description="Section 5.8 -- manually set / seeded. Hard-fail at Level 1.",
+        description=(
+            "Section 5.8 -- hard-fail at Level 1. Set by a reviewer from an "
+            "official debarment list, or derived from the bidder's own "
+            "disclosure in `debarment_disclosure`."
+        ),
+    )
+    debarment_disclosure: str | None = Field(
+        default=None,
+        description=(
+            "Verbatim text where the bid admits to being debarred, blacklisted "
+            "or under insolvency. Kept so the elimination can quote the bidder's "
+            "own words rather than asserting a flag."
+        ),
     )
     status: VendorStatus = VendorStatus.PENDING
     elimination_reason: str | None = Field(

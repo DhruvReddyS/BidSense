@@ -185,6 +185,40 @@ def run_inline(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
     _run(job_id, kind, path, **kwargs)
 
 
+# A job that has not finished in this long is stuck, whatever the cause. Six
+# extractors at the free tier's pace take about three minutes; twenty is well
+# past any legitimate run, including retries and model failover.
+STALE_AFTER_SECONDS = 20 * 60
+
+
+def fail_if_stuck(job: IngestJob) -> bool:
+    """Mark a job failed if it has clearly hung. Returns True if it did.
+
+    Called when a job is read, so a stuck job surfaces to whoever is watching it
+    rather than showing RUNNING for ever. The startup reaper only catches jobs
+    orphaned by a restart; this catches the ones whose process is still alive
+    but wedged.
+    """
+    if job.is_terminal or job.started_at is None:
+        return False
+    age = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+    if age < STALE_AFTER_SECONDS:
+        return False
+
+    job.status = JobStatus.FAILED
+    job.stage = "timed out"
+    job.error = (
+        f"This job stopped making progress after {int(age // 60)} minutes and was "
+        "marked failed. It reached "
+        f"{job.steps_done}/{job.steps_total or '?'} sections. Re-upload the file; "
+        "if it happens again the document may be too large for the current "
+        "extraction budget."
+    )
+    job.finished_at = datetime.now(timezone.utc)
+    logger.warning("job %s marked failed after %.0fs without finishing", job.id, age)
+    return True
+
+
 def reap_stale_jobs() -> int:
     """Mark jobs abandoned by a restart as failed.
 

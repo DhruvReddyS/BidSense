@@ -29,7 +29,15 @@ class GeminiProvider(LLMProvider):
             raise LLMError("GEMINI_API_KEY is not set; cannot use the gemini provider.")
         from google import genai
 
-        self._client = genai.Client(api_key=settings.gemini_api_key)
+        # An explicit timeout is not optional. Without one the SDK will wait on
+        # a stalled connection indefinitely, and because extraction runs on a
+        # small worker pool a single hung call takes a worker with it -- two of
+        # them deadlock the whole ingestion queue. Observed in practice: one
+        # request sat at 0% CPU for five hours and blocked every job behind it.
+        self._client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options={"timeout": settings.gemini_timeout_ms},
+        )
         # Free tier is a few requests per minute per model (5 for
         # gemini-2.5-flash). Unpaced, the six-way extractor fan-out exceeds it
         # on the first document and the losing branches look like extraction

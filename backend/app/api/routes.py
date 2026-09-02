@@ -202,6 +202,11 @@ def job_status(job_id: str, session: Session = Depends(get_db)) -> JobStatusResp
     if job is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No job {job_id}")
 
+    # A wedged job would otherwise report RUNNING for ever, and a client polling
+    # it has no way to tell "slow" from "stuck".
+    if job_runner.fail_if_stuck(job):
+        session.commit()
+
     elapsed = None
     if job.started_at:
         end = job.finished_at or datetime.now(timezone.utc)

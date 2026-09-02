@@ -212,6 +212,7 @@ def save_submission(
             submission.quoted_price.amount_inr if submission.quoted_price else None
         ),
         is_blacklisted=submission.is_blacklisted,
+        debarment_disclosure=submission.debarment_disclosure,
         status=submission.status,
         elimination_reason=submission.elimination_reason,
         has_technical_approach=bool(submission.technical_approach_text),

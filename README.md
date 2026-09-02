@@ -195,6 +195,60 @@ the model. When the estimate is unknown the criterion stays unresolved and
 surfaces as needs-manual-check — inventing an absolute figure from an unknown
 base would be worse than admitting it cannot be computed.
 
+## Evaluation (Section 10)
+
+`scripts/evaluate.py` compares every vendor's outcome against the answer key in
+`data/tracking_vendors.csv` and reports elimination precision, recall and — the
+number that matters for defensibility — **reason accuracy**: eliminated, and for
+the clause the key names. A rule engine that rejects everybody scores perfect
+recall and is useless; one that rejects the right vendor for the wrong clause is
+not defensible if challenged, which is the point of Section 5.2.
+
+First run against the GHMC tender (5 vendors, real 68-page notification):
+
+| Metric | Value |
+|---|---|
+| Elimination precision | 100% |
+| Elimination recall | 67% |
+| Reason accuracy | 100% |
+| Accuracy | 80% |
+
+The one miss was a bidder who **disclosed its own debarment in the bid text**
+while `is_blacklisted` — a manual flag under Section 5.8 — was unset, so the
+engine never saw it. Self-declared debarment is now extracted, and an
+elimination on that ground quotes the bidder's own words rather than asserting
+an internal flag. The reviewer's manual flag still wins when set: knowledge of
+an official list outranks what a bidder chose to admit.
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.evaluate                       # all tenders
+../.venv/bin/python -m scripts.evaluate --tender NOTIF_supply_01 --json run.json
+```
+
+## Test data (Section 9.2)
+
+15 synthetic bids, 5 per notification, 9–10 pages each, written as real Indian
+technical bids. Ground truth is fixed **before** the prose (Section 9.2.1) and
+written to the tracking sheet in the same run, so the answer key cannot drift
+from the files.
+
+Each tender's set contains a compliant bidder, one missing exactly one document,
+one below a numeric threshold, one sitting **exactly** on the thresholds, and —
+across the corpus — debarred bidders. Strong and weak write-ups are mixed so the
+Section 5.4 fluency-bias guard is testable: one of the passing vendors on every
+tender writes badly.
+
+Enclosure checklists are generated from the requirement list the pipeline
+actually extracted from that notification, not from a hand-written list. The
+first evaluation run failed because of exactly this: the GHMC tender demands 49
+documents and the bids enclosed 14, so a compliant vendor was reported
+non-compliant — the fixture was wrong, not the pipeline.
+
+```bash
+cd backend && ../.venv/bin/python -m scripts.make_vendor_bids
+```
+
 ## What's still needed
 
 1. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
