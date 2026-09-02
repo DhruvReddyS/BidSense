@@ -32,6 +32,24 @@ The text is presented with [PAGE N] markers. Tables are rendered as
 pipe-delimited rows under a [TABLES ON PAGE N] heading."""
 
 
+# The instruction-only version, kept so the few-shot prompt below can be
+# measured against it rather than assumed better. `scripts.benchmark_extraction
+# --prompt both` runs the pair on the same documents and the same selected
+# pages. See the header of that script for why this control matters: a
+# capability gap and a prompting gap are indistinguishable from outside.
+HEADER_PROMPT_NO_EXAMPLES = """Extract the identifying header fields of this tender notification.
+
+For dates, convert to ISO YYYY-MM-DD (this is the documented exception to the
+no-conversion rule). Indian tenders write dates as DD.MM.YYYY or "15 March 2026";
+both mean the 15th of March. If a date is absent, return null.
+
+For emd_amount_raw and contract_value_raw, copy the amount EXACTLY as printed
+including the currency word or symbol. Do not convert to a number.
+
+TENDER NOTIFICATION:
+{text}"""
+
+
 HEADER_PROMPT = """Extract the identifying header fields of this tender notification.
 
 For dates, convert to ISO YYYY-MM-DD (this is the documented exception to the
@@ -40,6 +58,58 @@ both mean the 15th of March. If a date is absent, return null.
 
 For emd_amount_raw and contract_value_raw, copy the amount EXACTLY as printed
 including the currency word or symbol. Do not convert to a number.
+
+WHERE THESE FIELDS ACTUALLY SIT. Indian tenders put them in a "Notice Inviting
+Tender" grid or a key-dates table near the front, as label/value rows rather
+than sentences. The label rarely matches the field name: the submission deadline
+is printed as "Last Date and Time for uploading of Bids" or "Bid Submission End
+Date", and the EMD as "Earnest Money" inside a cost table. Read the value from
+the row whose LABEL means the field, not from the row whose label looks like it.
+
+Watch for two rows that both look like a deadline. "Last Date for submission of
+EMD" is not the bid deadline; "Last Date and Time for uploading of Bids" is.
+
+WORKED EXAMPLES. These are illustrations of the shape only -- never copy a value
+from them into your answer.
+
+Example A, from a page printed as a table:
+
+    Name of Work                              Construction of internal roads
+    Estimated Cost                            Rs. 84,21,900/-
+    Earnest Money                             Rs. 1,68,438/-
+    Last Date and Time for receipt of Queries 03 July 2025 (11:00 Hours)
+    Last Date and Time for uploading of Bids  09 July 2025 (18:30 Hours)
+
+  ->  submission_deadline    : "2025-07-09"
+      pre_bid_query_deadline : "2025-07-03"
+      emd_amount_raw         : "Rs. 1,68,438/-"
+      contract_value_raw     : "Rs. 84,21,900/-"
+
+Example B, where the authority appears only in the letterhead and the dates are
+written differently:
+
+    OFFICE OF THE EXECUTIVE ENGINEER, PUBLIC WORKS DIVISION, NAGPUR
+    e-Tender Notice No. PWD/NGP/2025-26/41
+    Bid submission end date : 14.02.2026 upto 15:00 hrs
+    EMD : Rupees Two Lakh Fifty Thousand only (Rs. 2,50,000/-)
+
+  ->  tender_id            : "PWD/NGP/2025-26/41"
+      issuing_authority    : "Office of the Executive Engineer, Public Works Division, Nagpur"
+      submission_deadline  : "2026-02-14"
+      emd_amount_raw       : "Rs. 2,50,000/-"
+
+Example C, a tender that genuinely does not state a pre-bid date:
+
+    Tender ID : 2026_HGCL_884213_1
+    Last date of submission : 30-11-2026
+
+  ->  tender_id              : "2026_HGCL_884213_1"
+      submission_deadline    : "2026-11-30"
+      pre_bid_query_deadline : null
+      emd_amount_raw         : null
+
+Null is the right answer when the document does not say. It is not the right
+answer when the document says it somewhere you did not look.
 
 TENDER NOTIFICATION:
 {text}"""

@@ -21,6 +21,7 @@ class OllamaProvider(LLMProvider):
     def __init__(self) -> None:
         self._url = settings.ollama_base_url.rstrip("/")
         self._model = settings.ollama_model
+        self.last_model_used: str | None = None
 
     #: Roughly how many characters of English legal prose a token holds. Used
     #: only to size the page-selection budget, so an approximation is fine --
@@ -88,6 +89,7 @@ class OllamaProvider(LLMProvider):
         # </think> tag, even when `think: false` suppresses the opening tag.
         # Stripped here rather than at each call site: it is a property of this
         # provider, and the RAG layer is not the only thing that reads text.
+        self.last_model_used = self._model
         return strip_thinking(data.get("message", {}).get("content", "").strip())
 
     def generate_structured(
@@ -105,6 +107,7 @@ class OllamaProvider(LLMProvider):
                 "options": self._options(),
             }
         )
+        self.last_model_used = self._model
         raw = data.get("message", {}).get("content", "")
 
         # An empty body is a distinct failure with a distinct cause, and it

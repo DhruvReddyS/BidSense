@@ -70,7 +70,12 @@ def _provider_label(llm: "LLMProvider | None") -> str:
     from app.llm import get_llm
 
     provider = llm or get_llm()
-    model = getattr(provider, "_model", None)
+    # The chain knows which TIER answered, which is the thing worth recording --
+    # "chain" alone would hide a run that fell through to the local model.
+    active = getattr(provider, "active_provider", None)
+    if active:
+        return active
+    model = getattr(provider, "last_model_used", None) or getattr(provider, "_model", None)
     return f"{provider.name}:{model}" if model else provider.name
 
 
@@ -195,7 +200,18 @@ def ingest_notification(
     report.node_timings = result["timings"]
     report.identifier = notification.tender_id
     # Run BEFORE persisting, so the findings describe exactly what was stored.
-    report.validation = validate_notification(notification, document)
+    # The pages the model actually read, so the pattern backstop answers the
+    # same question the model was asked. Searching pages it never saw would
+    # produce "the regex found it and you didn't" for text never in front of it.
+    from app.extraction.selection import select_pages
+
+    try:
+        _, header_pages = select_pages(document, "header")
+    except Exception:
+        header_pages = None
+    report.validation = validate_notification(
+        notification, document, selected_pages=header_pages
+    )
 
     started = time.perf_counter()
     with session_scope() as session:

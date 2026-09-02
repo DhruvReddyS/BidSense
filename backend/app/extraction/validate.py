@@ -36,6 +36,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
+from app.extraction.patterns import find_header_candidates
 from app.ingest.models import ParsedDocument
 from app.schemas.notification import TenderNotification
 from app.schemas.submission import VendorSubmission
@@ -136,15 +137,44 @@ def validate_notification(
     document: ParsedDocument | None = None,
     *,
     today: date | None = None,
+    selected_pages: list[int] | None = None,
 ) -> list[Finding]:
     """Plausibility of an extracted notification, before it reaches a vendor."""
     today = today or date.today()
     findings: list[Finding] = []
 
+    # Deterministic cross-check, consulted ONLY where the model returned
+    # nothing. A pattern that disagrees with an extracted value is not
+    # automatically right, and overriding on that basis would be a second
+    # unauditable extractor -- so this speaks only into silence.
+    patterns = (
+        find_header_candidates(document, selected_pages) if document is not None else {}
+    )
+
     # --- fields that should be there and are not -------------------------- #
     for attribute, description in _EXPECTED_NOTIFICATION_FIELDS.items():
         value = getattr(notification, attribute, None)
         if value is None or (isinstance(value, str) and not value.strip()):
+            hit = patterns.get(attribute)
+            if hit is not None:
+                # The document does state it, in a form a pattern can locate.
+                # That is a much stronger claim than "this is probably missing",
+                # and it is actionable: the reviewer can confirm it in one look.
+                findings.append(
+                    Finding(
+                        field=attribute,
+                        severity=Severity.ERROR,
+                        message=(
+                            f"no value for {description} was extracted, but page "
+                            f"{hit.page} of the document appears to state it: "
+                            f"\u201c{hit.value}\u201d, read from \u201c{hit.line}\u201d. "
+                            "The model missed a value that is present -- check it "
+                            "before relying on this extraction."
+                        ),
+                        value=hit.value,
+                    )
+                )
+                continue
             findings.append(
                 Finding(
                     field=attribute,

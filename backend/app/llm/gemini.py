@@ -70,6 +70,11 @@ class GeminiProvider(LLMProvider):
         # write it concurrently, and a lost write there costs a whole
         # rate-limited request per thread.
         self._state = threading.Lock()
+        #: The model that actually served the most recent call. Distinct from
+        #: `_model`, which is "the first candidate not known to be spent" and is
+        #: read AFTER the call -- by which time a concurrent retirement can have
+        #: moved it on, so it reported a model that had just been retired.
+        self.last_model_used: str | None = None
 
     @property
     def _model(self) -> str | None:
@@ -132,9 +137,12 @@ class GeminiProvider(LLMProvider):
                 )
 
             try:
-                return retry_transient(
+                response = retry_transient(
                     once, label=f"gemini {label} [{model}]", attempts=settings.gemini_retries
                 )
+                with self._state:
+                    self.last_model_used = model
+                return response
             except _ModelRetired:
                 # Another thread retired this model while we waited for a slot.
                 # No request was spent; pick the next live one.

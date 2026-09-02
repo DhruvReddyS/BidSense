@@ -31,7 +31,11 @@ class Settings(BaseSettings):
     embedding_device: str = "cpu"
 
     # --- LLM (Section 8.1) ---
-    llm_provider: Literal["gemini", "ollama"] = "gemini"
+    llm_provider: Literal["gemini", "groq", "xai", "ollama", "chain"] = "gemini"
+    # Ordered fallback chain, used when LLM_PROVIDER=chain. Each tier is tried
+    # in turn and a tier that fails for a persistent reason (quota spent, key
+    # rejected) is retired for the process rather than retried on every call.
+    llm_chain: str = "gemini,groq,ollama"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-2.5-flash"
     # Free-tier quota, requests per minute per model. Raise on a paid key.
@@ -43,6 +47,26 @@ class Settings(BaseSettings):
     # Milliseconds. Generous enough for a large structured extraction, bounded
     # enough that a stalled connection cannot hold a worker for ever.
     gemini_timeout_ms: int = 180_000
+    # --- Groq (tier 2: hosted, own quota) ---
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    # Two per minute, not thirty. The binding limit is TOKENS per minute, not
+    # requests: at 8,000 TPM and ~4,400 tokens per extraction request, three
+    # requests in a minute is already a 429. Measured, not guessed.
+    groq_rpm: int = 2
+    groq_retries: int = 3
+    groq_timeout_s: int = 180
+    # Free tier is 8,000 TPM, measured from a 413. Raise on a paid tier.
+    groq_tpm: int = 8000
+
+    # --- xAI / Grok (tier 2 alternative) ---
+    xai_api_key: str | None = None
+    xai_model: str = "grok-3"
+    xai_rpm: int = 60
+    xai_retries: int = 3
+    xai_timeout_s: int = 180
+    xai_tpm: int = 16000
+
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = "qwen3-14b-40k:latest"
     # Qwen3 reasons before answering. Thinking roughly quadruples latency but
