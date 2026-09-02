@@ -148,10 +148,27 @@ def try_normalize_amount(raw: str | int | float | Decimal | None) -> Decimal | N
         return None
 
 
+def _trim(value: Decimal) -> str:
+    """At most three decimal places, with trailing zeros removed.
+
+    `normalize()` alone keeps every significant digit, so a threshold derived
+    from a percentage rendered as "10.052488 Lakh" -- arithmetic precision
+    presented as if it were the tender's own figure.
+
+    Three rather than two, because tenders state crore figures to three places
+    and rounding changes what the document says: HGCL requires "Rs. 49.855
+    Crores", and an elimination notice quoting "Rs. 49.86 Cr" misstates the
+    clause it is enforcing.
+    """
+    quantized = value.quantize(Decimal("0.001"))
+    text = format(quantized, "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
 def format_inr(amount: Decimal) -> str:
     """Render a canonical amount back into readable Indian notation for the UI."""
     if amount >= 10_000_000:
-        return f"₹{(amount / Decimal(10_000_000)).normalize():f} Cr"
+        return f"₹{_trim(amount / Decimal(10_000_000))} Cr"
     if amount >= 100_000:
-        return f"₹{(amount / Decimal(100_000)).normalize():f} Lakh"
-    return f"₹{amount.normalize():f}"
+        return f"₹{_trim(amount / Decimal(100_000))} Lakh"
+    return f"₹{_trim(amount)}"

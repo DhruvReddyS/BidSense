@@ -176,3 +176,39 @@ def test_percentages_never_leak_into_thresholds() -> None:
     """Belt and braces across the three shapes seen in real documents."""
     for raw in ("1%", "1 %", "1 percent"):
         assert try_normalize_amount(raw) is None
+
+
+# --------------------------------------------------------------------------- #
+# Display formatting
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    ("amount", "expected"),
+    [
+        # 80% of a Rs. 12,56,561 estimate. normalize() alone rendered this as
+        # "10.052488 Lakh" -- arithmetic precision presented as if it were the
+        # tender's own figure.
+        ("1005248.80", "₹10.052 Lakh"),
+        ("376968.30", "₹3.77 Lakh"),
+        # Three decimals, not two: HGCL states "Rs. 49.855 Crores", and an
+        # elimination quoting "49.86" misstates the clause it enforces.
+        ("498550000.00", "₹49.855 Cr"),
+        # Whole numbers keep no decimal point at all.
+        ("50000000.00", "₹5 Cr"),
+        ("200000.00", "₹2 Lakh"),
+        ("31500.00", "₹31500"),
+    ],
+)
+def test_amounts_render_to_two_decimals_without_trailing_zeros(
+    amount: str, expected: str
+) -> None:
+    assert format_inr(Decimal(amount)) == expected
+
+
+def test_formatting_never_shows_spurious_precision() -> None:
+    """A threshold derived from a percentage must not advertise eight decimal
+    places the tender never stated."""
+    for raw in ("1005248.80", "376968.30", "1234567.89"):
+        rendered = format_inr(Decimal(raw))
+        decimals = rendered.split(".")[1] if "." in rendered else ""
+        digits = "".join(c for c in decimals if c.isdigit())
+        assert len(digits) <= 3, rendered
