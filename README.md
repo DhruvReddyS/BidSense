@@ -6,8 +6,8 @@ Tender intelligence platform. Build spec: [TenderIQ_Scope_v2.md](TenderIQ_Scope_
 
 The stack has been run end to end against a real LLM: PDF upload → parse →
 LangGraph extraction → PostgreSQL + Qdrant → gap report with cited clauses →
-grounded Q&A. **Extraction quality is currently limited by the LLM available —
-see [LLM status](#llm-status).**
+grounded Q&A across a three-tier provider chain — **every tier verified to
+extract correctly**, see [Model routing](#model-routing-section-81).
 
 ## Quick start
 
@@ -18,7 +18,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 381 tests
+../.venv/bin/python -m pytest -q           # 574 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -30,7 +30,7 @@ backend/app/
   schemas/      Section 6 shared extraction schema (Pydantic)
   db/models/    SQLAlchemy tables (hybrid normalized + JSONB)
   vector/       Qdrant collection, payload schema, BGE embeddings
-  llm/          Section 8.1 provider interface (Gemini primary, Ollama fallback)
+  llm/          Section 8.1 provider chain (Gemini -> Groq -> Ollama)
   normalize/    Indian-notation currency canonicalization
   ingest/       PDF/DOCX parsing, Tesseract OCR fallback, page-aware chunking
   extraction/   LangGraph agents, prompts, page selection, converters, pipeline
@@ -108,7 +108,11 @@ Postgres is authoritative; Qdrant carries `status` as a filter tag (Section 7). 
 
 ## Swapping the LLM (Section 8.1)
 
-Set `LLM_PROVIDER=ollama` in `.env`. No code change — both providers implement `generate_structured` with native schema-constrained decoding.
+Set `LLM_PROVIDER` to `gemini`, `groq`, `xai`, `ollama`, or `chain` (the
+default, which walks `LLM_CHAIN` in order). No code change — every provider
+implements `generate_structured` with native schema-constrained decoding, and
+page selection sizes itself to whichever one is active. See
+[Model routing](#model-routing-section-81).
 
 ## Phase 2 decisions
 
@@ -132,31 +136,93 @@ cue scoring with embedding re-ranking as a fallback. This cuts that document to
 the real documents: the page carrying the turnover clause, the EMD, and the
 document checklist must each be selected.
 
-## LLM status
+## Model routing (Section 8.1)
 
-Gemini works. The binding constraint is **quota, not capability**:
+**One chain serves both extraction and RAG. It is a speed and availability
+ladder, not a capability ladder.**
 
-| Limit | Value | Consequence |
-|---|---|---|
-| Requests/minute | 5 (free tier) | Paced by `RateLimiter`; ~65s per document |
-| Requests/**day** | **20 per model** (`gemini-2.5-flash`) | 6 calls/document → **3 documents/day per model** |
-
-The daily cap is the real problem, and it cannot be waited out. Each model
-carries its *own* daily quota, so the provider fails over automatically:
-
-```bash
-GEMINI_MODEL=gemini-3.6-flash
-GEMINI_FALLBACK_MODELS=gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash
+```
+LLM_PROVIDER=chain
+LLM_CHAIN=gemini,groq,ollama
 ```
 
-A per-minute breach is retried (it clears in seconds); a per-day cap is not
-(it does not), so the provider retires that model and moves to the next.
-Transient `503 "high demand"` responses are retried too — the shared free tier
-emits them regularly.
+| tier | provider / model | role |
+|---|---|---|
+| 1 | Gemini (`gemini-3.6-flash` + fallbacks) | primary; best quality, hardest quota |
+| 2 | Groq `openai/gpt-oss-120b` | hosted, own quota, absorbs most exhaustion |
+| 3 | Ollama `qwen3:4b` | offline last resort |
 
-Ollama remains the offline fallback, unchanged. Measured on this machine:
-`qwen3:14b` gives good extraction but takes minutes per call under memory
-pressure; `qwen3:4b` answers in ~6s but misses fields and narrates its reasoning.
+Measured on the 101-page IIT (ISM) tender, six header fields, ground truth read
+from the PDF rather than from another model:
+
+| tier | model | header | eligibility | documents | seconds |
+|---|---|---|---|---|---|
+| 1 | gemini-3.5-flash-lite | **6/6** | 14 | 10 | 27.5 |
+| 2 | groq openai/gpt-oss-120b | **6/6** | — | — | **2.9** |
+| 2 | groq qwen/qwen3.8-27b | **6/6** | 14 | — | 12.3 |
+| 3 | ollama qwen3:4b | **6/6** | 10 | 10 | 80.4 |
+
+**All three tiers extract correctly.** The chain exists to keep working when a
+quota runs out, not to trade accuracy for availability.
+
+### The correction that produced this
+
+An earlier version of this README said `qwen3:4b` "misses fields". That was
+wrong, and it was wrong in a way worth recording: the fields were missing
+because the prompt had instructions but no worked examples, not because the
+model could not find them.
+
+| document | bare prompt | with worked examples |
+|---|---|---|
+| IIT (ISM) 101p | 2/6 | **6/6** |
+| GHMC 68p | 0/2 | **2/2** |
+
+Same model, same document, same selected pages. Under the bare prompt the model
+returned the literal string `"None"`, which read as a hallucination and was
+actually the model saying it could not find the field. No value leaked from the
+examples — every extracted value is the document's own.
+
+The lesson generalises: a capability gap and a prompting gap are
+indistinguishable from outside, so `scripts/benchmark_extraction.py` holds the
+document, the page selection and the scoring fixed and varies one thing at a
+time. `--verify-truth` separately confirms every expected value is present in
+the pages actually sent, so "the model missed it" and "selection never sent it"
+cannot be confused either.
+
+### RAG uses the same chain
+
+No separate routing. Retrieval hands the model a handful of scored passages, and
+every tier answers that well — `qwen3:4b` answered 8 of 8 real questions
+correctly with citations while scoring 2/6 on bare-prompt extraction of the same
+tender. Q&A over retrieved chunks is a much smaller task than reading 28 pages.
+
+### Quota, which is the real constraint
+
+| provider | limit | consequence |
+|---|---|---|
+| Gemini | 5 req/min, **20 req/day per model** | 6 calls/document → ~3 documents/day/model; fails over across 4 models |
+| Groq | 30 req/min, **8,000 tokens/min** | the binding limit is tokens: a 15,009-token request is refused outright |
+| Ollama | none | bounded by local hardware |
+
+**Groq's 8,000 TPM cap is why tier 2's 2.9 seconds is not a full-document
+number.** That figure is one field group (~4,400 tokens) on a warm connection.
+A whole document is six such groups, and at 8,000 TPM they must be paced —
+hence `GROQ_RPM=2`, which puts a full six-group extraction at roughly three
+minutes rather than eighteen seconds. Page selection sizes itself to the active
+provider (`input_char_budget`), so the same document that sends 60,000
+characters to Gemini sends 15,400 to Groq.
+
+A hosted provider having a *smaller* usable window than the local one is not the
+intuitive ordering, and is exactly the kind of thing that shows up as
+unexplained 413s if it is not written down.
+
+### Not in the chain
+
+- **Llama 3.3 70B** — not available on this Groq account. `openai/gpt-oss-120b`
+  is the substitute, benchmarked above at 6/6.
+- **xAI / Grok** — the provider is built and unit-tested (`app/llm/xai.py`), and
+  the key is valid, but the account has no credits: every endpoint returns 403.
+  A billing blocker, not a code one. Add credits and put `xai` in `LLM_CHAIN`.
 
 ## Verified on real tenders
 

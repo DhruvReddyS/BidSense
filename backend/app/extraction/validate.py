@@ -8,16 +8,21 @@ a missing value as a fact about the tender rather than a fact about the
 extraction. A gap report built on a notification with no deadline tells a vendor
 nothing is due.
 
-Measured, not hypothetical: the same 101-page tender extracted by
-gemini-3.5-flash and by a local qwen3:4b differed like this --
+Measured, not hypothetical. The same 101-page tender, the same model, differing
+only in the PROMPT -- an earlier version of this docstring blamed the model, and
+that was wrong:
 
-    field               gemini                          qwen3:4b
-    issuing_authority   IIT (ISM) Dhanbad               (empty)
-    submission_deadline 2026-08-22                      None
-    emd_amount          Rs. 31,500/-                    None
-    errors reported     0                               0
+    field               gemini-3.5-flash    qwen3:4b bare   qwen3:4b few-shot
+    issuing_authority   IIT (ISM) Dhanbad   (empty)         IIT (ISM) Dhanbad
+    submission_deadline 2026-08-22          None            2026-08-22
+    emd_amount          Rs. 31,500/-        None            Rs. 31,500/-
+    errors reported     0                   0               0
 
-Both runs reported success. This module is what makes the second one say so.
+All three runs reported success. The middle column is the one this module exists
+for, and the point generalises past any one model: an extraction can be empty,
+report no error, and be presented as clean -- whether the cause is a weak model,
+a weak prompt, or a page selection that sent the wrong pages. The validator does
+not need to know which.
 
 Two principles, the same ones the gap report runs on:
 

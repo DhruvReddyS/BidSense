@@ -4,15 +4,19 @@ The failure this guards against is the one that does not raise. Every extractor
 returned, no error was recorded, the job said SUCCEEDED -- and the notification
 had no deadline, no EMD and no issuing authority.
 
-That is not hypothetical. The same 101-page tender through two models:
+That is not hypothetical. The same 101-page tender and the same local model,
+differing only in the prompt:
 
-    field               gemini-3.5-flash                qwen3:4b
-    issuing_authority   IIT (ISM) Dhanbad               (empty)
-    submission_deadline 2026-08-22                      None
-    emd_amount          Rs. 31,500/-                    None
-    errors reported     0                               0
+    field               qwen3:4b bare prompt    qwen3:4b few-shot prompt
+    issuing_authority   (empty)                 IIT (ISM) Dhanbad
+    submission_deadline None                    2026-08-22
+    emd_amount          None                    Rs. 31,500/-
+    errors reported     0                       0
 
-`test_the_measured_ollama_degradation_is_caught` replays exactly that output.
+`test_the_measured_empty_extraction_is_caught` replays the left column. The
+cause turned out to be the prompt rather than the model, which is precisely why
+the validator does not try to attribute blame -- it reports that fields a tender
+almost always states are absent, and that claim is true whatever caused it.
 """
 
 from __future__ import annotations
@@ -98,9 +102,10 @@ def test_a_clean_extraction_produces_no_findings() -> None:
 # --------------------------------------------------------------------------- #
 # The measured regression
 # --------------------------------------------------------------------------- #
-def test_the_measured_ollama_degradation_is_caught() -> None:
-    """Replays the real qwen3:4b output for NOTIF_civilworks_01, which reported
-    zero errors and would otherwise have been presented as a clean run."""
+def test_the_measured_empty_extraction_is_caught() -> None:
+    """Replays the real bare-prompt qwen3:4b output for NOTIF_civilworks_01,
+    which reported zero errors and would otherwise have been presented as a
+    clean run."""
     degraded = TenderNotification(
         tender_id="CMU-12011/17/2026-CMU",
         title="Notice Inviting eTender",

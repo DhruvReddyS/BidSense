@@ -62,10 +62,12 @@ def _safe_store(digest: str, kind: DocumentKind, payload: dict, **kwargs) -> Non
 def _provider_label(llm: "LLMProvider | None") -> str:
     """Name the model that produced an extraction.
 
-    Worth recording because the failure this enables is provider-shaped: the
-    same 101-page tender yields a full header from gemini-3.5-flash and an empty
-    one from a local qwen3:4b, both reporting zero errors. Without this, the
-    only evidence of which ran is the wall-clock time.
+    Worth recording because a run served by a different tier is a different run,
+    and nothing else in the report says which one answered. Not because the local
+    tier is weaker -- with few-shot prompting all three tiers extract the same
+    101-page tender at 6/6 -- but because latency, quota and failure modes differ
+    per tier, and "which tier produced this" is the first question when a result
+    looks wrong.
     """
     from app.llm import get_llm
 
