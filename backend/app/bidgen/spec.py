@@ -40,6 +40,9 @@ class TenderProfile:
     experience_requirement: str
     key_documents: tuple[str, ...]
     technical_context: str
+    # How long a bid for this tender should run. Proportionate to the tender's
+    # value: a Rs. 12 lakh boundary wall does not attract a 200-page bid.
+    bid_scale: str = "standard"
 
 
 @dataclass

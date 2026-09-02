@@ -198,13 +198,28 @@ def match_document(
     return MatchResult(False, None, round(best_score, 4), None)
 
 
-@lru_cache(maxsize=512)
-def _best_embedding_match(required: str, submitted: tuple[str, ...]) -> tuple[str, float]:
+@lru_cache(maxsize=4096)
+def _embed_one(text: str) -> tuple[float, ...]:
+    """Embed a single document name, cached across the whole process.
+
+    Caching per NAME rather than per (requirement, haystack) pair matters a
+    great deal. A gap report checks every requirement against the same list of
+    submitted documents, so a pair-keyed cache re-embeds that list once per
+    requirement: on a real tender with 49 requirements and 50 enclosed documents
+    that is ~2,500 embeddings where 99 distinct ones exist. The report took
+    minutes as a result.
+    """
     from app.vector.embeddings import embed_passages
 
-    vectors = embed_passages([required, *submitted])
-    required_vec, rest = vectors[0], vectors[1:]
-    # Vectors are unit-normalised, so the dot product is cosine similarity.
-    scores = [sum(a * b for a, b in zip(required_vec, v)) for v in rest]
-    best = max(range(len(scores)), key=scores.__getitem__)
-    return submitted[best], scores[best]
+    return tuple(embed_passages([text])[0])
+
+
+def _best_embedding_match(required: str, submitted: tuple[str, ...]) -> tuple[str, float]:
+    required_vec = _embed_one(required)
+    best_name, best_score = submitted[0], -1.0
+    for name in submitted:
+        # Vectors are unit-normalised, so the dot product is cosine similarity.
+        score = sum(a * b for a, b in zip(required_vec, _embed_one(name)))
+        if score > best_score:
+            best_name, best_score = name, score
+    return best_name, best_score

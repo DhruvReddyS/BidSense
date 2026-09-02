@@ -219,6 +219,31 @@ def fail_if_stuck(job: IngestJob) -> bool:
     return True
 
 
+# Finished jobs older than this are removed at startup. They are an audit trail
+# of uploads, not of decisions -- the extracted data itself is the record that
+# matters -- so keeping them for ever grows a table nothing reads.
+JOB_RETENTION_DAYS = 30
+
+
+def purge_old_jobs() -> int:
+    """Delete finished jobs past the retention window."""
+    from datetime import timedelta
+
+    from sqlalchemy import delete
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=JOB_RETENTION_DAYS)
+    with session_scope() as session:
+        result = session.execute(
+            delete(IngestJob).where(
+                IngestJob.status.in_(
+                    [JobStatus.SUCCEEDED, JobStatus.PARTIAL, JobStatus.FAILED]
+                ),
+                IngestJob.created_at < cutoff,
+            )
+        )
+        return result.rowcount or 0
+
+
 def reap_stale_jobs() -> int:
     """Mark jobs abandoned by a restart as failed.
 

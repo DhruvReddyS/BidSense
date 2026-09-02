@@ -37,6 +37,9 @@ from app.vector.schema import ChunkPayload, chunk_point_id
 
 logger = logging.getLogger(__name__)
 
+# Points per Qdrant upsert request.
+UPSERT_BATCH = 128
+
 
 def _prov(p: Provenance) -> dict:
     return {
@@ -307,7 +310,17 @@ def _index(
         }
         for chunk, vector in zip(chunks, vectors)
     ]
-    get_client().upsert(settings.qdrant_collection, points=points, wait=True)
+    # Batched rather than sent as one request. A 173-page bid produces a few
+    # hundred chunks and a whole-document upsert is a multi-megabyte body; a
+    # larger document would push it past request limits or time out, and the
+    # failure would land after the embedding work was already paid for.
+    client = get_client()
+    for start in range(0, len(points), UPSERT_BATCH):
+        client.upsert(
+            settings.qdrant_collection,
+            points=points[start : start + UPSERT_BATCH],
+            wait=True,
+        )
     return len(points)
 
 

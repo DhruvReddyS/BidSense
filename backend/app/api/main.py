@@ -20,7 +20,7 @@ logger = logging.getLogger("tenderiq")
 async def lifespan(_: FastAPI):
     # A process kill mid-extraction leaves jobs stuck in RUNNING for ever, and
     # the UI polls them until the user gives up. Fail them at startup instead.
-    from app.api.jobs import reap_stale_jobs
+    from app.api.jobs import purge_old_jobs, reap_stale_jobs
 
     try:
         reaped = reap_stale_jobs()
@@ -28,6 +28,13 @@ async def lifespan(_: FastAPI):
             logger.warning("marked %d interrupted job(s) as failed", reaped)
     except Exception:
         logger.exception("could not reap stale jobs at startup")
+
+    try:
+        purged = purge_old_jobs()
+        if purged:
+            logger.info("purged %d job record(s) past the retention window", purged)
+    except Exception:
+        logger.exception("could not purge old jobs at startup")
     yield
 
 

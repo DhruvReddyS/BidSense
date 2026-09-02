@@ -44,6 +44,9 @@ GHMC = TenderProfile(
         "Test report",
     ),
     technical_context="LED street lighting supply, delivery and installation",
+    # Rs. 30 crore supply contract: a full technical bid with clause-by-clause
+    # specification compliance, which is the longest section of a supply bid.
+    bid_scale="standard",
 )
 
 IITISM = TenderProfile(
@@ -84,6 +87,9 @@ IITISM = TenderProfile(
         "Possession of Valid Class II/III Digital Signature Certificate",
     ),
     technical_context="reinforced cement concrete boundary wall construction",
+    # Rs. 12.5 lakh works contract. Bids for small works are genuinely shorter,
+    # and inflating this one would make the set less realistic, not more.
+    bid_scale="compact",
 )
 
 HGCL = TenderProfile(
@@ -128,6 +134,10 @@ HGCL = TenderProfile(
         "Bid Form for first Part",
     ),
     technical_context="rooftop solar photovoltaic EPC",
+    # Rs. 100 crore EPC across 22 locations: design basis, per-site annexures,
+    # a large plant schedule and a full O&M commitment. Real bids of this kind
+    # run to several hundred pages.
+    bid_scale="comprehensive",
 )
 
 PROFILES = {p.notification_id: p for p in (GHMC, IITISM, HGCL)}

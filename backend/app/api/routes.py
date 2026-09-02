@@ -163,8 +163,15 @@ def upload_notification(file: UploadFile = File(...)) -> JobAccepted:
     Returns 202 immediately; poll `poll_url` for progress.
     """
     path = _save_upload(file)
-    job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name)
-    job_runner.submit(job_id, JobKind.NOTIFICATION, path)
+    try:
+        job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name)
+        job_runner.submit(job_id, JobKind.NOTIFICATION, path)
+    except Exception:
+        # The worker deletes the upload when it finishes. If queueing itself
+        # fails there is no worker, so the temp directory would be orphaned --
+        # a tens-of-megabytes leak per failed upload.
+        shutil.rmtree(path.parent, ignore_errors=True)
+        raise
     return _accept(job_id, path.name)
 
 
@@ -182,12 +189,16 @@ def upload_submission(
     require_notification(session, tender_id)
 
     path = _save_upload(file)
-    job_id = job_runner.create_job(
-        JobKind.SUBMISSION, path.name, tender_id=tender_id, vendor_id=vendor_id
-    )
-    job_runner.submit(
-        job_id, JobKind.SUBMISSION, path, vendor_id=vendor_id, tender_id=tender_id
-    )
+    try:
+        job_id = job_runner.create_job(
+            JobKind.SUBMISSION, path.name, tender_id=tender_id, vendor_id=vendor_id
+        )
+        job_runner.submit(
+            job_id, JobKind.SUBMISSION, path, vendor_id=vendor_id, tender_id=tender_id
+        )
+    except Exception:
+        shutil.rmtree(path.parent, ignore_errors=True)
+        raise
     return _accept(job_id, path.name)
 
 

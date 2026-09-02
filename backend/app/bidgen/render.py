@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.bidgen import sections
+from app.bidgen.sections import SCALES, BidScale
 from app.bidgen.spec import TenderProfile, VendorSpec
 
 # --------------------------------------------------------------------------- #
@@ -166,8 +168,9 @@ def build_pages(
     spec: VendorSpec,
     tender: TenderProfile,
     required_documents: list[str] | None = None,
+    scale: BidScale | None = None,
 ) -> list[str]:
-    """The bid, page by page. Nine pages of realistic tender prose.
+    """The complete bid, page by page.
 
     `required_documents`, when supplied, is the deduplicated requirement list the
     pipeline actually extracted from this notification. A compliant bid must
@@ -175,7 +178,13 @@ def build_pages(
     documents -- a hand-written list of fourteen makes a compliant vendor look
     non-compliant, which is a defect in the test data rather than in the system.
     Deliberate omissions are still removed, so the answer key stays exact.
+
+    `scale` sets how long the document runs. It is chosen from the tender's
+    value rather than picked arbitrarily: a Rs. 12 lakh boundary wall does not
+    attract a 200-page bid, and pretending otherwise would make the test set
+    less realistic rather than more.
     """
+    scale = scale or SCALES[tender.bid_scale]
     catalogue = list(required_documents or tender.key_documents)
     omitted_norm = {d.strip().lower() for d in spec.omitted_documents}
 
@@ -184,35 +193,83 @@ def build_pages(
         if d.strip().lower() not in omitted_norm
         and not any(o in d.strip().lower() for o in omitted_norm)
     ]
-    # Anything the spec says to omit is listed but marked not enclosed, which is
-    # what a real bid's checklist looks like when something is outstanding.
     omitted = [
         d for d in catalogue
         if d.strip().lower() in omitted_norm
         or any(o in d.strip().lower() for o in omitted_norm)
     ] or list(spec.omitted_documents)
 
-    blacklist_para = (
-        "\n\n".join(spec.extra_declarations)
-        if spec.is_blacklisted
-        else (
-            "We further declare that our firm, its partners/directors and its "
-            "associate concerns have not been blacklisted, debarred or banned from "
-            "participating in tenders by any Central or State Government department, "
-            "public sector undertaking, municipal body or autonomous institution as "
-            "on the date of submission of this bid, and that no proceedings for such "
-            "action are pending against us."
-        )
-    )
-
     turnover_rows = [(year, amount) for year, amount in spec.turnover]
-    project_rows = [
-        (p["client"][:38], p["value"]) for p in spec.projects
-    ]
+    certs = "\n".join(
+        f"  - {name}" + (f", valid until {valid}" if valid != "\u2014" else "")
+        for name, valid in spec.certifications
+    ) or "  - Nil"
 
-    page1 = f"""{spec.vendor_name.upper()}
+    cover = f"""{spec.vendor_name.upper()}
 {spec.constitution}
 {spec.city}
+
+
+
+
+TECHNICAL AND FINANCIAL BID
+
+
+
+
+Submitted to
+
+{tender.authority}
+{tender.authority_address}
+
+
+
+
+Tender reference : {tender.tender_ref}
+
+Name of work     : {tender.work_title}
+
+Estimated cost   : {tender.estimated_cost}
+
+Earnest money    : {tender.emd}
+
+Due date         : {tender.bid_due}
+
+
+
+
+Submitted by
+
+{spec.vendor_name}
+{spec.city}
+
+Date : {tender.bid_due}
+"""
+
+    index_page = """INDEX
+
+Section                                                          Page
+------------------------------------------------------------------------
+1    Covering Letter
+2    Letter of Bid and Price
+3    Bidder's General Information (Form F-1)
+4    Financial Capacity
+5    Experience of Similar Works (Form F-13)
+6    Method Statement
+7    Organisation and Key Personnel
+8    Compliance with Technical Specifications
+9    Programme and Sequence of Work
+10   Plant, Machinery and Equipment
+11   Quality Assurance Plan
+12   Health, Safety and Environment
+13   Risk Register
+14   Price Schedule
+15   Declarations and Undertakings
+16   Checklist of Documents Enclosed
+     Annexures I to XI
+"""
+
+    covering = f"""SECTION 1 — COVERING LETTER
 
 Ref: {spec.vendor_id}/BID/2024                          Date: {tender.bid_due}
 
@@ -226,13 +283,12 @@ Ref: {tender.tender_ref}
 
 Sir,
 
-1. COVERING LETTER
-
 1.1 With reference to the above tender notice, we submit herewith our bid for
 the captioned work. We have examined the bid document in its entirety, including
-the notice inviting tender, instructions to bidders, general and special
-conditions of contract, technical specifications, drawings, schedules and all
-addenda and corrigenda issued thereto, and we accept them without reservation.
+the notice inviting tender, the instructions to bidders, the general and special
+conditions of contract, the technical specifications, the drawings, the schedules
+and all addenda and corrigenda issued thereto, and we accept them without
+reservation.
 
 1.2 {spec.vendor_name} is a {spec.constitution.lower()} established in the year
 {spec.established} and has been continuously engaged in
@@ -241,10 +297,10 @@ office is situated at {spec.city}.
 
 1.3 We confirm that we satisfy the qualification requirements stipulated in the
 bid document and have furnished documentary evidence in support thereof at the
-annexures listed in the checklist at the end of this bid.
+annexures listed in the checklist at Section 16 of this bid.
 
 1.4 We have deposited the Earnest Money Deposit of {tender.emd} as required, and
-the proof of remittance is enclosed.
+the proof of remittance is enclosed at Annexure X.
 
 1.5 Our bid shall remain valid for acceptance for a period of 180 days from the
 date fixed for opening of bids, and it shall remain binding upon us and may be
@@ -254,28 +310,56 @@ accepted at any time before the expiry of that period.
 stipulated and to complete the whole of the work within the time for completion
 specified in the contract data.
 
-1.7 We understand that you are not bound to accept the lowest or any bid you may
-receive.
+1.7 We confirm that we have visited and inspected the site and satisfied
+ourselves as to the conditions under which the work is to be executed.
+
+1.8 We understand that you are not bound to accept the lowest or any bid you may
+receive, and that no claim shall lie against you on that account.
 """
 
-    page2 = f"""2. LETTER OF BID AND PRICE
+    letter_of_bid = f"""SECTION 2 — LETTER OF BID AND PRICE
 
-2.1 The total price of our bid for the execution of the whole of the works
-described above, inclusive of all taxes, duties, levies, cess, insurance,
-transportation, loading and unloading, and all incidental charges, is:
+2.1 Price
+
+The total price of our bid for the execution of the whole of the work described
+above, inclusive of all taxes, duties, levies, cess, insurance, transportation,
+loading and unloading, and all incidental charges, is:
 
         {spec.quoted_price}
         ({spec.quoted_words})
 
-2.2 The above price is firm and is not subject to any escalation whatsoever
-during the currency of the contract, save to the extent expressly provided in the
+2.2 Firmness of Price
+
+The above price is firm and is not subject to any escalation whatsoever during
+the currency of the contract, save to the extent expressly provided in the
 conditions of contract.
 
-2.3 We confirm that the rates quoted are inclusive of Goods and Services Tax at
-the applicable rate, and that we shall raise invoices in accordance with the GST
-Act and rules made thereunder.
+2.3 Taxes
 
-3. BIDDER'S GENERAL INFORMATION (Form F-1)
+We confirm that the rates quoted are inclusive of Goods and Services Tax at the
+applicable rate, and that we shall raise invoices in accordance with the GST Act
+and the rules made thereunder. Our GST registration certificate is enclosed at
+Annexure I.
+
+2.4 Validity
+
+We confirm that our bid remains valid for 180 days from the date fixed for
+opening of bids.
+
+2.5 Earnest Money Deposit
+
+The Earnest Money Deposit of {tender.emd} has been remitted as required by the
+bid document and the proof of remittance is enclosed at Annexure X. We accept
+that the Earnest Money shall stand forfeited in the circumstances set out in the
+conditions of contract.
+
+2.6 Performance Security
+
+We undertake, if our bid is accepted, to furnish the Performance Security in the
+form and within the period stipulated in the conditions of contract.
+"""
+
+    bidder_info = f"""SECTION 3 — BIDDER'S GENERAL INFORMATION (Form F-1)
 
 3.1  Name of bidder                : {spec.vendor_name}
 3.2  Constitution                  : {spec.constitution}
@@ -284,12 +368,33 @@ Act and rules made thereunder.
 3.5  Registered office             : {spec.city}
 3.6  Permanent Account Number      : Enclosed at Annexure I
 3.7  GST Registration Number       : Enclosed at Annexure I
-3.8  Bankers                       : State Bank of India, {spec.city} Main Branch
-3.9  Authorised signatory          : As per Power of Attorney at Annexure II
-3.10 Class of registration         : {spec.certifications[0][0] if spec.certifications else 'Not applicable'}
+3.8  EPFO registration             : Enclosed at Annexure I
+3.9  ESIC registration             : Enclosed at Annexure I
+3.10 Bankers                       : State Bank of India, {spec.city} Main Branch
+3.11 Authorised signatory          : As per Power of Attorney at Annexure II
+3.12 Class of registration         : {spec.certifications[0][0] if spec.certifications else 'Not applicable'}
+
+3.13 Constitution Documents
+
+The certificate of incorporation or registration of the firm, together with the
+memorandum and articles of association or the partnership deed as applicable, is
+enclosed at Annexure II. There has been no change in the constitution of the firm
+in the three years preceding the date of this bid.
+
+3.14 Litigation History
+
+No arbitration or litigation arising out of any contract executed by us in the
+last five years has resulted in an award against us exceeding ten percent of the
+contract value, and no contract awarded to us has been terminated for default.
+
+3.15 Certifications and Registrations Held
+
+{certs}
+
+Copies of each of the above are enclosed at Annexure V.
 """
 
-    page3 = f"""4. FINANCIAL CAPACITY
+    financial = f"""SECTION 4 — FINANCIAL CAPACITY
 
 4.1 Annual Turnover
 
@@ -300,159 +405,67 @@ Annexure III.
 
 {_fmt_table(turnover_rows, ("Financial Year", "Turnover"))}
 
-4.2 We confirm that the figures stated above are extracted from the audited
-financial statements and that no part of the turnover shown relates to work
-executed as a sub-contractor to another bidder for this tender.
+4.2 Certification of the Figures
+
+We confirm that the figures stated above are extracted from the audited financial
+statements and that no part of the turnover shown relates to work executed as a
+sub-contractor to another bidder for this tender. The certificate of our
+Chartered Accountant showing the computation is enclosed.
 
 4.3 Net Worth
 
 The net worth of the firm as certified by our Chartered Accountant is
 {spec.net_worth}, and is positive as on the last day of the immediately preceding
-financial year. The certificate of the Chartered Accountant showing the
-computation of net worth is enclosed.
+financial year.
 
 4.4 Liquid Assets and Credit Facilities
 
 We have available liquid assets and unutilised credit facilities amounting to
 {spec.bank_credit}. A solvency certificate and a letter of credit availability
-issued by our bankers are enclosed.
+issued by our bankers are enclosed at Annexure VI.
 
-4.5 The requirement stipulated in the bid document in this regard is
-{tender.turnover_requirement}. We confirm that the figures furnished above are to
-be read against that requirement.
+4.5 Requirement Stated in the Bid Document
+
+The requirement stipulated in the bid document in this regard is
+{tender.turnover_requirement}. The figures furnished above are to be read against
+that requirement.
+
+4.6 Bid Capacity
+
+Our available bid capacity, computed by the formula prescribed in the bid
+document, exceeds the estimated cost of this work. The computation is set out at
+Annexure IV together with a statement of works in hand and their anticipated
+completion dates.
 """
 
-    project_text = "\n\n".join(
-        f"""{index}. {project['client']}
-     Work order no.   : {project['order_no']}
-     Value of work    : {project['value']}
-     Year of completion: {project['year']}
-     Scope            : {project['scope']}"""
-        for index, project in enumerate(spec.projects, start=1)
-    )
-
-    page4 = f"""5. EXPERIENCE OF SIMILAR WORKS (Form F-13)
-
-5.1 The requirement stipulated in the bid document is
-{tender.experience_requirement}.
-
-5.2 In support thereof we cite the following works executed and completed by us.
-Copies of the work orders and of the completion and satisfactory performance
-certificates issued by the respective clients are enclosed at Annexure IV.
-
-{project_text}
-
-5.3 We confirm that each of the works cited above was executed by us in our own
-name and not through any joint venture, consortium or sub-contract arrangement,
-and that the certificates enclosed are issued by an officer not below the rank of
-Executive Engineer or equivalent.
-
-{_fmt_table(project_rows, ("Client", "Value"))}
-"""
-
-    narrative = (STRONG if spec.writeup_quality == "strong" else WEAK)[tender.sector]
-    page5 = f"""6. TECHNICAL APPROACH AND METHODOLOGY
-
-{narrative}
-"""
-
-    page6 = f"""7. QUALITY ASSURANCE AND HEALTH, SAFETY AND ENVIRONMENT
-
-7.1 Quality Assurance. A project-specific quality assurance plan will be
-submitted for approval within fifteen days of the award of work. It will identify
-the inspection and test plan for each activity, the hold and witness points at
-which the Engineer-in-Charge's inspection is required, the acceptance criteria,
-and the records to be maintained. No activity that carries a hold point will
-proceed without written release.
-
-7.2 Materials. All materials brought to site will be accompanied by the
-manufacturer's test certificate for the relevant lot, and samples will be
-submitted for approval before bulk procurement. Materials rejected by the
-Engineer-in-Charge will be removed from site within forty-eight hours.
-
-7.3 Health and Safety. We operate a written safety policy and shall appoint a
-qualified safety officer for the duration of the contract. All personnel deployed
-will undergo an induction covering site hazards, emergency assembly points and
-the permit-to-work system before being allowed to work. Personal protective
-equipment will be issued to every worker and its use enforced.
-
-7.4 Environment. Debris and construction waste will be removed to a disposal site
-approved by the local authority. Water sprinkling will be carried out to suppress
-dust, and no burning of waste will be permitted on site.
-
-7.5 Statutory Compliance. We shall comply with the Contract Labour (Regulation and
-Abolition) Act 1970, the Building and Other Construction Workers Act 1996, the
-Minimum Wages Act 1948, and the Employees' Provident Fund and Employees' State
-Insurance enactments, and shall maintain the registers prescribed thereunder for
-inspection at any time.
-"""
-
-    page7 = f"""8. DECLARATIONS
-
-8.1 Declaration of Non-Blacklisting
-
-{blacklist_para}
-
-8.2 Declaration on Code of Integrity
-
-We declare that we have not, directly or indirectly, offered or agreed to offer
-any inducement or reward to any officer or employee of the {tender.authority} or
-to any person acting on its behalf in connection with this bid, and that we have
-not entered into any agreement or arrangement with any other bidder with a view to
-restricting competition.
-
-8.3 No Deviation Confirmation (Form F-6)
-
-We confirm that our bid is in full conformity with the terms, conditions,
-specifications and schedules of the bid document, and that we have taken no
-deviation or exception thereto. We understand that any deviation not expressly
-accepted in writing by the Employer shall be treated as no deviation.
-
-8.4 Declaration on Restriction on Procurement
-
-We confirm that we are not from a country which shares a land border with India,
-or, if we are, that we are registered with the Competent Authority as required by
-the Order of the Ministry of Finance dated 23.07.2020, and the registration
-certificate is enclosed.
-
-8.5 Correctness of Information
-
-We hereby declare that the particulars and information furnished in this bid and
-in the documents accompanying it are true and correct to the best of our knowledge
-and belief, and that nothing material has been concealed. We understand that if
-any information furnished is found to be false or misleading at any stage, our bid
-shall be liable to summary rejection, our earnest money forfeited, and such
-further action taken as the Employer may deem fit.
-"""
-
-    checklist = "\n".join(
-        f"  {index:>2}. [X]  {name}" for index, name in enumerate(enclosed, start=1)
+    checklist_lines = "\n".join(
+        f"  {index:>3}. [X]  {name}" for index, name in enumerate(enclosed, start=1)
     )
     if omitted:
-        checklist += "\n" + "\n".join(
-            f"  {len(enclosed) + index:>2}. [ ]  {name}   — NOT ENCLOSED"
+        checklist_lines += "\n" + "\n".join(
+            f"  {len(enclosed) + index:>3}. [ ]  {name}   — NOT ENCLOSED"
             for index, name in enumerate(omitted, start=1)
         )
 
-    certs = "\n".join(
-        f"  - {name}" + (f", valid until {valid}" if valid != "—" else "")
-        for name, valid in spec.certifications
-    ) or "  - Nil"
+    checklist_pages: list[str] = []
+    all_lines = checklist_lines.split("\n")
+    per_page = 34
+    for start_index in range(0, len(all_lines), per_page):
+        block = "\n".join(all_lines[start_index : start_index + per_page])
+        header = (
+            """SECTION 16 — CHECKLIST OF DOCUMENTS ENCLOSED
 
-    page8 = f"""9. CERTIFICATIONS AND REGISTRATIONS HELD
+The documents listed below are enclosed with this bid in the order shown. Items
+marked [X] are enclosed; any item marked [ ] is not enclosed and the reason is
+stated against it.
 
-{certs}
-
-Copies of each of the above certificates are enclosed at Annexure V.
-
-10. CHECKLIST OF DOCUMENTS ENCLOSED
-
-The following documents are enclosed with this bid in the order listed:
-
-{checklist}
 """
+            if start_index == 0
+            else "SECTION 16 — CHECKLIST OF DOCUMENTS ENCLOSED (continued)\n\n"
+        )
+        checklist_pages.append(header + block)
 
-    page9 = f"""11. UNDERTAKING AND SIGNATURE
+    signature = f"""UNDERTAKING AND SIGNATURE
 
 We have read and understood the entire bid document and we agree to abide by all
 its terms and conditions without any reservation. We understand that the Employer
@@ -460,7 +473,11 @@ reserves the right to reject any or all bids without assigning any reason
 whatsoever, and that no claim shall lie against the Employer on that account.
 
 We confirm that this bid is submitted by a person duly authorised to do so, and
-that the Power of Attorney in his favour is enclosed.
+that the Power of Attorney in his favour is enclosed at Annexure II.
+
+We declare that the particulars and information furnished in this bid and in the
+documents accompanying it are true and correct to the best of our knowledge and
+belief, and that nothing material has been concealed.
 
 Thanking you,
 
@@ -469,16 +486,42 @@ Yours faithfully,
 For {spec.vendor_name}
 
 
+
 (Authorised Signatory)
-Name    : {"".join(w[0] for w in spec.vendor_name.split()[:3]).upper()} Signatory
-Designation: Authorised Signatory
-Date    : {tender.bid_due}
-Place   : {spec.city}
+Name        : {"".join(w[0] for w in spec.vendor_name.split()[:3]).upper()} Signatory
+Designation : Authorised Signatory
+Date        : {tender.bid_due}
+Place       : {spec.city}
 
 Seal of the firm
 """
 
-    return [page1, page2, page3, page4, page5, page6, page7, page8, page9]
+    return [
+        cover,
+        index_page,
+        covering,
+        letter_of_bid,
+        bidder_info,
+        financial,
+        *sections.section_experience(spec, tender, scale),
+        *sections.section_method_statement(tender, scale),
+        *sections.section_personnel(spec, tender, scale),
+        *sections.section_specification_compliance(tender, scale),
+        *sections.section_programme(tender),
+        *sections.section_plant(tender),
+        *sections.section_quality_plan(tender, scale),
+        *sections.section_hse(spec, tender),
+        *sections.section_risk(),
+        *(sections.section_design_basis(spec, tender, scale)
+          if scale.name == "comprehensive" else []),
+        *(sections.section_om_plan(spec, tender)
+          if scale.name == "comprehensive" else []),
+        *sections.section_boq(spec, tender, scale),
+        *sections.section_declarations(spec, tender, scale),
+        *checklist_pages,
+        signature,
+        *sections.section_annexures(spec, tender, scale),
+    ]
 
 
 def render_pdf(
@@ -486,6 +529,7 @@ def render_pdf(
     tender: TenderProfile,
     out_dir: Path,
     required_documents: list[str] | None = None,
+    scale: BidScale | None = None,
 ) -> Path:
     """Render to PDF with real page breaks, so extraction meets real pagination."""
     from reportlab.lib.pagesizes import A4
@@ -508,7 +552,7 @@ def render_pdf(
     mono = ParagraphStyle("mono", parent=body, fontName="Courier", fontSize=8.5, leading=11)
 
     story = []
-    pages = build_pages(spec, tender, required_documents)
+    pages = build_pages(spec, tender, required_documents, scale)
     for index, page in enumerate(pages):
         for block in page.strip().split("\n\n"):
             tabular = any(
