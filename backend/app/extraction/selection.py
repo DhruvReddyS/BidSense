@@ -159,11 +159,21 @@ FIELD_GROUPS: dict[str, FieldGroup] = {
     ),
     "submitted_documents": FieldGroup(
         name="submitted_documents",
+        # "index" and "page no" are deliberately absent. They match a bid's own
+        # table of contents far more strongly than its enclosure checklist, and
+        # selecting the contents page led the extractor to return the bid's
+        # chapters as its enclosures -- which made every required certificate
+        # look missing.
         cues=(
-            "enclosed", "annexure", "attached", "index", "checklist",
-            "enclosure", "submitted herewith", "as per annexure", "page no",
+            "enclosed", "not enclosed", "annexure", "attached", "checklist",
+            "enclosure", "submitted herewith", "as per annexure",
+            "documents enclosed", "list of enclosures", "true copy",
+            "self attested", "certified copy",
         ),
-        query="index or checklist of documents enclosed with this bid",
+        query=(
+            "checklist of documents enclosed with this bid, annexures attached, "
+            "certificates and declarations submitted"
+        ),
     ),
 }
 

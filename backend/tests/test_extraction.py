@@ -386,3 +386,41 @@ def test_notification_assembly_wires_the_estimate_into_relative_thresholds():
     criterion = notification.eligibility_criteria[0]
     assert notification.contract_value_estimate.amount_inr == _D("1256561.00")
     assert criterion.threshold_amount.amount_inr == _D("376968.30")
+
+
+# --------------------------------------------------------------------------- #
+# Table of contents vs enclosure checklist (regression)
+# --------------------------------------------------------------------------- #
+def test_the_enclosure_prompt_rules_out_the_bids_own_contents_page():
+    """A 60-page bid opens with an index of its own sections. Extracted as
+    enclosures, those chapters replaced the real checklist and every required
+    certificate looked missing -- a defect no nine-page bid could surface."""
+    from app.extraction.prompts import SUBMITTED_DOCUMENTS_PROMPT
+
+    prompt = SUBMITTED_DOCUMENTS_PROMPT.lower()
+    assert "table of contents" in prompt
+    assert "not documents enclosed with it" in prompt
+    # It must also say how to tell them apart, not merely forbid the mistake.
+    assert "page numbers" in prompt
+    assert "checklist" in prompt
+
+
+def test_selection_cues_do_not_favour_a_contents_page():
+    """"index" and "page no" match a table of contents far more strongly than an
+    enclosure checklist."""
+    from app.extraction.selection import FIELD_GROUPS
+
+    cues = FIELD_GROUPS["submitted_documents"].cues
+    assert "index" not in cues
+    assert "page no" not in cues
+    assert "not enclosed" in cues
+    assert any("enclos" in c for c in cues)
+
+
+def test_the_enclosure_prompt_defines_the_absent_case():
+    """A checklist entry marked NOT ENCLOSED is a compliance fact, and the
+    prompt has to say so or the model reports it as present."""
+    from app.extraction.prompts import SUBMITTED_DOCUMENTS_PROMPT
+
+    assert "not enclosed" in SUBMITTED_DOCUMENTS_PROMPT.lower()
+    assert "present=false" in SUBMITTED_DOCUMENTS_PROMPT.lower()

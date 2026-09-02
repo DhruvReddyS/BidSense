@@ -191,14 +191,26 @@ VENDOR BID:
 {text}"""
 
 
-SUBMITTED_DOCUMENTS_PROMPT = """Extract the documents enclosed with this bid.
+SUBMITTED_DOCUMENTS_PROMPT = """Extract the documents ENCLOSED WITH this bid.
 
-Look at index pages, checklists, annexure lists and explicit statements that a
-document is enclosed. Copy each document name as printed -- do not normalise it
-to match what the tender asked for. Matching is done later by separate code.
+Read the enclosure checklist, the annexure list, and explicit statements that a
+document is enclosed or attached. Copy each document name as printed -- do not
+normalise it to match what the tender asked for. Matching is done later by
+separate code.
 
-Set present false where the bid lists a document but marks it as not applicable,
-to be submitted later, or otherwise absent.
+CRITICAL -- do NOT extract the bid's own table of contents. A bid begins with an
+index of its own sections ("Covering Letter", "Method Statement", "Price
+Schedule", "Declarations") against page numbers. Those are chapters of this
+document, not documents enclosed with it, and returning them makes every
+genuinely required certificate look missing. Two reliable signals distinguish
+them: a table of contents lists sections against PAGE NUMBERS, whereas an
+enclosure checklist lists documents against a tick, a cross, or the word
+enclosed. Prefer the section headed "Checklist of Documents Enclosed", "List of
+Enclosures" or similar.
+
+Set present false where the bid lists a document but marks it as not enclosed,
+not applicable, or to be submitted later. A checklist entry marked with an empty
+box or the words "NOT ENCLOSED" is present=false.
 
 VENDOR BID:
 {text}"""
