@@ -8,7 +8,7 @@
  */
 import type { CheckStatus, Severity, Verdict } from "@/lib/types";
 
-type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "accent";
+export type Tone = "ok" | "warn" | "bad" | "info" | "neutral" | "accent";
 
 const TONE: Record<Tone, string> = {
   ok: "bg-[hsl(var(--ok-soft))] text-[hsl(var(--ok))] border-[hsl(var(--ok-border))]",
@@ -128,6 +128,51 @@ export const VERDICT_META: Record<
     tone: "neutral",
     icon: "?",
   },
+};
+
+/**
+ * Full class strings per tone, written out rather than interpolated.
+ *
+ * Tailwind extracts classes by scanning source for literals, so a template
+ * like `bg-[hsl(var(--${tone}-soft))]` generates no CSS — it only appeared to
+ * work where the same literal happened to exist elsewhere in this file. Naming
+ * them explicitly also caught a tone referencing a token (`--neutral`) that was
+ * never defined.
+ */
+export const TONE_SURFACE: Record<Tone, string> = {
+  ok: "bg-[hsl(var(--ok-soft))] border-[hsl(var(--ok-border))]",
+  warn: "bg-[hsl(var(--warn-soft))] border-[hsl(var(--warn-border))]",
+  bad: "bg-[hsl(var(--bad-soft))] border-[hsl(var(--bad-border))]",
+  info: "bg-[hsl(var(--info-soft))] border-[hsl(var(--info-border))]",
+  neutral: "bg-[hsl(var(--neutral-soft))] border-[hsl(var(--neutral-border))]",
+  accent: "bg-[hsl(var(--accent-soft))] border-[hsl(var(--accent-border))]",
+};
+
+export const TONE_TEXT: Record<Tone, string> = {
+  ok: "text-[hsl(var(--ok))]",
+  warn: "text-[hsl(var(--warn))]",
+  bad: "text-[hsl(var(--bad))]",
+  info: "text-[hsl(var(--info))]",
+  neutral: "text-[hsl(var(--fg-muted))]",
+  accent: "text-[hsl(var(--accent))]",
+};
+
+export const TONE_SOLID: Record<Tone, string> = {
+  ok: "bg-[hsl(var(--ok))]",
+  warn: "bg-[hsl(var(--warn))]",
+  bad: "bg-[hsl(var(--bad))]",
+  info: "bg-[hsl(var(--info))]",
+  neutral: "bg-[hsl(var(--fg-subtle))]",
+  accent: "bg-[hsl(var(--accent))]",
+};
+
+export const TONE_EDGE: Record<Tone, string> = {
+  ok: "border-l-[hsl(var(--ok))]",
+  warn: "border-l-[hsl(var(--warn))]",
+  bad: "border-l-[hsl(var(--bad))]",
+  info: "border-l-[hsl(var(--info))]",
+  neutral: "border-l-[hsl(var(--fg-subtle))]",
+  accent: "border-l-[hsl(var(--accent))]",
 };
 
 export function Card({

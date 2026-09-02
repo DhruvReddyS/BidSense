@@ -15,8 +15,13 @@ import {
   SectionTitle,
   STATUS_META,
   StatusChip,
+  TONE_EDGE,
+  TONE_SOLID,
+  TONE_SURFACE,
+  TONE_TEXT,
   VERDICT_META,
 } from "./ui";
+import type { Tone } from "./ui";
 
 const KIND_LABEL: Record<GapItem["kind"], string> = {
   document: "Document",
@@ -70,22 +75,20 @@ export function GapReport({ data }: { data: GapReportResponse }) {
     <div className="space-y-6">
       {/* Verdict ------------------------------------------------------- */}
       <Card className="overflow-hidden">
-        <div
-          className={`border-b bg-[hsl(var(--${meta.tone}-soft))] px-6 py-5`}
-        >
+        <div className={`border-b px-6 py-5 ${TONE_SURFACE[meta.tone]}`}>
           <div className="flex flex-wrap items-center gap-6">
             <ComplianceRing counts={counts} />
 
             <div className="min-w-[16rem] flex-1">
               <div className="flex items-center gap-2.5">
                 <span
-                  className={`grid h-6 w-6 place-items-center rounded-full bg-[hsl(var(--${meta.tone}))] text-[11px] font-bold text-white`}
+                  className={`grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold text-white ${TONE_SOLID[meta.tone]}`}
                   aria-hidden
                 >
                   {meta.icon}
                 </span>
                 <p
-                  className={`text-lg font-semibold tracking-tight text-[hsl(var(--${meta.tone}))]`}
+                  className={`text-lg font-semibold tracking-tight ${TONE_TEXT[meta.tone]}`}
                 >
                   {meta.title}
                 </p>
@@ -336,7 +339,7 @@ const ACTION_GROUPS: {
   key: ActionGroup;
   title: string;
   blurb: string;
-  tone: "bad" | "warn" | "info" | "neutral";
+  tone: Tone;
   openByDefault: boolean;
 }[] = [
   {
@@ -433,14 +436,14 @@ function ActionGroupCard({
   const [open, setOpen] = useState(group.openByDefault || items.length <= 6);
 
   return (
-    <Card className={`overflow-hidden border-l-2 border-l-[hsl(var(--${group.tone}))]`}>
+    <Card className={`overflow-hidden border-l-2 ${TONE_EDGE[group.tone]}`}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className="flex w-full items-start justify-between gap-4 p-5 text-left transition-colors hover:bg-[hsl(var(--surface-2))]"
       >
         <div className="min-w-0">
-          <p className={`text-sm font-semibold text-[hsl(var(--${group.tone}))]`}>
+          <p className={`text-sm font-semibold ${TONE_TEXT[group.tone]}`}>
             {group.title}
             <span className="tnum ml-2 font-normal opacity-70">{items.length}</span>
           </p>
