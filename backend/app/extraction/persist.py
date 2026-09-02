@@ -127,6 +127,7 @@ def save_notification(
     *,
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
+    content_hash: str | None = None,
 ) -> TenderNotificationRow:
     """Insert or update a notification, preserving the bids filed against it.
 
@@ -216,6 +217,8 @@ def save_notification(
     ]
     if source_file:
         row.source_file = source_file
+    if content_hash:
+        row.content_hash = content_hash
     if owner_user_id:
         row.owner_user_id = owner_user_id
 
@@ -266,6 +269,7 @@ def save_submission(
     notification_id: uuid.UUID | None = None,
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
+    content_hash: str | None = None,
 ) -> VendorSubmissionRow:
     """Insert or update a vendor submission, keyed by (notification, vendor_id).
 
@@ -330,6 +334,8 @@ def save_submission(
     row.has_technical_approach = bool(submission.technical_approach_text)
     if source_file:
         row.source_file = source_file
+    if content_hash:
+        row.content_hash = content_hash
     if owner_user_id:
         row.owner_user_id = owner_user_id
 

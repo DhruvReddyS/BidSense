@@ -161,6 +161,8 @@ from the PDF rather than from another model:
 | 2 | groq openai/gpt-oss-120b | **6/6** | — | — | **2.9** |
 | 2 | groq qwen/qwen3.8-27b | **6/6** | 14 | — | 12.3 |
 | 3 | ollama qwen3:4b | **6/6** | 10 | 10 | 80.4 |
+| — | ollama qwen2.5:14b-instruct-q4_K_M | **6/6** | — | — | 49.1 |
+| — | ollama qwen3:14b | **6/6** | — | — | 59.2 |
 
 **All three tiers extract correctly.** The chain exists to keep working when a
 quota runs out, not to trade accuracy for availability.
@@ -181,6 +183,20 @@ Same model, same document, same selected pages. Under the bare prompt the model
 returned the literal string `"None"`, which read as a hallucination and was
 actually the model saying it could not find the field. No value leaked from the
 examples — every extracted value is the document's own.
+
+The effect is not only accuracy. Both local 14B models **time out at 601s under
+the bare prompt** and answer 6/6 in under a minute with the examples — under
+schema-constrained decoding a model that does not know what shape the answer
+takes will fill the schema indefinitely. The examples make it converge.
+
+Two more operational findings worth keeping, both measured on qwen2.5:14b:
+
+- **Schema-constrained decoding costs ~19x.** The same 19k-character prompt
+  takes 13.5s as free text and 253.7s with a JSON schema attached. Local
+  structured extraction is not the same workload as local chat.
+- **Two 14B models cannot share this machine.** Cycling between them thrashes
+  VRAM (15.2GB each on 25.7GB) and turns a 13.5s call into 254s. Benchmark one
+  local model at a time or the numbers measure the swapping, not the model.
 
 The lesson generalises: a capability gap and a prompting gap are
 indistinguishable from outside, so `scripts/benchmark_extraction.py` holds the

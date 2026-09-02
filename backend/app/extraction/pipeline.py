@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.db.session import session_scope
+from app.documents import store_document
 from app.extraction import cache as extraction_cache
 from app.extraction.graph import extract_notification, extract_submission
 from app.extraction.persist import (
@@ -35,6 +36,15 @@ from app.schemas.notification import TenderNotification
 from app.schemas.submission import VendorSubmission
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_store_document(path: Path, digest: str) -> None:
+    """Keeping the source must never break ingestion. A citation that cannot be
+    opened is a degraded feature; a failed upload is a lost document."""
+    try:
+        store_document(path, digest=digest)
+    except Exception as exc:      # noqa: BLE001 - deliberately broad
+        logger.warning("could not retain %s for citation click-through: %s", path.name, exc)
 
 
 def _safe_lookup(digest: str, kind: DocumentKind):
@@ -169,6 +179,9 @@ def ingest_notification(
 
     started = time.perf_counter()
     digest = extraction_cache.content_hash(path)
+    # Retained here, before the worker deletes the temp upload. A citation that
+    # cannot be opened at its page is a label the vendor has to take on trust.
+    _safe_store_document(path, digest)
     hit = _safe_lookup(digest, DocumentKind.NOTIFICATION) if use_cache else None
 
     if hit is not None:
@@ -218,7 +231,8 @@ def ingest_notification(
     started = time.perf_counter()
     with session_scope() as session:
         row = save_notification(
-            session, notification, source_file=str(path), owner_user_id=owner_user_id
+            session, notification, source_file=str(path),
+            owner_user_id=owner_user_id, content_hash=digest,
         )
         report.row_id = row.id
     if index:
@@ -252,6 +266,7 @@ def ingest_submission(
 
     started = time.perf_counter()
     digest = extraction_cache.content_hash(path)
+    _safe_store_document(path, digest)
     hit = _safe_lookup(digest, DocumentKind.SUBMISSION) if use_cache else None
 
     if hit is not None:
@@ -290,7 +305,8 @@ def ingest_submission(
     started = time.perf_counter()
     with session_scope() as session:
         row = save_submission(
-            session, submission, source_file=str(path), owner_user_id=owner_user_id
+            session, submission, source_file=str(path),
+            owner_user_id=owner_user_id, content_hash=digest,
         )
         report.row_id = row.id
         notification_id = row.notification_id

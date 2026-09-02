@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import tempfile
 import uuid
@@ -39,6 +40,7 @@ from app.api.schemas import (
     NotificationList,
     NotificationSummary,
     Page,
+    SourceDocuments,
     StalenessOut,
 )
 from app.db.models import IngestJob, JobKind
@@ -243,6 +245,80 @@ def upload_corrigendum(
     return _accept(job_id, path.name)
 
 
+# --------------------------------------------------------------------------- #
+# Section 4.3 / 4.5 -- citation click-through
+# --------------------------------------------------------------------------- #
+@router.get("/documents/{content_hash}/page/{page}")
+def document_page(
+    content_hash: str,
+    page: int,
+    highlight: str | None = Query(default=None, max_length=2000),
+    dpi: int = Query(default=0, ge=0, le=200),
+):
+    """Render one page of a source document, marking a cited passage.
+
+    Rendered on the server so the highlight is computed from the same word
+    coordinates the extractor read. A browser-side text search over a
+    re-extracted text layer can disagree with the backend about where a phrase
+    sits, and a citation that points at the wrong clause is worse than one that
+    is merely a label.
+    """
+    from fastapi.responses import Response
+
+    from app.documents import path_for, render_page
+
+    path = path_for(content_hash)
+    if path is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "That source document is not retained. Documents ingested before "
+            "citation click-through was added have no stored copy; re-upload it "
+            "to enable it.",
+        )
+    try:
+        rendered = render_page(
+            path, page, highlight=highlight, dpi=dpi or settings.page_render_dpi
+        )
+    except Exception as exc:
+        logger.warning("could not render %s p%s: %s", content_hash[:12], page, exc)
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, f"Could not render that page: {exc}"
+        ) from exc
+
+    return Response(
+        content=rendered.png,
+        media_type="image/png",
+        headers={
+            # Content-addressed, so a given hash+page+highlight never changes.
+            "Cache-Control": "public, max-age=86400, immutable",
+            "X-Page": str(rendered.page),
+            "X-Page-Count": str(rendered.page_count),
+            # Zero is a real answer: the passage could not be located, and the
+            # UI says so rather than implying the page was marked.
+            "X-Highlights": str(rendered.highlights),
+            "Access-Control-Expose-Headers": "X-Page, X-Page-Count, X-Highlights",
+        },
+    )
+
+
+@router.get("/documents/{content_hash}")
+def document_file(content_hash: str, download: bool = Query(default=False)):
+    """The original PDF, for a vendor who wants the whole thing."""
+    from fastapi.responses import FileResponse
+
+    from app.documents import path_for
+
+    path = path_for(content_hash)
+    if path is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That source document is not retained.")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=path.name if download else None,
+        headers={"Cache-Control": "public, max-age=86400, immutable"},
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 def job_status(job_id: str, session: Session = Depends(get_db)) -> JobStatusResponse:
     try:
@@ -441,6 +517,10 @@ def gap_report(
         counts=report.counts,
         data_quality=quality,
         action_counts=report.action_counts,
+        sources=SourceDocuments(
+            notification=notification_row.content_hash,
+            bid=submission_row.content_hash,
+        ),
         completion=CompletionOut(
             satisfied=report.completion.satisfied,
             total=report.completion.total,
@@ -459,15 +539,64 @@ def gap_report(
     )
 
 
+@router.post("/gap-report/export")
+def export_gap_report(
+    request: GapReportRequest,
+    fmt: str = Query(default="pdf", pattern="^(pdf|docx)$"),
+    session: Session = Depends(get_db),
+):
+    """Section 4.6 -- the report as a file the vendor can hand to their team.
+
+    The people who actually attach the documents are usually not the person who
+    ran the check, and a compliance report quoted from memory is how a
+    requirement gets missed.
+
+    Rebuilt from the stored rows rather than from anything the client posts, so
+    an exported report cannot disagree with the one on screen.
+    """
+    from fastapi.responses import Response
+
+    from app.compliance.export import ExportContext, export_docx, export_pdf
+
+    notification_row = require_notification(session, request.tender_id)
+    submission_row = require_submission(session, request.tender_id, request.vendor_id)
+    notification = to_notification_schema(notification_row)
+    submission = to_submission_schema(submission_row)
+    report = build_gap_report(notification, submission)
+
+    findings = validate_notification(notification) + validate_submission(submission)
+    state = staleness_for(session, notification_row.id, submission_row)
+
+    context = ExportContext(
+        tender_title=notification.title,
+        issuing_authority=notification.issuing_authority,
+        submission_deadline=notification.submission_deadline,
+        data_quality_banner=summarise(findings),
+        staleness_banner=state.banner,
+    )
+
+    body = export_pdf(report, context) if fmt == "pdf" else export_docx(report, context)
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", f"{request.tender_id}_{request.vendor_id}")[:120]
+    return Response(
+        content=body,
+        media_type=(
+            "application/pdf" if fmt == "pdf"
+            else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ),
+        headers={"Content-Disposition": f'attachment; filename="compliance_{safe}.{fmt}"'},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Section 4.5 -- RAG Q&A
 # --------------------------------------------------------------------------- #
 @router.post("/ask", response_model=AskResponse)
 def ask(request: AskRequest, session: Session = Depends(get_db)) -> AskResponse:
-    require_notification(session, request.tender_id)
+    notification_row = require_notification(session, request.tender_id)
+    submission_row = None
 
     if request.vendor_id:
-        require_submission(session, request.tender_id, request.vendor_id)
+        submission_row = require_submission(session, request.tender_id, request.vendor_id)
         chunks = retrieve_for_pair(
             request.question,
             tender_id=request.tender_id,
@@ -487,4 +616,8 @@ def ask(request: AskRequest, session: Session = Depends(get_db)) -> AskResponse:
         answer=answer,
         grounded=answer.is_grounded,
         confidence=answer.confidence.value,
+        sources=SourceDocuments(
+            notification=notification_row.content_hash,
+            bid=submission_row.content_hash if submission_row is not None else None,
+        ),
     )

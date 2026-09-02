@@ -87,6 +87,10 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
     # the pointer so a chunk can be traced back to its row and vice versa.
     has_technical_approach: Mapped[bool] = mapped_column(default=False, nullable=False)
     source_file: Mapped[str | None] = mapped_column(Text)
+    #: SHA-256 of the uploaded bytes, and the key into the document store. What
+    #: makes a citation clickable: without the original file, "page 5, clause
+    #: 1.1" is a label a vendor has to take on trust.
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     # When a gap report was last put in front of someone (Section 5.6). Gap
     # reports are computed on demand, not stored, so this timestamp is the only
     # record that the vendor has SEEN a verdict -- and therefore the only thing a

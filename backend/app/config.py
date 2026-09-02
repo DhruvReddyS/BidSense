@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     # Milliseconds. Generous enough for a large structured extraction, bounded
     # enough that a stalled connection cannot hold a worker for ever.
     gemini_timeout_ms: int = 180_000
+    # --- Retained source documents (citation click-through) ---
+    # Uploaded files are kept so a citation can be shown on the page it came
+    # from. Content-addressed, so the same tender uploaded twice is stored once.
+    document_store_path: str = "../data/store"
+    # Render resolution for a cited page. 110 is legible on a laptop without
+    # producing a megabyte per page.
+    page_render_dpi: int = 110
+
     # --- Groq (tier 2: hosted, own quota) ---
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-120b"

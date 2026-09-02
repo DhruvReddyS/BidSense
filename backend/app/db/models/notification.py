@@ -78,6 +78,10 @@ class TenderNotificationRow(Base, UUIDPrimaryKey, Timestamps):
     )
 
     source_file: Mapped[str | None] = mapped_column(Text)
+    #: SHA-256 of the uploaded bytes, and the key into the document store. What
+    #: makes a citation clickable: without the original file, "page 5, clause
+    #: 1.1" is a label a vendor has to take on trust.
+    content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

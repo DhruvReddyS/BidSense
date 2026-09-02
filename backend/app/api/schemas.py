@@ -105,6 +105,9 @@ class AskRequest(BaseModel):
 
 class AskResponse(BaseModel):
     answer: GroundedAnswer
+    #: Lets each citation be opened on its page. A citation maps to a document
+    #: by its `doc_kind`.
+    sources: "SourceDocuments" = Field(default_factory=lambda: SourceDocuments())
     # Surfaced so the UI can show a warning rather than presenting an
     # ungrounded answer as if it were verified.
     grounded: bool
@@ -192,12 +195,25 @@ class CompletionOut(BaseModel):
     caveat: str
 
 
+class SourceDocuments(BaseModel):
+    """Where each side's citations can be opened.
+
+    Returned as hashes rather than URLs so the client composes them, and null
+    when a document predates the store -- the UI then shows page and clause
+    without a page image instead of a broken link.
+    """
+
+    notification: str | None = None
+    bid: str | None = None
+
+
 class GapReportResponse(BaseModel):
     report: GapReport
     verdict: str
     counts: dict[str, int]
     staleness: StalenessOut
     data_quality: DataQualityOut
+    sources: SourceDocuments
     #: Section 4.4/4.6 -- a factual count, with the copy that keeps it from
     #: being read as a score travelling alongside it.
     completion: CompletionOut
