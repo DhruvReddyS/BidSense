@@ -336,6 +336,32 @@ def test_absence_of_a_blacklist_flag_is_not_claimed_as_a_pass():
     assert "does not check official debarment lists" in item.explanation
 
 
+def test_positive_credential_eligibility_requires_bid_evidence():
+    criterion = EligibilityCriterion(
+        criterion=(
+            "Bank's empaneled contractors under the appropriate category who "
+            "are invited by the project architect"
+        ),
+        type=CriterionType.BOOLEAN,
+        provenance=Provenance(clause_ref="1", source_page=6),
+    )
+    missing = build_gap_report(
+        notification(eligibility_criteria=[criterion]), submission(), **NO_EMBED
+    )
+    item = next(i for i in missing.items if "empaneled" in i.requirement)
+    assert item.status is CheckStatus.MISSING
+    assert item.severity is Severity.DISQUALIFYING
+    assert item.notification_provenance.clause_ref == "1"
+
+    present = build_gap_report(
+        notification(eligibility_criteria=[criterion]),
+        submission(documents_submitted=[SubmittedDocument(doc_name=criterion.criterion, present=True)]),
+        **NO_EMBED,
+    )
+    item = next(i for i in present.items if "empaneled" in i.requirement)
+    assert item.status is CheckStatus.MATCH
+
+
 # --------------------------------------------------------------------------- #
 # Format rules -- always manual (Section 4.3)
 # --------------------------------------------------------------------------- #

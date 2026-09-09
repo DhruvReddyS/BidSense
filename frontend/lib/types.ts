@@ -27,6 +27,7 @@ export interface Provenance {
 }
 
 export interface GapItem {
+  conditional_on: string | null;
   requirement: string;
   kind: "document" | "numeric" | "boolean" | "format_rule";
   status: CheckStatus;
@@ -100,6 +101,7 @@ export interface ValidationFinding {
 /** How far the figures can be trusted. Separate from the verdict: one answers
  *  "does this bid meet the tender", the other "how good was our reading". */
 export interface DataQuality {
+  providers?: Record<string, string | null>;
   ok: boolean;
   banner: string | null;
   findings: ValidationFinding[];
@@ -169,6 +171,7 @@ export interface Citation {
 export type Confidence = "high" | "low" | "none";
 
 export interface GroundedAnswer {
+  provider?: string | null;
   question: string;
   answer: string;
   citations: Citation[];
@@ -180,6 +183,7 @@ export interface GroundedAnswer {
 }
 
 export interface AskResponse {
+  data_quality?: DataQuality | null;
   answer: GroundedAnswer;
   grounded: boolean;
   confidence: Confidence;
@@ -197,6 +201,66 @@ export interface NotificationSummary {
   document_count: number;
   submission_count: number;
   created_at: string;
+}
+
+export interface VendorSubmissionSummary {
+  vendor_id: string;
+  vendor_name: string;
+  status: string;
+  is_blacklisted: boolean;
+  elimination_reason: string | null;
+}
+
+export interface Level1Result {
+  vendor_id: string;
+  vendor_name: string;
+  status: "eliminated" | "pending";
+  elimination_reason: string | null;
+  clause_ref: string | null;
+  source_page: number | null;
+  /** Present on the read model; merged locally when the evaluation response omits it. */
+  is_blacklisted?: boolean;
+}
+
+export interface ReviewLevel1Response {
+  tender_id: string;
+  total: number;
+  eliminated: number;
+  pending: number;
+  results: Level1Result[];
+}
+
+export interface PerformanceSummary {
+  completed_jobs: number;
+  median_seconds: number | null;
+  p95_seconds: number | null;
+  cache_reuse_percent: number;
+  pages_per_second: number | null;
+}
+
+export interface ShortlistCandidate {
+  vendor_id: string;
+  vendor_name: string;
+  status: "shortlisted";
+  summary: string;
+  evidence: string[];
+}
+
+export interface ReviewLevel2Response {
+  tender_id: string;
+  eligible: number;
+  shortlisted: number;
+  requested: number;
+  factors: string[];
+  candidates: ShortlistCandidate[];
+  caveat: string;
+}
+
+export interface PoolQueryResponse {
+  route: "structured" | "comparative" | "qualitative" | "hybrid" | "audit";
+  answer: string;
+  citations: { vendor_id: string | null; source_file: string | null; source_page: number | null; clause_ref: string | null; snippet: string }[];
+  caveat: string;
 }
 
 export interface JobAccepted {
@@ -285,6 +349,12 @@ export interface IngestResponse {
   /** Which provider and model produced it. A run served by the local fallback
    *  is a different run, and nothing else in the report says which. */
   extracted_by?: string | null;
+  from_cache?: boolean;
+  content_hash?: string | null;
+  timing?: { parse: number; extract: number; persist: number; index: number };
+  node_timings?: Record<string, number>;
+  index_state?: "pending" | "ready" | "failed";
+  index_error?: string | null;
   validation_summary?: string | null;
   validation?: { field: string; severity: string; message: string }[];
 }

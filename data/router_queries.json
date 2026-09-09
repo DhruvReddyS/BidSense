@@ -1,0 +1,14 @@
+[
+  {"question":"Why was Vendor A eliminated?","route":"audit"},
+  {"question":"Show the rejection reason for Vendor B","route":"audit"},
+  {"question":"Which vendors are shortlisted?","route":"structured"},
+  {"question":"Which vendors have turnover above five crore?","route":"structured"},
+  {"question":"Show years of experience for every bidder","route":"structured"},
+  {"question":"Compare vendors on experience","route":"comparative"},
+  {"question":"Compare shortlisted vendors on project value","route":"comparative"},
+  {"question":"Which approach discusses scalability?","route":"qualitative"},
+  {"question":"Summarise each bidder methodology","route":"qualitative"},
+  {"question":"Which narrative explains the technical approach?","route":"qualitative"},
+  {"question":"Compare shortlisted experience and technical approach","route":"hybrid"},
+  {"question":"Which low-price vendor explains its methodology?","route":"hybrid"}
+]

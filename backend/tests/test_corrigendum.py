@@ -14,6 +14,7 @@ Three things are tested and one is tested for its ABSENCE:
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -29,6 +30,14 @@ from app.schemas.notification import TenderNotification
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 KEY_PATH = DATA / "tracking_corrigenda.json"
+
+def _reviewer_client():
+    from fastapi.testclient import TestClient
+    from app.api.main import app
+    client=TestClient(app)
+    response=client.post("/api/auth/register",json={"email":f"corr-{uuid.uuid4()}@example.com","password":"correct-horse-battery-staple","role":"reviewer","reviewer_code":"development-reviewer"})
+    client.headers["Authorization"]=f"Bearer {response.json()['access_token']}"
+    return client
 
 
 def _live() -> bool:
@@ -354,7 +363,7 @@ def test_the_gap_report_endpoint_surfaces_the_banner_and_clears_it_on_recheck(
     from app.api.main import app
 
     notification_id, submission, _ = corrigendum_fixture
-    client = TestClient(app)
+    client = _reviewer_client()
     body = {"tender_id": "CORR-TEST/2026/001", "vendor_id": "V-CORR"}
 
     first = client.post("/api/gap-report", json=body)
@@ -379,7 +388,7 @@ def test_the_corrigenda_endpoint_lists_the_diff(corrigendum_fixture) -> None:
 
     from app.api.main import app
 
-    client = TestClient(app)
+    client = _reviewer_client()
     response = client.get("/api/notifications/CORR-TEST/2026/001/corrigenda")
     assert response.status_code == 200, response.text
     listing = response.json()
@@ -400,7 +409,7 @@ def test_a_corrigendum_for_an_unknown_tender_is_refused_before_any_extraction() 
 
     from app.api.main import app
 
-    client = TestClient(app)
+    client = _reviewer_client()
     response = client.post(
         "/api/corrigenda",
         files={"file": ("c.pdf", b"%PDF-1.4 not a real pdf", "application/pdf")},

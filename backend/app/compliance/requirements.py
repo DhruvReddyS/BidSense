@@ -24,7 +24,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
-from app.compliance.matching import canonical_form, normalise
+from app.compliance.matching import canonical_form, normalise, document_identifiers
 from app.schemas.notification import MandatoryDocument
 
 
@@ -120,13 +120,15 @@ def canonical_key(doc_name: str) -> str:
     "Power of Attorney", "Submission of Power of Attorney" and "Copy of Power of
     Attorney duly attested" all collapse to the same key.
     """
+    identifiers = document_identifiers(doc_name)
+    suffix = "".join(f" | {kind}:{ref}" for kind, ref in sorted(identifiers))
     text = _LEADING_VERB.sub("", doc_name.strip())
     text = _TRAILING_NOISE.sub("", text)
     canonical = canonical_form(text)
     if canonical:
-        return canonical
+        return canonical + suffix
     tokens = _WORD.findall(normalise(text))
-    return " ".join(tokens[:8])          # first 8 tokens identify the document
+    return " ".join(tokens[:8]) + suffix
 
 
 def shorten(doc_name: str) -> str:

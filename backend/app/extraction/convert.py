@@ -246,19 +246,38 @@ def to_submission(
     tender_id: str | None = None,
     is_blacklisted: bool = False,
 ) -> VendorSubmission:
-    turnover_rows: list[YearlyTurnover] = []
+    turnover_by_year: dict[int, YearlyTurnover] = {}
     for item in turnover:
         year = _bare_number(item.year)
         if year is None:
             logger.warning("Turnover entry with unparseable year %r -- skipped", item.year)
             continue
-        turnover_rows.append(
-            YearlyTurnover(
-                year=int(year),
-                amount=MoneyAmount(raw_text=item.amount_raw),
-                provenance=to_provenance(item),
-            )
+        row = YearlyTurnover(
+            year=int(year),
+            amount=MoneyAmount(raw_text=item.amount_raw),
+            provenance=to_provenance(item),
         )
+        existing = turnover_by_year.get(row.year)
+        if existing is None:
+            turnover_by_year[row.year] = row
+            continue
+        if existing.amount.amount_inr == row.amount.amount_inr:
+            # The model often repeats one figure in Indian and compact notation
+            # ("4,20,00,000" and "Rs. 4.2 Cr"). One financial year is one fact.
+            continue
+        logger.warning(
+            "Conflicting turnover values for %s: %r and %r -- manual review required",
+            row.year,
+            existing.amount.raw_text,
+            row.amount.raw_text,
+        )
+        turnover_by_year[row.year] = YearlyTurnover(
+            year=row.year,
+            amount=MoneyAmount(raw_text="Conflicting extracted values; manual review required"),
+            provenance=existing.provenance or row.provenance,
+        )
+
+    turnover_rows = list(turnover_by_year.values())
 
     return VendorSubmission(
         vendor_id=vendor_id,

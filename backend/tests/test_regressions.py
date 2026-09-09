@@ -631,6 +631,9 @@ def test_d9_slashed_tender_ids_route_correctly_end_to_end(pdf, clean) -> None:
     assert "/" in slashed, "this test is meaningless unless the id contains a slash"
 
     client = TestClient(app)
+    import uuid
+    auth = client.post("/api/auth/register", json={"email":f"reg-{uuid.uuid4()}@example.com","password":"correct-horse-battery-staple","role":"reviewer","reviewer_code":"development-reviewer"})
+    client.headers["Authorization"] = f"Bearer {auth.json()['access_token']}"
     detail = client.get(f"/api/notifications/{slashed}")
     assert detail.status_code == 200, detail.text
     assert detail.json()["tender_id"] == slashed

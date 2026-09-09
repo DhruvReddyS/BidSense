@@ -1,0 +1,346 @@
+{
+  "summary": {
+    "evaluated": 19,
+    "skipped": 0,
+    "tp": 12,
+    "tn": 7,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "accuracy": 1.0,
+    "reason_accuracy": 0.6666666666666666,
+    "reason_unverified": 1,
+    "passed": false
+  },
+  "results": [
+    {
+      "vendor_id": "VENDOR_supply_01_01",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_02",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "5",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "5"
+      ],
+      "blocking_reasons": [
+        "The Sole Bidder/ Joint Venture/Consortium should have annual Turnover of Rs.3,00,00,000/- (Rupees Three Crore only) in any one of last Five financial years i.e. from 2019-20 to 2023-24."
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_03",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "7",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "22, item 7"
+      ],
+      "blocking_reasons": [
+        "Submit Manufacturers authorization form"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_04",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "4",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "3",
+        "4"
+      ],
+      "blocking_reasons": [
+        "Blacklisting: Debarment/ Transgression by any Procuring Entity.",
+        "Debarment/ Transgression by any country."
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_05",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_01",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_02",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "1.1(4)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "1.1(4)"
+      ],
+      "blocking_reasons": [
+        "Experience of successfully completed similar type of works during last 07 (Seven) years"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_03",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "2.6(b)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "2.6(b)"
+      ],
+      "blocking_reasons": [
+        "Submit Possession of Valid Class II/III Digital Signature Certificate (DSC) in the company's name"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_04",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "1",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "1"
+      ],
+      "blocking_reasons": [
+        "Average Annual Financial Turnover during the last 3 financial years ending 2024-25"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_05",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_01",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_02",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "28.1 vi)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "28.1 vi)"
+      ],
+      "blocking_reasons": [
+        "Liquid assets and/ or credit facilities of not less than specified amount."
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_03",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "\u2014",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "11.II(a)(h)"
+      ],
+      "blocking_reasons": [
+        "Submit \u2018Declaration regarding the procurement of Solar Inverters & Solar Modules from class I\u2026"
+      ],
+      "outcome": "TP",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_04",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "2.3",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "2.2",
+        "2.3"
+      ],
+      "blocking_reasons": [
+        "The Bidder (either individually or as a JV consortium) shall not have been debarred by Employer/ HGCL/ MNRE or any government entity from future bidding.",
+        "The Bidder should not be under liquidation, court receivership or similar proceedings on the due date of submission of bid."
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_05",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION1",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clauses 1, 5, 6 and 8",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "8",
+        "8",
+        "8",
+        "20",
+        "5",
+        "6",
+        "6",
+        "5",
+        "6"
+      ],
+      "blocking_reasons": [
+        "Submit Undertaking (Annexure-A)",
+        "Submit Process Compliance Statement (Annexure-B)",
+        "Submit EMD",
+        "Submit list of ongoing works in SBI Delhi Circle with scheduled completion date",
+        "Submit compliance form",
+        "Submit Demand Draft of specified amount of EMD",
+        "Submit Process compliance form",
+        "Submit Send by email, the compliance form in the prescribed format (provided by service\u2026",
+        "Submit Demand Draft of specified amount of EMD and Process compliance form dully signed in\u2026"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION2",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clauses 5, 6, 8 and 20",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "8",
+        "20",
+        "5",
+        "6",
+        "6",
+        "5",
+        "6"
+      ],
+      "blocking_reasons": [
+        "Submit Process Compliance Statement (Annexure-B)",
+        "Submit list of ongoing works in SBI Delhi Circle with scheduled completion date",
+        "Submit compliance form",
+        "Submit Demand Draft of specified amount of EMD",
+        "Submit Process compliance form",
+        "Submit Send by email, the compliance form in the prescribed format (provided by service\u2026",
+        "Submit Demand Draft of specified amount of EMD and Process compliance form dully signed in\u2026"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION3",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clause 6 and Process Compliance Statement requirement",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "6"
+      ],
+      "blocking_reasons": [
+        "Submit Demand Draft of specified amount of EMD"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION4",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    }
+  ]
+}

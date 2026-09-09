@@ -24,6 +24,7 @@ import argparse
 import csv
 import json
 import logging
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -61,7 +62,15 @@ class VendorResult:
 
 def load_ground_truth(path: Path) -> dict[str, dict]:
     with path.open() as handle:
-        return {row["vendor_id"]: row for row in csv.DictReader(handle)}
+        rows = {}
+        for row in csv.DictReader(handle):
+            vendor = row["vendor_id"].strip()
+            if not vendor or vendor in rows:
+                raise ValueError(f"Missing or duplicate vendor id in answer key: {vendor!r}")
+            if row["intended_status"] not in {"pass", "eliminate"}:
+                raise ValueError(f"Unknown intended status for {vendor}")
+            rows[vendor] = row
+        return rows
 
 
 def report_for(tender_id: str, vendor_id: str) -> GapReport | None:
@@ -87,12 +96,57 @@ def tender_ids_by_notification() -> dict[str, str]:
     return mapping
 
 
-def _clause_matches(expected: str, actual: list[str]) -> bool:
-    """Loose match: extracted clause labels carry the surrounding heading text."""
-    if not expected or expected == "—":
-        return True                     # no specific clause was asserted
-    expected = expected.strip().lower()
-    return any(expected in (a or "").strip().lower() for a in actual)
+def _clause_matches(expected: str, actual: list[str]) -> bool | None:
+    """Compare whole references, allowing a heading after the reference.
+
+    Missing ground truth is unverified, never a successful citation check.
+    Explicit comma/and lists require EVERY named clause. Other compound prose
+    is not silently interpreted as a list of choices.
+    """
+    expected = " ".join((expected or "").casefold().split())
+    if expected in {"", "—", "-"}:
+        return None
+    reference = r"\d+(?:\.\d+)*(?:\([a-z0-9]+\))*"
+    clause_list = re.fullmatch(
+        rf"(?:nit\s+)?clauses?\s+({reference}(?:(?:\s*,\s*(?:and\s+)?|\s+and\s+){reference})*)",
+        expected,
+    )
+    if clause_list:
+        references = re.findall(reference, clause_list.group(1))
+        return all(_clause_matches(ref, actual) is True for ref in references)
+    pattern = re.compile(r"(?<![\w.])" + re.escape(expected) + r"(?![\w.(])")
+    return any(pattern.search(" ".join((a or "").casefold().split())) for a in actual)
+
+
+def _evidence_matches(
+    expected: str,
+    actual_clauses: list[str],
+    actual_reasons: list[str],
+) -> bool | None:
+    """Match either clause-only truth or a clause plus a named requirement.
+
+    Some mandatory documents have page provenance but no printed clause number.
+    The answer key names those explicitly; accepting the numbered part alone
+    would overstate reason accuracy, so both pieces must be present.
+    """
+    normalised = " ".join((expected or "").casefold().split())
+    reference = r"\d+(?:\.\d+)*(?:\([a-z0-9]+\))*"
+    mixed = re.fullmatch(
+        rf"(?:nit\s+)?clauses?\s+({reference})\s+and\s+(.+?)\s+requirement",
+        normalised,
+    )
+    if not mixed:
+        return _clause_matches(expected, actual_clauses)
+
+    clause, named = mixed.groups()
+    clause_ok = _clause_matches(clause, actual_clauses) is True
+    named_words = [word for word in re.findall(r"[a-z0-9]+", named) if len(word) > 2]
+    reason_texts = [" ".join(re.findall(r"[a-z0-9]+", reason.casefold()))
+                    for reason in actual_reasons]
+    named_ok = bool(named_words) and any(
+        all(word in reason.split() for word in named_words) for reason in reason_texts
+    )
+    return clause_ok and named_ok
 
 
 def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
@@ -146,6 +200,8 @@ def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
             else "FP" if eliminated and not should_eliminate
             else "FN"
         )
+        if report.verdict == "not_checked":
+            outcome = "UNASSESSED"
 
         clauses = [
             (item.notification_provenance.clause_ref if item.notification_provenance else "")
@@ -159,11 +215,15 @@ def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
                 intended_clause=row["intended_failed_clause"],
                 predicted_verdict=report.verdict,
                 predicted_eliminated=eliminated,
-                blocking_clauses=[c for c in clauses if c][:6],
-                blocking_reasons=[i.requirement[:60] for i in blocking][:4],
+                blocking_clauses=[c for c in clauses if c],
+                blocking_reasons=[i.requirement for i in blocking],
                 outcome=outcome,
                 clause_matched=(
-                    _clause_matches(row["intended_failed_clause"], clauses)
+                    _evidence_matches(
+                        row["intended_failed_clause"],
+                        clauses,
+                        [i.requirement for i in blocking],
+                    )
                     if outcome == "TP"
                     else None
                 ),
@@ -173,7 +233,7 @@ def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
 
 
 def summarise(results: list[VendorResult]) -> dict:
-    scored = [r for r in results if r.outcome != "SKIP"]
+    scored = [r for r in results if r.outcome in {"TP", "TN", "FP", "FN"}]
     tp = sum(1 for r in scored if r.outcome == "TP")
     tn = sum(1 for r in scored if r.outcome == "TN")
     fp = sum(1 for r in scored if r.outcome == "FP")
@@ -183,8 +243,8 @@ def summarise(results: list[VendorResult]) -> dict:
     recall = tp / (tp + fn) if tp + fn else None
     f1 = (
         2 * precision * recall / (precision + recall)
-        if precision and recall
-        else None
+        if precision is not None and recall is not None and precision + recall > 0
+        else 0.0 if precision == 0 and recall == 0 else None
     )
     correct_clause = [r for r in scored if r.outcome == "TP" and r.clause_matched]
     return {
@@ -198,6 +258,11 @@ def summarise(results: list[VendorResult]) -> dict:
         # The number that actually matters for defensibility: eliminated, AND
         # for the clause the answer key says.
         "reason_accuracy": (len(correct_clause) / tp) if tp else None,
+        "reason_unverified": sum(r.outcome == "TP" and r.clause_matched is None for r in results),
+        "passed": bool(results) and all(
+            r.outcome == "TN" or (r.outcome == "TP" and r.clause_matched is True)
+            for r in results
+        ),
     }
 
 
@@ -219,12 +284,12 @@ def main() -> int:
     print(f"{'vendor':28} {'intended':10} {'predicted':15} {'outcome':8} clause")
     print("-" * 96)
     for r in sorted(results, key=lambda x: (x.notification_id, x.vendor_id)):
-        mark = {"TP": "OK", "TN": "OK", "FP": "WRONG", "FN": "MISS", "SKIP": "-"}[r.outcome]
+        mark = {"TP": "OK", "TN": "OK", "FP": "WRONG", "FN": "MISS", "SKIP": "-", "UNASSESSED": "UNCHECKED"}[r.outcome]
         clause = (
             ("cited " + ", ".join(r.blocking_clauses[:2])) if r.blocking_clauses else ""
         )
         if r.outcome == "TP":
-            clause = ("right clause" if r.clause_matched else "WRONG CLAUSE") + " — " + clause
+            clause = ("right clause" if r.clause_matched else "UNVERIFIED CLAUSE" if r.clause_matched is None else "WRONG CLAUSE") + " — " + clause
         print(
             f"{r.vendor_id:28} {r.intended_status:10} {r.predicted_verdict:15} "
             f"{mark:8} {clause[:44]}"
@@ -252,7 +317,9 @@ def main() -> int:
         )
         print(f"\nFull results written to {args.json}")
 
-    return 0
+    print(f"\nProduction evaluation gate: {'PASS' if summary['passed'] else 'FAIL'}")
+    print(f"Unverified elimination reasons: {summary['reason_unverified']}")
+    return 0 if summary["passed"] else 1
 
 
 if __name__ == "__main__":

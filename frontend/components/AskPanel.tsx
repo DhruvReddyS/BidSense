@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { DataQualityBanner } from "./Banners";
 import { api, ApiError } from "@/lib/api";
 import type { AskResponse, Citation } from "@/lib/types";
 import { CitationViewer, type CitationTarget } from "./CitationViewer";
@@ -59,42 +60,37 @@ export function AskPanel({
   }
 
   return (
-    <Card className="flex min-h-[30rem] flex-col p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold tracking-tight">Ask this tender</h2>
-          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
+    <Card className="grid min-h-[26rem] overflow-hidden p-0 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <aside className="border-b bg-[hsl(var(--surface-2)/.6)] p-5 lg:border-b-0 lg:border-r lg:p-6">
+          <p className="label">Document Q&amp;A</p>
+          <h2 className="font-display mt-2 text-2xl font-medium">Ask this tender</h2>
+          <p className="mt-2 text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
             Every answer is drawn from the uploaded document and carries the
             clause it came from. Where the document does not say, the answer
             says so rather than filling the gap.
           </p>
-        </div>
-        {turns.length > 0 && (
-          <button
-            onClick={() => setTurns([])}
-            className="btn btn-subtle !px-2 !py-1 text-xs"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      {turns.length === 0 && (
-        <div className="mt-5 flex flex-wrap gap-2">
+        <p className="label mt-7">Common questions</p>
+        <div className="mt-2 divide-y border-y">
           {SUGGESTIONS.map((s) => (
             <button
               key={s}
               onClick={() => ask(s)}
               disabled={busy}
-              className="chip bg-[hsl(var(--surface))] transition-colors hover:bg-[hsl(var(--surface-2))] disabled:opacity-50"
+              className="group flex w-full items-start justify-between gap-3 py-2.5 text-left text-xs leading-snug text-[hsl(var(--fg-muted))] transition-colors hover:text-[hsl(var(--fg))] disabled:opacity-50"
             >
-              {s}
+              <span>{s}</span><span className="text-[hsl(var(--fg-subtle))] group-hover:text-[hsl(var(--accent))]">→</span>
             </button>
           ))}
         </div>
-      )}
+      </aside>
 
+      <div className="flex min-w-0 flex-col p-5 lg:p-6">
+        <div className="flex items-center justify-between border-b pb-3">
+          <p className="text-xs font-medium text-[hsl(var(--fg-muted))]">Answers include source clauses and page references</p>
+          {turns.length > 0 && <button onClick={() => setTurns([])} className="text-xs text-[hsl(var(--fg-muted))] hover:text-[hsl(var(--fg))]">Clear history</button>}
+        </div>
       <div className="mt-5 flex-1 space-y-6">
+        {turns.length === 0 && <div className="grid min-h-[12rem] place-items-center text-center"><div><p className="font-display text-xl font-medium">What would you like to verify?</p><p className="mt-2 text-xs text-[hsl(var(--fg-muted))]">Choose a common question or write your own below.</p></div></div>}
         {turns.map((turn, i) => (
           <div key={i} className="animate-rise">
             {/* No avatar, no bubble. This is a question put to a document and
@@ -145,6 +141,7 @@ export function AskPanel({
           {busy ? "…" : "Ask"}
         </button>
       </form>
+      </div>
 
       <CitationViewer target={citation} onClose={() => setCitation(null)} />
     </Card>
@@ -193,6 +190,8 @@ function Answer({
 
   return (
     <div>
+      {response.data_quality && <DataQualityBanner quality={response.data_quality} />}
+      {answer.provider && <p className="ref mb-2 text-fg-muted">Answered by {answer.provider}</p>}
       <p className="whitespace-pre-wrap break-anywhere text-sm leading-relaxed">
         {answer.answer}
       </p>

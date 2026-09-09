@@ -1,0 +1,352 @@
+{
+  "summary": {
+    "evaluated": 19,
+    "skipped": 0,
+    "tp": 12,
+    "tn": 5,
+    "fp": 2,
+    "fn": 0,
+    "precision": 0.8571428571428571,
+    "recall": 1.0,
+    "f1": 0.923076923076923,
+    "accuracy": 0.8947368421052632,
+    "reason_accuracy": 0.6666666666666666
+  },
+  "results": [
+    {
+      "vendor_id": "VENDOR_supply_01_01",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "21"
+      ],
+      "blocking_reasons": [
+        "Submit information on technical man power"
+      ],
+      "outcome": "FP",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_02",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "5",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "21",
+        "21",
+        "5"
+      ],
+      "blocking_reasons": [
+        "Submit information on technical man power",
+        "Submit contractors alternative technical proposals",
+        "The Sole Bidder/ Joint Venture/Consortium should have annual"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_03",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "7",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "21",
+        "22"
+      ],
+      "blocking_reasons": [
+        "Submit information on technical man power",
+        "Submit Manufacturers authorization form"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_04",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "eliminate",
+      "intended_clause": "4",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "21",
+        "21",
+        "3",
+        "4"
+      ],
+      "blocking_reasons": [
+        "Submit information on technical man power",
+        "Submit contractors alternative technical proposals",
+        "Blacklisting: Debarment/ Transgression by any Procuring Enti",
+        "Debarment/ Transgression by any country."
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_supply_01_05",
+      "notification_id": "NOTIF_supply_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "21",
+        "21"
+      ],
+      "blocking_reasons": [
+        "Submit information on technical man power",
+        "Submit contractors alternative technical proposals"
+      ],
+      "outcome": "FP",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_01",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_02",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "1.1(4)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "1.1(4)"
+      ],
+      "blocking_reasons": [
+        "Experience of successfully completed similar type of works d"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_03",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "2.6(b)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "2.6(b)"
+      ],
+      "blocking_reasons": [
+        "Submit Possession of Valid Class II/III Digital Signature Ce"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_04",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "1",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "1"
+      ],
+      "blocking_reasons": [
+        "Average Annual Financial Turnover during the last 3 financia"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_01_05",
+      "notification_id": "NOTIF_civilworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_01",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_02",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "28.1 vi)",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "28.1 vi)"
+      ],
+      "blocking_reasons": [
+        "Liquid assets and/ or credit facilities of not less than spe"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_03",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "\u2014",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "11.II(a)(h)"
+      ],
+      "blocking_reasons": [
+        "Submit \u2018Declaration regarding the procurement of Solar Inver"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_04",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "eliminate",
+      "intended_clause": "2.3",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "2.2",
+        "2.3"
+      ],
+      "blocking_reasons": [
+        "The Bidder (either individually or as a JV consortium) shall",
+        "The Bidder should not be under liquidation, court receiversh"
+      ],
+      "outcome": "TP",
+      "clause_matched": true,
+      "note": ""
+    },
+    {
+      "vendor_id": "VENDOR_civilworks_02_05",
+      "notification_id": "NOTIF_civilworks_02",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION1",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clauses 1, 5, 6 and 8",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "8",
+        "8",
+        "8",
+        "20",
+        "5",
+        "6"
+      ],
+      "blocking_reasons": [
+        "Submit Undertaking (Annexure-A)",
+        "Submit Process Compliance Statement (Annexure-B)",
+        "Submit EMD",
+        "Submit list of ongoing works in SBI Delhi Circle with schedu"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION2",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clauses 5, 6, 8 and 20",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "8",
+        "20",
+        "5",
+        "6",
+        "6",
+        "5"
+      ],
+      "blocking_reasons": [
+        "Submit Process Compliance Statement (Annexure-B)",
+        "Submit list of ongoing works in SBI Delhi Circle with schedu",
+        "Submit compliance form",
+        "Submit Demand Draft of specified amount of EMD"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION3",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "eliminate",
+      "intended_clause": "NIT clause 6 and Process Compliance Statement requirement",
+      "predicted_verdict": "not_compliant",
+      "predicted_eliminated": true,
+      "blocking_clauses": [
+        "6"
+      ],
+      "blocking_reasons": [
+        "Submit Demand Draft of specified amount of EMD"
+      ],
+      "outcome": "TP",
+      "clause_matched": false,
+      "note": ""
+    },
+    {
+      "vendor_id": "SBI_AMCC_VERSION4",
+      "notification_id": "NOTIF_interiorworks_01",
+      "intended_status": "pass",
+      "intended_clause": "",
+      "predicted_verdict": "needs_review",
+      "predicted_eliminated": false,
+      "blocking_clauses": [],
+      "blocking_reasons": [],
+      "outcome": "TN",
+      "clause_matched": null,
+      "note": ""
+    }
+  ]
+}

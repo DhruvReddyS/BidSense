@@ -25,6 +25,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, ProvenanceColumns, Timestamps, UUIDPrimaryKey
@@ -86,6 +87,7 @@ class VendorSubmissionRow(Base, UUIDPrimaryKey, Timestamps):
     # technical_approach_text lives in Qdrant (Section 7), not here. This keeps
     # the pointer so a chunk can be traced back to its row and vice versa.
     has_technical_approach: Mapped[bool] = mapped_column(default=False, nullable=False)
+    extraction_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     source_file: Mapped[str | None] = mapped_column(Text)
     #: SHA-256 of the uploaded bytes, and the key into the document store. What
     #: makes a citation clickable: without the original file, "page 5, clause

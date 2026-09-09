@@ -1,0 +1,248 @@
+{
+  "mode": "simulated transient exhaustion and recovery; no live API calls",
+  "requests": 40,
+  "correct_attribution": 15,
+  "retired": {},
+  "results": [
+    {
+      "request": 0,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 1,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 2,
+      "actual": "ollama",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 3,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 4,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 5,
+      "actual": "ollama",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 6,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 7,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 8,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 9,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 10,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 11,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 12,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 13,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 14,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 15,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 16,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 17,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 18,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 19,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 20,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 21,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 22,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 23,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 24,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 25,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 26,
+      "actual": "ollama",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 27,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 28,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 29,
+      "actual": "ollama",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 30,
+      "actual": "gemini",
+      "reported": "groq:groq-probe",
+      "correct": false
+    },
+    {
+      "request": 31,
+      "actual": "groq",
+      "reported": "groq:groq-probe",
+      "correct": true
+    },
+    {
+      "request": 32,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 33,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 34,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 35,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 36,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 37,
+      "actual": "groq",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    },
+    {
+      "request": 38,
+      "actual": "ollama",
+      "reported": "ollama:ollama-probe",
+      "correct": true
+    },
+    {
+      "request": 39,
+      "actual": "gemini",
+      "reported": "ollama:ollama-probe",
+      "correct": false
+    }
+  ]
+}

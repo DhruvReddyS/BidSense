@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import shutil
+import tempfile
 from pathlib import Path
 
 from app.config import settings
@@ -66,9 +67,15 @@ def store_document(path: str | Path, *, digest: str | None = None) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     # Written beside the target and renamed, so a crash mid-copy cannot leave a
     # truncated file that looks complete to every later reader.
-    staging = target.with_suffix(target.suffix + ".part")
-    shutil.copyfile(path, staging)
-    staging.replace(target)
+    # Each writer owns its staging file. A shared .part name lets one writer
+    # rename the file while another is still copying or preparing to publish it.
+    with tempfile.NamedTemporaryFile(dir=target.parent, suffix=".part", delete=False) as handle:
+        staging = Path(handle.name)
+    try:
+        shutil.copyfile(path, staging)
+        staging.replace(target)
+    finally:
+        staging.unlink(missing_ok=True)
     logger.info("stored %s as %s", path.name, digest[:12])
     return digest
 

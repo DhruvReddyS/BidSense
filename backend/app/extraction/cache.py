@@ -26,10 +26,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
+from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import update
+from sqlalchemy.dialects.postgresql import insert
 
 from app.db.models.cache import ExtractionCacheRow
 from app.db.session import session_scope
@@ -53,9 +56,61 @@ _VERSIONED_MODULES = (
     "app/extraction/convert.py",
     "app/extraction/graph.py",
     "app/extraction/selection.py",
+    "app/normalize/money.py",
+    "app/schemas/common.py",
+    "app/schemas/notification.py",
+    "app/schemas/submission.py",
+    "app/ingest/loader.py",
+    "app/ingest/models.py",
+    "app/ingest/pdf.py",
+    "app/ingest/docx.py",
+    "app/ingest/ocr.py",
 )
 
 _CHUNK = 1 << 20
+
+
+@contextmanager
+def extraction_lock(digest: str, doc_kind: DocumentKind, *, timeout: float = 600):
+    """Coalesce identical extraction work across workers on this host.
+
+    Keep the lock file: unlinking it allows old and new callers to lock
+    different inodes for the same document. No database connection is held
+    while waiting on a model. Cache lookup must happen INSIDE this context.
+    An unavailable lock only loses the optimization; extraction still runs.
+    """
+    import fcntl
+    from app.config import settings
+
+    handle = None
+    locked = False
+    try:
+        key = hashlib.sha256(f"{digest}:{doc_kind.value}:{pipeline_version()}".encode()).hexdigest()
+        folder = Path(settings.document_store_path) / ".extraction-locks"
+        folder.mkdir(parents=True, exist_ok=True)
+        handle = (folder / f"{key}.lock").open("a")
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    logger.warning("extraction lock wait timed out; extracting independently")
+                    break
+                time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+    except OSError as exc:
+        logger.warning("extraction lock unavailable; extracting independently: %s", exc)
+    try:
+        yield
+    finally:
+        if handle is not None:
+            try:
+                if locked:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
 
 def content_hash(path: str | Path) -> str:
@@ -107,15 +162,14 @@ def lookup(digest: str, doc_kind: DocumentKind) -> CacheHit | None:
     try:
         with session_scope() as session:
             row = session.scalar(
-                select(ExtractionCacheRow).where(
+                update(ExtractionCacheRow).where(
                     ExtractionCacheRow.content_hash == digest,
                     ExtractionCacheRow.doc_kind == doc_kind.value,
                     ExtractionCacheRow.pipeline_version == pipeline_version(),
-                )
+                ).values(hits=ExtractionCacheRow.hits + 1).returning(ExtractionCacheRow)
             )
             if row is None:
                 return None
-            row.hits += 1
             return CacheHit(row.payload, row.model, row.created_at, row.hits)
     except Exception as exc:
         # A cache that cannot be read must never stop an extraction. The cost of
@@ -135,26 +189,18 @@ def store(
     """Record an extraction. Failures here are logged, never raised."""
     try:
         with session_scope() as session:
-            existing = session.scalar(
-                select(ExtractionCacheRow).where(
-                    ExtractionCacheRow.content_hash == digest,
-                    ExtractionCacheRow.doc_kind == doc_kind.value,
-                    ExtractionCacheRow.pipeline_version == pipeline_version(),
-                )
-            )
-            if existing is not None:
-                # Two uploads of the same file raced. Both extracted; either
-                # answer is equally valid, so keep the one already stored.
-                return
-            session.add(
-                ExtractionCacheRow(
+            # The unique key arbitrates races in the database, including
+            # separate worker processes. Never overwrite the winning payload
+            # or its provenance with a later writer's model label.
+            session.execute(
+                insert(ExtractionCacheRow).values(
                     content_hash=digest,
                     doc_kind=doc_kind.value,
                     pipeline_version=pipeline_version(),
                     payload=payload,
                     model=model,
                     source_file=source_file,
-                )
+                ).on_conflict_do_nothing(constraint="uq_extraction_cache_key")
             )
     except Exception as exc:
         logger.warning("could not cache extraction: %s", exc)

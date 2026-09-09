@@ -175,6 +175,15 @@ def test_a_citation_beyond_the_last_page_is_an_error() -> None:
     assert "400" in finding.message and "10 pages" in finding.message
 
 
+def test_a_mandatory_fact_without_verifiable_evidence_is_not_silently_trusted() -> None:
+    notification = _healthy()
+    notification.eligibility_criteria[0].provenance = Provenance()
+    findings = validate_notification(notification, _document(), today=TODAY)
+    finding = next(f for f in findings if f.field.endswith(".provenance"))
+    assert finding.affects_confidence
+    assert "audit-ready" in finding.message
+
+
 def test_page_checks_are_skipped_when_the_document_is_not_available() -> None:
     """Validation runs at gap-report time too, where the parsed document is long
     gone. It must not invent a failure from an absence of evidence."""

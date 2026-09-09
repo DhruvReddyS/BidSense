@@ -1,0 +1,23 @@
+[
+  {
+    "file": "VENDOR_civilworks_01_02.pdf",
+    "identifier": "VENDOR_civilworks_01_02",
+    "pages": 61,
+    "ocr_pages": 0,
+    "chunks": 85,
+    "errors": [],
+    "warnings": [],
+    "node_timings": {
+      "certifications": 43.008227709000494,
+      "past_projects": 150.09503587500149,
+      "submitted_documents": 235.80829537499994,
+      "turnover": 512.5251002500008,
+      "vendor_header": 36.00398516600035
+    },
+    "seconds": {
+      "parse": 3.229,
+      "extract": 512.781,
+      "persist": 21.269
+    }
+  }
+]

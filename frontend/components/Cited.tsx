@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { CheckStatus, Provenance } from "@/lib/types";
 
 /**
@@ -27,40 +29,42 @@ export function Cited({
   /** What clicking opens, named before the click: "page 67". */
   destination?: string;
 }) {
-  const reference = provenance?.clause_ref
-    ? provenance.clause_ref
-    : provenance?.source_page
-      ? `p${provenance.source_page}`
-      : null;
-
-  // No provenance means no claim to check. Rendered plainly, and the absence of
-  // the rule is itself information.
-  if (!provenance || !reference) {
-    return <span>{children}</span>;
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 360 });
+  const trigger = useRef<HTMLButtonElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const id = useId();
+  const reference = provenance?.clause_ref || (provenance?.source_page ? `p${provenance.source_page}` : null);
+  function show() {
+    clearTimeout(timer.current);
+    const box = trigger.current?.getBoundingClientRect();
+    if (!box) return;
+    const width = Math.min(380, window.innerWidth - 32);
+    setPosition({ width, left: Math.max(16, Math.min(box.left, window.innerWidth - width - 16)), top: box.bottom + 10 });
+    setOpen(true);
   }
-
-  const page = provenance.source_page ? `page ${provenance.source_page}` : null;
-
-  return (
-    <button
-      type="button"
-      className="cited text-left"
-      onClick={onOpen}
-      title={
-        page
-          ? `Open ${page}${provenance.clause_ref ? `, clause ${provenance.clause_ref}` : ""} in the source document`
-          : "Open the source document"
-      }
-    >
-      <span className="claim">{children}</span>
-      <span className="src">{reference}</span>
-      {destination ?? page ? (
-        <span className="go" aria-hidden>
-          {destination ?? page} ↗
-        </span>
-      ) : null}
+  function hide() { timer.current = setTimeout(() => setOpen(false), 130); }
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+    window.addEventListener("resize", close); window.addEventListener("scroll", close, true); window.addEventListener("keydown", key);
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true); window.removeEventListener("keydown", key); };
+  }, [open]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  if (!provenance || !reference) return <span>{children}</span>;
+  const page = provenance.source_page ? `page ${provenance.source_page}` : "source document";
+  return <>
+    <button ref={trigger} type="button" className="cited text-left" aria-describedby={open ? id : undefined} onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide} onClick={() => { setOpen(false); onOpen?.(); }}>
+      <span className="claim">{children}</span><span className="src">{reference}</span><span className="go" aria-hidden>{destination ?? page} ↗</span>
     </button>
-  );
+    {open && createPortal(<div id={id} role="tooltip" className="citation-peek" style={{ left: position.left, top: Math.max(12, Math.min(position.top, window.innerHeight - 270)), width: position.width }} onMouseEnter={() => clearTimeout(timer.current)} onMouseLeave={hide}>
+      <div className="peek-heading"><span className="peek-icon" aria-hidden>↳</span><span>Source passage</span><span className="ref">{page}</span></div>
+      <p className="peek-reference">{provenance.clause_ref ? `Clause ${provenance.clause_ref}` : "Document reference"}</p>
+      <blockquote>{provenance.source_snippet || "The extracted record has a reference but no passage text. Open the source page to verify it."}</blockquote>
+      <div className="peek-footer"><span>Extracted text · verify in the original</span><span>Click citation to open ↗</span></div>
+    </div>, document.body)}
+  </>;
 }
 
 /**

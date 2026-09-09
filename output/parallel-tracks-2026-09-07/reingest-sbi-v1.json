@@ -1,0 +1,23 @@
+[
+  {
+    "file": "version1.pdf",
+    "identifier": "SBI_AMCC_VERSION1",
+    "pages": 8,
+    "ocr_pages": 0,
+    "chunks": 20,
+    "errors": [],
+    "warnings": [],
+    "node_timings": {
+      "certifications": 27.185048542000004,
+      "past_projects": 114.8797544579993,
+      "submitted_documents": 40.8213128339994,
+      "turnover": 37.930186958001286,
+      "vendor_header": 13.705277000000933
+    },
+    "seconds": {
+      "parse": 0.184,
+      "extract": 114.982,
+      "persist": 11.445
+    }
+  }
+]

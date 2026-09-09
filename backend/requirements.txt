@@ -37,4 +37,5 @@ uvicorn[standard]==0.32.1
 
 # --- dev ---
 pytest==9.1.1
-reportlab==5.0.1        # test fixture PDFs, and gap-report PDF export
+reportlab==5.0.1        # test fixture PDFs
+weasyprint==69.0       # Unicode PDF export; requires Pango >= 1.44

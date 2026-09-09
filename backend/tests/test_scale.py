@@ -96,6 +96,32 @@ def test_repeated_reports_reuse_the_cache():
     assert first > 0, "nothing was embedded; the test is measuring nothing"
 
 
+def test_long_document_page_embeddings_are_shared_across_field_groups(monkeypatch):
+    """Thin lexical matches used to embed every page once per graph branch."""
+    from app.extraction.selection import PageEmbeddingCache, select_pages
+    from app.ingest.models import PageText, ParsedDocument
+    from app.schemas.common import DocumentKind
+
+    document = ParsedDocument(
+        file_name="large.pdf",
+        doc_kind=DocumentKind.NOTIFICATION,
+        pages=[PageText(page_number=i + 1, text=(f"neutral section {i} " + "x" * 1200)) for i in range(60)],
+    )
+    passage_calls: list[int] = []
+
+    def passages(texts, **kwargs):
+        passage_calls.append(len(texts))
+        return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr("app.vector.embeddings.embed_passages", passages)
+    monkeypatch.setattr("app.vector.embeddings.embed_query", lambda text: [1.0, 0.0])
+    cache = PageEmbeddingCache()
+    select_pages(document, "eligibility", embedding_cache=cache)
+    select_pages(document, "documents", embedding_cache=cache)
+
+    assert passage_calls == [60], "page heads were embedded once per extractor"
+
+
 # --------------------------------------------------------------------------- #
 # Indexing at scale
 # --------------------------------------------------------------------------- #
@@ -129,6 +155,29 @@ def test_upserts_are_batched():
     assert max(calls) <= UPSERT_BATCH
 
 
+def test_duplicate_chunks_are_embedded_once_without_dropping_points():
+    from app.extraction.persist import _index
+    from app.ingest.chunking import Chunk
+    from app.schemas.common import ChunkSection
+
+    chunks = [
+        Chunk(text="repeated declaration", page_number=i + 1, chunk_index=i,
+              section=ChunkSection.GENERAL)
+        for i in range(12)
+    ]
+    encoded: list[list[str]] = []
+    points: list[dict] = []
+    with patch(
+        "app.extraction.persist.embed_passages",
+        side_effect=lambda texts: encoded.append(list(texts)) or [[0.0] * 768 for _ in texts],
+    ), patch("app.extraction.persist.get_client") as client:
+        client.return_value.upsert.side_effect = lambda *a, **kw: points.extend(kw["points"])
+        total = _index(chunks, {"doc_kind": "submission"}, owner_key="dedupe")
+
+    assert encoded == [["repeated declaration"]]
+    assert total == len(points) == 12
+
+
 # --------------------------------------------------------------------------- #
 # Uploads
 # --------------------------------------------------------------------------- #
@@ -152,7 +201,11 @@ def test_a_failed_queue_does_not_leak_the_upload(tmp_path):
         side_effect=lambda p, **kw: leaked.append(Path(p)),
     ):
         with pdf.open("rb") as handle:
-            response = TestClient(app, raise_server_exceptions=False).post(
+            client = TestClient(app, raise_server_exceptions=False)
+            import uuid
+            auth = client.post("/api/auth/register", json={"email":f"scale-{uuid.uuid4()}@example.com","password":"correct-horse-battery-staple","role":"reviewer","reviewer_code":"development-reviewer"})
+            client.headers["Authorization"] = f"Bearer {auth.json()['access_token']}"
+            response = client.post(
                 "/api/notifications",
                 files={"file": (pdf.name, handle, "application/pdf")},
             )

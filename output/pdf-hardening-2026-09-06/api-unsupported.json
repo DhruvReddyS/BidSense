@@ -1,0 +1,5 @@
+{
+  "pdf_status": 422,
+  "detail": "PDF export cannot render U+4E2D yet. Export DOCX to preserve this text.",
+  "docx_status": 200
+}

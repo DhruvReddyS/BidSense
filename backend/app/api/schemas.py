@@ -9,6 +9,35 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.compliance.models import GapReport
 from app.rag.answer import GroundedAnswer
+from app.schemas.common import UserRole
+
+
+class RegisterRequest(BaseModel):
+    email: str = Field(min_length=5, max_length=320)
+    password: str = Field(min_length=10, max_length=128)
+    full_name: str | None = Field(default=None, max_length=200)
+    organisation: str | None = Field(default=None, max_length=200)
+    role: UserRole
+    reviewer_code: str | None = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+    organisation: str | None
+    role: UserRole
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
 
 
 class HealthResponse(BaseModel):
@@ -71,6 +100,9 @@ class IngestResponse(BaseModel):
     parse_warnings: list[str]
     extraction_errors: list[str]
     seconds: float
+    extracted_by: str | None = None
+    from_cache: bool = False
+    timing: dict[str, float] = Field(default_factory=dict)
 
 
 class NotificationList(BaseModel):
@@ -104,6 +136,7 @@ class AskRequest(BaseModel):
 
 
 class AskResponse(BaseModel):
+    data_quality: "DataQualityOut | None" = None
     answer: GroundedAnswer
     #: Lets each citation be opened on its page. A citation maps to a document
     #: by its `doc_kind`.
@@ -129,6 +162,79 @@ class GapReportRequest(BaseModel):
     )
 
 
+class Level1RunRequest(BaseModel):
+    tender_id: str
+
+
+class Level1VendorResult(BaseModel):
+    vendor_id: str
+    vendor_name: str
+    status: str
+    elimination_reason: str | None = None
+    clause_ref: str | None = None
+    source_page: int | None = None
+
+
+class Level1RunResponse(BaseModel):
+    tender_id: str
+    total: int
+
+
+class PerformanceSummary(BaseModel):
+    completed_jobs: int
+    median_seconds: float | None
+    p95_seconds: float | None
+    cache_reuse_percent: float
+    pages_per_second: float | None
+    eliminated: int
+    pending: int
+    results: list[Level1VendorResult]
+
+
+class Level2RunRequest(BaseModel):
+    tender_id: str
+    target_count: int = Field(ge=1, le=100)
+    factor_weights: dict[str, float] = Field(default_factory=dict)
+
+
+class ShortlistCandidateOut(BaseModel):
+    vendor_id: str
+    vendor_name: str
+    status: str
+    summary: str
+    evidence: list[str] = Field(default_factory=list)
+
+
+class Level2RunResponse(BaseModel):
+    tender_id: str
+    eligible: int
+    shortlisted: int
+    requested: int
+    factors: list[str]
+    candidates: list[ShortlistCandidateOut]
+    caveat: str = "Qualified pool, not a ranking. Final selection remains with the evaluation committee."
+
+
+class PoolQueryRequest(BaseModel):
+    tender_id: str
+    question: str = Field(min_length=3, max_length=1000)
+
+
+class PoolCitationOut(BaseModel):
+    vendor_id: str | None = None
+    source_file: str | None = None
+    source_page: int | None = None
+    clause_ref: str | None = None
+    snippet: str
+
+
+class PoolQueryResponse(BaseModel):
+    route: str
+    answer: str
+    citations: list[PoolCitationOut] = Field(default_factory=list)
+    caveat: str = "This assistant summarizes recorded evidence; it does not select a winner."
+
+
 class ChangedFieldOut(BaseModel):
     field_path: str
     label: str
@@ -145,6 +251,7 @@ class CorrigendumOut(BaseModel):
     source_file: str | None = None
     uploaded_at: datetime
     changed_fields: list[ChangedFieldOut] = Field(default_factory=list)
+    applied: bool = False
 
 
 class StalenessOut(BaseModel):
@@ -185,6 +292,7 @@ class DataQualityOut(BaseModel):
     ok: bool
     banner: str | None = None
     findings: list[ValidationFindingOut] = Field(default_factory=list)
+    providers: dict[str, str | None] = Field(default_factory=dict)
 
 
 class CompletionOut(BaseModel):

@@ -10,7 +10,9 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
+from contextlib import nullcontext
 from pathlib import Path
+from typing import Callable
 
 from app.db.session import session_scope
 from app.documents import store_document
@@ -122,10 +124,29 @@ class IngestReport:
     from_cache: bool = False
     extract_seconds: float = 0.0
     persist_seconds: float = 0.0
+    index_seconds: float = 0.0
+    content_hash: str | None = None
+    index_deferred: bool = False
+    _index_task: Callable[[], int] | None = field(default=None, repr=False)
+
+    def audit_metadata(self) -> dict:
+        return {
+            "provider": self.extracted_by,
+            "from_cache": self.from_cache,
+            "pipeline_version": extraction_cache.pipeline_version(),
+            "extraction_errors": self.extraction_errors,
+            "parse_warnings": self.parse_warnings,
+            "findings": [
+                {"field": f.field, "severity": f.severity.value,
+                 "message": f.message, "value": f.value,
+                 "affects_confidence": f.affects_confidence}
+                for f in self.validation
+            ],
+        }
 
     @property
     def total_seconds(self) -> float:
-        return self.parse_seconds + self.extract_seconds + self.persist_seconds
+        return self.parse_seconds + self.extract_seconds + self.persist_seconds + self.index_seconds
 
     @property
     def ok(self) -> bool:
@@ -166,6 +187,7 @@ def ingest_notification(
     index: bool = True,
     use_cache: bool = True,
     on_node_complete=None,
+    defer_index: bool = False,
 ) -> IngestReport:
     path = Path(path)
     report = IngestReport(file_name=path.name, doc_kind=DocumentKind.NOTIFICATION)
@@ -179,51 +201,49 @@ def ingest_notification(
 
     started = time.perf_counter()
     digest = extraction_cache.content_hash(path)
+    report.content_hash = digest
     # Retained here, before the worker deletes the temp upload. A citation that
     # cannot be opened at its page is a label the vendor has to take on trust.
     _safe_store_document(path, digest)
-    hit = _safe_lookup(digest, DocumentKind.NOTIFICATION) if use_cache else None
+    with extraction_cache.extraction_lock(digest, DocumentKind.NOTIFICATION) if use_cache else nullcontext():
+        hit = _safe_lookup(digest, DocumentKind.NOTIFICATION) if use_cache else None
 
-    if hit is not None:
-        # Six LLM requests skipped. Against a free tier of twenty per model per
-        # day, one accidental re-upload of a tender is nearly a third of a
-        # model's quota -- and during a demo the same file gets uploaded again
-        # and again.
-        notification = TenderNotification.model_validate(hit.payload)
-        result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
-        report.from_cache = True
-        report.extracted_by = hit.model
-        logger.info(
-            "cache hit for %s (extracted by %s, served %d time(s))",
-            path.name, hit.model, hit.hits,
-        )
-    else:
-        notification, result = extract_notification(
-            document, llm=llm, on_node_complete=on_node_complete
-        )
-        report.extracted_by = _provider_label(llm)
-        if use_cache and not result["errors"]:
-            # Only a clean extraction is cached. Storing a partial one would
-            # make a transient API failure permanent for those bytes.
-            _safe_store(
-                digest, DocumentKind.NOTIFICATION, notification.model_dump(mode="json"),
-                model=report.extracted_by, source_file=path.name,
+        if hit is not None:
+            # Six LLM requests skipped. Against a free tier of twenty per model per
+            # day, one accidental re-upload of a tender is nearly a third of a
+            # model's quota -- and during a demo the same file gets uploaded again
+            # and again.
+            notification = TenderNotification.model_validate(hit.payload)
+            result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
+            report.from_cache = True
+            report.extracted_by = hit.model
+            logger.info(
+                "cache hit for %s (extracted by %s, served %d time(s))",
+                path.name, hit.model, hit.hits,
             )
+        else:
+            notification, result = extract_notification(
+                document, llm=llm, on_node_complete=on_node_complete
+            )
+            report.extracted_by = ", ".join(sorted({label for _, label in result.get("providers", [])})) or None
+            if use_cache and not result["errors"]:
+                # Only a clean extraction is cached. Storing a partial one would
+                # make a transient API failure permanent for those bytes.
+                _safe_store(
+                    digest, DocumentKind.NOTIFICATION, notification.model_dump(mode="json"),
+                    model=report.extracted_by, source_file=path.name,
+                )
 
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]
     report.node_timings = result["timings"]
     report.identifier = notification.tender_id
     # Run BEFORE persisting, so the findings describe exactly what was stored.
-    # The pages the model actually read, so the pattern backstop answers the
-    # same question the model was asked. Searching pages it never saw would
-    # produce "the regex found it and you didn't" for text never in front of it.
-    from app.extraction.selection import select_pages
-
-    try:
-        _, header_pages = select_pages(document, "header")
-    except Exception:
-        header_pages = None
+    # Use the final attempted tier's actual pages, not a fresh selection with
+    # the hosted default budget. Cache entries without coverage metadata are
+    # validated against the whole source rather than inventing model coverage.
+    header_pages = next((pages for node, pages in result.get("selections", [])
+                         if node == "header"), None)
     report.validation = validate_notification(
         notification, document, selected_pages=header_pages
     )
@@ -233,11 +253,19 @@ def ingest_notification(
         row = save_notification(
             session, notification, source_file=str(path),
             owner_user_id=owner_user_id, content_hash=digest,
+            extraction_metadata=report.audit_metadata(),
         )
         report.row_id = row.id
-    if index:
-        report.chunks_indexed = index_notification(document, notification, report.row_id)
     report.persist_seconds = time.perf_counter() - started
+    if index and defer_index:
+        report.index_deferred = True
+        report._index_task = lambda: index_notification(
+            document, notification, report.row_id
+        )
+    elif index:
+        started = time.perf_counter()
+        report.chunks_indexed = index_notification(document, notification, report.row_id)
+        report.index_seconds = time.perf_counter() - started
 
     logger.info(report.summary())
     return report
@@ -253,6 +281,7 @@ def ingest_submission(
     index: bool = True,
     use_cache: bool = True,
     on_node_complete=None,
+    defer_index: bool = False,
 ) -> IngestReport:
     path = Path(path)
     report = IngestReport(file_name=path.name, doc_kind=DocumentKind.SUBMISSION)
@@ -266,35 +295,37 @@ def ingest_submission(
 
     started = time.perf_counter()
     digest = extraction_cache.content_hash(path)
+    report.content_hash = digest
     _safe_store_document(path, digest)
-    hit = _safe_lookup(digest, DocumentKind.SUBMISSION) if use_cache else None
+    with extraction_cache.extraction_lock(digest, DocumentKind.SUBMISSION) if use_cache else nullcontext():
+        hit = _safe_lookup(digest, DocumentKind.SUBMISSION) if use_cache else None
 
-    if hit is not None:
-        submission = VendorSubmission.model_validate(hit.payload)
-        # The cached extraction is of the DOCUMENT; who is filing it and against
-        # which tender are arguments, not content. The same bid PDF can legitimately
-        # be filed by a different vendor id or against a different tender, so these
-        # are re-applied rather than restored from the entry.
-        submission.vendor_id = vendor_id
-        submission.tender_id = tender_id
-        result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
-        report.from_cache = True
-        report.extracted_by = hit.model
-        logger.info("cache hit for %s (extracted by %s)", path.name, hit.model)
-    else:
-        submission, result = extract_submission(
-            document,
-            vendor_id=vendor_id,
-            tender_id=tender_id,
-            llm=llm,
-            on_node_complete=on_node_complete,
-        )
-        report.extracted_by = _provider_label(llm)
-        if use_cache and not result["errors"]:
-            _safe_store(
-                digest, DocumentKind.SUBMISSION, submission.model_dump(mode="json"),
-                model=report.extracted_by, source_file=path.name,
+        if hit is not None:
+            submission = VendorSubmission.model_validate(hit.payload)
+            # The cached extraction is of the DOCUMENT; who is filing it and against
+            # which tender are arguments, not content. The same bid PDF can legitimately
+            # be filed by a different vendor id or against a different tender, so these
+            # are re-applied rather than restored from the entry.
+            submission.vendor_id = vendor_id
+            submission.tender_id = tender_id
+            result = {"errors": [], "timings": [], "parse_warnings": document.parse_warnings}
+            report.from_cache = True
+            report.extracted_by = hit.model
+            logger.info("cache hit for %s (extracted by %s)", path.name, hit.model)
+        else:
+            submission, result = extract_submission(
+                document,
+                vendor_id=vendor_id,
+                tender_id=tender_id,
+                llm=llm,
+                on_node_complete=on_node_complete,
             )
+            report.extracted_by = ", ".join(sorted({label for _, label in result.get("providers", [])})) or None
+            if use_cache and not result["errors"]:
+                _safe_store(
+                    digest, DocumentKind.SUBMISSION, submission.model_dump(mode="json"),
+                    model=report.extracted_by, source_file=path.name,
+                )
 
     report.extract_seconds = time.perf_counter() - started
     report.extraction_errors = result["errors"]
@@ -307,10 +338,22 @@ def ingest_submission(
         row = save_submission(
             session, submission, source_file=str(path),
             owner_user_id=owner_user_id, content_hash=digest,
+            extraction_metadata=report.audit_metadata(),
         )
         report.row_id = row.id
         notification_id = row.notification_id
-    if index:
+    report.persist_seconds = time.perf_counter() - started
+    if index and defer_index:
+        report.index_deferred = True
+        report._index_task = lambda: index_submission(
+            document,
+            submission,
+            report.row_id,
+            notification_id=notification_id,
+            owner_user_id=owner_user_id,
+        )
+    elif index:
+        started = time.perf_counter()
         report.chunks_indexed = index_submission(
             document,
             submission,
@@ -318,7 +361,7 @@ def ingest_submission(
             notification_id=notification_id,
             owner_user_id=owner_user_id,
         )
-    report.persist_seconds = time.perf_counter() - started
+        report.index_seconds = time.perf_counter() - started
 
     logger.info(report.summary())
     return report
@@ -353,6 +396,7 @@ def ingest_corrigendum(
     report.pages = document.page_count
     report.ocr_pages = document.ocr_page_count
     report.parse_warnings = document.parse_warnings
+    report.content_hash = extraction_cache.content_hash(path)
 
     with session_scope() as session:
         row = session.scalar(
@@ -386,6 +430,8 @@ def ingest_corrigendum(
         saved = save_corrigendum(
             session, corrigendum, notification_row, source_file=str(path)
         )
+        from app.review.corrigendum import apply_and_reevaluate
+        apply_and_reevaluate(session, notification_row, saved)
         report.row_id = saved.id
     report.persist_seconds = time.perf_counter() - started
 

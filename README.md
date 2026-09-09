@@ -1,8 +1,18 @@
 # BidSense
 
-Tender intelligence platform. Build spec: [BidSense_Scope_v2.md](BidSense_Scope_v2.md).
+Tender intelligence platform. Build spec: [TenderIQ_Scope_v2.md](TenderIQ_Scope_v2.md).
 
-**Status: Phases 0–2 complete.** Schema and stores, ingestion and extraction, and the Part 1 vendor tool (gap report, RAG Q&A, Next.js frontend). Phase 3 (company-side elimination) not started.
+**Status: Core Phases 0–5 complete.** Schema and stores, ingestion and extraction,
+the Part 1 vendor tool, and the company workflow are operational: batch bid intake,
+deterministic Level 1 elimination, non-ranked Level 2 qualified pools, Level 3
+structured/vector/hybrid questions, audit lookup, and committee PDF/DOCX export.
+Authentication and authorization are separate enforced layers: salted password
+identity plus expiring bearer tokens, followed by reviewer-role and vendor-ownership
+checks. Typed corrigenda automatically update the tender and replay Level 1.
+
+The isolated premium demo corpus in `data/premium_demo/` contains **45 detailed
+vendor bids / 4,887 pages** across three tender profiles, with pre-declared CSV
+and JSON answer keys. It does not alter the certified 19-row benchmark.
 
 The stack has been run end to end against a real LLM: PDF upload → parse →
 LangGraph extraction → PostgreSQL + Qdrant → gap report with cited clauses →
@@ -368,7 +378,7 @@ non-compliant — the fixture was wrong, not the pipeline.
 cd backend && ../.venv/bin/python -m scripts.make_vendor_bids
 ```
 
-## What's still needed
+## Data-set expansion still recommended
 
 1. **More notifications** — 3 of the 5–10 Section 9.1 asks for, covering two of
    three sectors. IT services and at least one scanned document are missing.
@@ -378,6 +388,10 @@ cd backend && ../.venv/bin/python -m scripts.make_vendor_bids
    only been exercised against fixtures. Ground truth goes in
    `data/tracking_vendors.csv` **before** generating each document.
 
-## Not yet built
+## Company-side workflow
 
-Phases 3–7: elimination rule engine, shortlist, query router, evaluation harness.
+The reviewer workspace implements Phases 3–5 as one traceable journey. Internal
+selection signals reduce the pool but are never displayed as a legal rank; every
+candidate is presented alphabetically with recorded facts. The cross-vendor
+assistant routes structured questions to stored fields, narrative questions to
+pre-filtered Qdrant retrieval, and audit questions to persisted decisions.

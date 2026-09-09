@@ -510,6 +510,53 @@ Place       : {spec.city}
 Seal of the firm
 """
 
+    tender_annexures: list[str] = []
+    self_certification = next(
+        (
+            name for name in enclosed
+            if "self-certification" in name.casefold()
+            and "annexure v" in name.casefold()
+        ),
+        None,
+    )
+    if self_certification:
+        # This is the tender authority's Annexure V, not the bidder's internal
+        # Annexure V compilation of registrations. Keeping the full executed
+        # form in the source document prevents a checklist tick or an unrelated
+        # same-numbered annexure from being treated as compliance evidence.
+        tender_annexures.append(f"""TENDER ANNEXURE V — SELF-CERTIFICATION/UNDERTAKING BY THE BIDDER
+
+I, the authorised representative of {spec.vendor_name}, hereby certify and
+undertake that:
+
+1. We visited the site of the proposed work and inspected the site and its
+surroundings before submission of this bid.
+
+2. We carefully examined and familiarised ourselves with the site conditions,
+existing structures, access, working conditions, available working space,
+approach roads, site constraints, existing services and utilities, storage
+facilities, and the other physical conditions that may affect execution.
+
+3. We took all such conditions and constraints into account while quoting our
+rates. We will make no additional claim on account of unfamiliarity with the
+site conditions after award of the work.
+
+4. We understand that this signed self-certification confirms that we personally
+inspected the site and familiarised ourselves with the relevant conditions
+before submitting the tender.
+
+We certify that the statements above are true and undertake to abide by the NIT
+and tender conditions.
+
+Name of firm/agency : {spec.vendor_name}
+Designation         : Authorised Signatory
+Place               : {spec.city}
+Date                : {tender.bid_due}
+
+Signature of Authorised Signatory
+Seal of the firm
+""")
+
     return [
         cover,
         index_page,
@@ -533,6 +580,7 @@ Seal of the firm
         *sections.section_boq(spec, tender, scale),
         *sections.section_declarations(spec, tender, scale),
         *checklist_pages,
+        *tender_annexures,
         signature,
         *sections.section_annexures(spec, tender, scale),
     ]

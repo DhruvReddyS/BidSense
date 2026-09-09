@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass
 
 from app.ingest.models import ParsedDocument
@@ -51,6 +52,33 @@ class FieldGroup:
     cues: tuple[str, ...]
     query: str          # used for embedding re-ranking
     always_include_first: int = 0   # front matter that always carries the header
+
+
+class PageEmbeddingCache:
+    """One page-head embedding pass shared by every extractor in a graph.
+
+    Long-document branches run concurrently. A lock deliberately makes the
+    first thin lexical branch compute the page matrix while the others wait and
+    reuse it. Previously each thin branch embedded all 382 page heads again.
+    Query vectors remain group-specific and cheap.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._page_numbers: list[int] | None = None
+        self._vectors: list[list[float]] | None = None
+
+    def vectors(self, document: ParsedDocument) -> tuple[list[int], list[list[float]]]:
+        with self._lock:
+            if self._vectors is None or self._page_numbers is None:
+                from app.vector.embeddings import embed_passages
+
+                pages = [p for p in document.pages if p.combined_text().strip()]
+                self._page_numbers = [p.page_number for p in pages]
+                self._vectors = embed_passages(
+                    [p.combined_text()[:1200] for p in pages]
+                )
+            return self._page_numbers, self._vectors
 
 
 FIELD_GROUPS: dict[str, FieldGroup] = {
@@ -229,16 +257,25 @@ def _lexical_scores(document: ParsedDocument, group: FieldGroup) -> dict[int, fl
     return scores
 
 
-def _embedding_scores(document: ParsedDocument, group: FieldGroup) -> dict[int, float]:
+def _embedding_scores(
+    document: ParsedDocument,
+    group: FieldGroup,
+    cache: PageEmbeddingCache | None = None,
+) -> dict[int, float]:
     from app.vector.embeddings import embed_passages, embed_query
 
     pages = [p for p in document.pages if p.combined_text().strip()]
     if not pages:
         return {}
     query_vec = embed_query(group.query)
-    # Only the head of each page is embedded: it is where section headings sit,
-    # and embedding 382 full pages costs far more than it adds.
-    page_vecs = embed_passages([p.combined_text()[:1200] for p in pages])
+    # Only the head of each page is embedded: it is where section headings sit.
+    # A graph-scoped cache avoids repeating this expensive matrix per field.
+    if cache is not None:
+        page_numbers, page_vecs = cache.vectors(document)
+        by_number = dict(zip(page_numbers, page_vecs))
+        page_vecs = [by_number[p.page_number] for p in pages]
+    else:
+        page_vecs = embed_passages([p.combined_text()[:1200] for p in pages])
     return {
         page.page_number: sum(a * b for a, b in zip(query_vec, vec))
         for page, vec in zip(pages, page_vecs)
@@ -251,6 +288,7 @@ def select_pages(
     *,
     char_budget: int = DEFAULT_CHAR_BUDGET,
     use_embeddings: bool = True,
+    embedding_cache: PageEmbeddingCache | None = None,
 ) -> tuple[str, list[int]]:
     """Return (text, page_numbers) for the pages relevant to `group_name`.
 
@@ -273,7 +311,7 @@ def select_pages(
     thin = len(scores) < 3
     if thin and use_embeddings:
         try:
-            scores = _embedding_scores(document, group)
+            scores = _embedding_scores(document, group, embedding_cache)
             logger.info("%s: lexical pass thin, used embedding ranking", group_name)
         except Exception as exc:
             logger.warning("%s: embedding ranking unavailable (%s)", group_name, exc)

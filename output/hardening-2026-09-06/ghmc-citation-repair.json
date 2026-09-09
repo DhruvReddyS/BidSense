@@ -1,0 +1,21 @@
+{
+  "time": "2026-09-06T08:18:00.135913+00:00",
+  "document_sha256": "56eab438adfec7d241bf156b4516d4aed414ff71d567b97567d9393df90a550c",
+  "requirement_id": "5752c767-0d5d-4196-af8f-a3d59cfc4cba",
+  "requirement": "Manufacturers authorization form",
+  "source_page": 16,
+  "before": "22",
+  "after": "22, item 7",
+  "table_row": [
+    "7",
+    "Manufacturers\nauthorization form",
+    "Must meet\nrequireme\nnt",
+    null,
+    "Must\nmeet\nrequirem\nent",
+    "Not\napplicable",
+    "Document\nrequired from\nauthorized\ndealers."
+  ],
+  "source_heading_page": 15,
+  "reason": "Retain parent clause 22 and add the exact table item 7.",
+  "applied": true
+}

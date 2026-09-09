@@ -19,10 +19,12 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+import re
 
 from app.compliance.matching import (
     MatchResult,
     canonical_form,
+    document_identifiers,
     match_document,
     normalise,
     prewarm,
@@ -79,6 +81,13 @@ _LIQUIDITY_HINTS = (
     "line of credit", "cash flow", "bid capacity",
 )
 _NET_WORTH_HINTS = ("net worth", "networth")
+_CREDENTIAL_EVIDENCE_HINTS = (
+    "empanel", "registration", "registered", "licence", "license",
+    "certif", "authorised", "authorized", "invited",
+)
+_NEGATIVE_ELIGIBILITY_HINTS = (
+    "blacklist", "debar", "liquidation", "banned", "insolven",
+)
 
 
 def _mentions(text: str, hints: tuple[str, ...]) -> bool:
@@ -100,6 +109,25 @@ def _collect_requirements(notification: TenderNotification) -> list[Requirement]
     documents = list(notification.mandatory_documents)
     for criterion in notification.eligibility_criteria:
         if criterion.type is CriterionType.DOCUMENT:
+            documents.append(
+                MandatoryDocument(
+                    doc_name=criterion.criterion,
+                    provenance=criterion.provenance,
+                )
+            )
+        elif (
+            criterion.type is CriterionType.BOOLEAN
+            and criterion.is_mandatory
+            and any(hint in criterion.criterion.casefold()
+                    for hint in _CREDENTIAL_EVIDENCE_HINTS)
+            and not any(hint in criterion.criterion.casefold()
+                        for hint in _NEGATIVE_ELIGIBILITY_HINTS)
+        ):
+            # Positive credential conditions (for example, "must be empanelled
+            # and invited") are only defensible when the bid contains evidence.
+            # Model them as a required enclosure so absence is visible and the
+            # tender clause is preserved. Negative declarations such as "not
+            # blacklisted" remain on the dedicated boolean path below.
             documents.append(
                 MandatoryDocument(
                     doc_name=criterion.criterion,
@@ -181,7 +209,18 @@ def _check_documents(
                 extra_aliases=requirement.aliases,
                 use_embeddings=use_embeddings,
             )
-        items.append(_document_item(requirement, result, declared_absent))
+        item = _document_item(requirement, result, declared_absent)
+        # A document match must retain the page on the bid side too. Selecting
+        # by the actual matched name avoids attributing an alias to another file.
+        if item.found_value:
+            source = next((d for d in submission.documents_submitted
+                           if d.present and d.doc_name == item.found_value), None)
+            if source is None:
+                source = next((c for c in submission.certifications
+                               if c.doc_present and c.name == item.found_value), None)
+            if source is not None:
+                item.submission_provenance = source.provenance
+        items.append(item)
     return items
 
 
@@ -208,6 +247,31 @@ def _document_item(
             else _CONDITION_LABELS[requirement.applicability]
         ),
     )
+
+    target_canonical = canonical_form(doc_name)
+    target_normalised = normalise(doc_name)
+
+    def absent_name_matches(name: str) -> bool:
+        candidate_normalised = normalise(name)
+        if candidate_normalised == target_normalised:
+            return True
+        # PDF table extraction can leak an isolated status-cell character onto
+        # the preceding document name (observed as "(Annexure-II) E"). Accept
+        # only one-letter suffix noise after the complete required name and the
+        # same explicit form identifier; this cannot merge Annexure-B with II.
+        if candidate_normalised.startswith(target_normalised + " "):
+            suffix = candidate_normalised[len(target_normalised):].split()
+            if suffix and all(len(token) == 1 for token in suffix):
+                return document_identifiers(name) == document_identifiers(doc_name)
+        return target_canonical is not None and canonical_form(name) == target_canonical
+
+    explicitly_absent = doc_name.lower() in declared_absent or any(
+        absent_name_matches(a) for a in declared_absent
+    )
+    if explicitly_absent:
+        # A different, similarly named enclosure cannot override the bidder's
+        # explicit declaration that this particular document is not enclosed.
+        result = MatchResult(False, None, None, None)
 
     if result.matched and not result.is_uncertain:
         return GapItem(
@@ -241,10 +305,6 @@ def _document_item(
             match_score=result.score,
             **base,
         )
-
-    explicitly_absent = doc_name.lower() in declared_absent or any(
-        normalise(doc_name) == normalise(a) for a in declared_absent
-    )
 
     # Checked BEFORE the review band. When the bid's own checklist marks a
     # document NOT ENCLOSED, that is the bidder telling us it is absent, and it
@@ -281,6 +341,30 @@ def _document_item(
             found_value=None,
             explanation=_conditional_explanation(requirement.applicability, doc_name),
             match_score=result.score,
+            **base,
+        )
+
+    # Enclosure extraction deliberately excludes the bid's chapter index. It
+    # therefore cannot prove that substantive narrative inside the bid is
+    # absent. Ask for review, never silently declare that narrative satisfied.
+    narrative = re.search(
+        r"\b(?:technical man\s*power|key personnel|staff deployment|method statement|"
+        r"technical proposals?|technical approach|work methodology)\b", doc_name, re.I
+    )
+    formal_document = re.search(
+        r"\b(?:certificat\w*|licen[cs]\w*|registration|authori[sz]ation|affidavit|"
+        r"undertaking|test report)\b", doc_name, re.I
+    )
+    if narrative and not formal_document and not explicitly_absent:
+        return GapItem(
+            status=CheckStatus.NOT_ASSESSABLE,
+            severity=Severity.REVIEW,
+            found_value=None,
+            explanation=(
+                "This asks for substantive bid content. The extracted enclosure "
+                "list cannot establish whether that content is absent from the "
+                "body of the bid. Review the relevant section against this clause."
+            ),
             **base,
         )
 
@@ -754,6 +838,8 @@ _GROUP_ORDER = {
 
 def _classify_action(item: GapItem) -> ActionGroup:
     if item.status is CheckStatus.NOT_ASSESSABLE:
+        if item.kind is RequirementKind.DOCUMENT:
+            return ActionGroup.VERIFY
         return ActionGroup.CLARIFY
     if item.status in (CheckStatus.MANUAL_CHECK, CheckStatus.PARTIAL):
         return ActionGroup.VERIFY
@@ -779,6 +865,8 @@ def _build_action_list(items: list[GapItem]) -> list[ActionItem]:
             action = item.explanation
         elif group is ActionGroup.CLARIFY:
             action = f"State clearly in your bid: {item.requirement}"
+        elif item.status is CheckStatus.NOT_ASSESSABLE and item.kind is RequirementKind.DOCUMENT:
+            action = f"Review the relevant section of your bid against: {item.requirement}"
         elif item.conditional_on and item.found_value:
             action = (
                 f"Only if {item.conditional_on}: confirm "
@@ -857,7 +945,16 @@ def build_gap_report(
     for criterion in notification.eligibility_criteria:
         if criterion.type is CriterionType.NUMERIC:
             items.append(_check_numeric(criterion, submission))
-        elif criterion.type is CriterionType.BOOLEAN:
+        elif (
+            criterion.type is CriterionType.BOOLEAN
+            and not (
+                criterion.is_mandatory
+                and any(hint in criterion.criterion.casefold()
+                        for hint in _CREDENTIAL_EVIDENCE_HINTS)
+                and not any(hint in criterion.criterion.casefold()
+                            for hint in _NEGATIVE_ELIGIBILITY_HINTS)
+            )
+        ):
             items.append(_check_boolean(criterion, submission))
         # DOCUMENT-type criteria are folded into _collect_requirements above, so
         # a tender stating one requirement in two places yields one row.

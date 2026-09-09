@@ -128,6 +128,7 @@ def save_notification(
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
     content_hash: str | None = None,
+    extraction_metadata: dict | None = None,
 ) -> TenderNotificationRow:
     """Insert or update a notification, preserving the bids filed against it.
 
@@ -181,6 +182,7 @@ def save_notification(
             ),
         )
 
+    row.extraction_metadata = extraction_metadata or {}
     row.tender_id = notification.tender_id
     row.title = notification.title
     row.issuing_authority = notification.issuing_authority
@@ -270,6 +272,7 @@ def save_submission(
     source_file: str | None = None,
     owner_user_id: uuid.UUID | None = None,
     content_hash: str | None = None,
+    extraction_metadata: dict | None = None,
 ) -> VendorSubmissionRow:
     """Insert or update a vendor submission, keyed by (notification, vendor_id).
 
@@ -306,6 +309,7 @@ def save_submission(
         ),
     )
 
+    row.extraction_metadata = extraction_metadata or {}
     row.vendor_id = submission.vendor_id
     row.vendor_name = submission.vendor_name
     row.notification_id = notification_id
@@ -418,7 +422,14 @@ def _index(
     if not chunks:
         return 0
 
-    vectors = embed_passages([c.text for c in chunks])
+    # Generated schedules, repeated declarations and boilerplate commonly
+    # produce identical chunks. Encode each distinct passage once and reuse the
+    # vector; cosine retrieval is mathematically identical, while large bid
+    # packs avoid redundant transformer work.
+    unique_texts = list(dict.fromkeys(c.text for c in chunks))
+    unique_vectors = embed_passages(unique_texts)
+    vector_by_text = dict(zip(unique_texts, unique_vectors))
+    vectors = [vector_by_text[c.text] for c in chunks]
     points = [
         {
             "id": chunk_point_id(owner_key, chunk.chunk_index),

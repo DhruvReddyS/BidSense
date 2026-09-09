@@ -1,0 +1,38 @@
+[
+  {
+    "vendor": "SBI_AMCC_VERSION3",
+    "format": "pdf",
+    "http_status": 200,
+    "bytes": 26538,
+    "pages": 4,
+    "seconds": 13.585,
+    "quality_warning_present": true
+  },
+  {
+    "vendor": "SBI_AMCC_VERSION3",
+    "format": "docx",
+    "http_status": 200,
+    "bytes": 38863,
+    "pages": null,
+    "seconds": 13.05,
+    "quality_warning_present": true
+  },
+  {
+    "vendor": "VENDOR_supply_01_01",
+    "format": "pdf",
+    "http_status": 200,
+    "bytes": 42670,
+    "pages": 8,
+    "seconds": 13.919,
+    "quality_warning_present": true
+  },
+  {
+    "vendor": "VENDOR_supply_01_01",
+    "format": "docx",
+    "http_status": 200,
+    "bytes": 41674,
+    "pages": null,
+    "seconds": 13.32,
+    "quality_warning_present": true
+  }
+]

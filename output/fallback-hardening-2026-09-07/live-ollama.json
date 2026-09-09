@@ -1,0 +1,548 @@
+{
+  "destination": "ollama",
+  "seconds": 264.714,
+  "nodes": 6,
+  "error_count": 0,
+  "providers": [
+    [
+      "documents",
+      "ollama:qwen3:4b"
+    ],
+    [
+      "eligibility",
+      "ollama:qwen3:4b"
+    ],
+    [
+      "evaluation",
+      "ollama:qwen3:4b"
+    ],
+    [
+      "format_rules",
+      "ollama:qwen3:4b"
+    ],
+    [
+      "header",
+      "ollama:qwen3:4b"
+    ],
+    [
+      "technical",
+      "ollama:qwen3:4b"
+    ]
+  ],
+  "selections": [
+    [
+      "documents",
+      [
+        6,
+        7,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        20,
+        21,
+        28,
+        29,
+        33,
+        35,
+        36,
+        37,
+        39,
+        40,
+        42,
+        46,
+        47,
+        49,
+        50,
+        52,
+        54
+      ]
+    ],
+    [
+      "eligibility",
+      [
+        6,
+        7,
+        8,
+        12,
+        13,
+        14,
+        45,
+        67,
+        74,
+        78,
+        90
+      ]
+    ],
+    [
+      "evaluation",
+      [
+        14,
+        54,
+        89
+      ]
+    ],
+    [
+      "format_rules",
+      [
+        7,
+        10,
+        11,
+        12,
+        63,
+        64,
+        84,
+        88,
+        97
+      ]
+    ],
+    [
+      "header",
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        17,
+        45,
+        46,
+        48,
+        53,
+        57,
+        62,
+        65,
+        67,
+        71,
+        74,
+        76,
+        77,
+        80,
+        85,
+        88,
+        92,
+        101
+      ]
+    ],
+    [
+      "technical",
+      [
+        3,
+        5,
+        6,
+        7,
+        13,
+        14,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        29,
+        30,
+        32,
+        33,
+        40,
+        43,
+        46,
+        47,
+        48
+      ]
+    ]
+  ],
+  "retired_tiers": [
+    "gemini",
+    "groq"
+  ],
+  "notification": {
+    "tender_id": "CMU-12011/17/2026-CMU",
+    "title": "NOTIF_civilworks_01.pdf",
+    "issuing_authority": "Indian Institute of Technology (Indian School of Mines) Dhanbad",
+    "sector": null,
+    "submission_deadline": "2026-08-22",
+    "pre_bid_query_deadline": "2026-08-19",
+    "eligibility_criteria": [
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "30%",
+        "threshold_amount": null,
+        "threshold_number": 30.0,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "document",
+        "type": "document",
+        "threshold_raw": "Photocopy of PAN card",
+        "threshold_amount": null,
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "document",
+        "type": "document",
+        "threshold_raw": "A tenderer shall produce annual turnover on works of the individual/firm/company from Chartered Accountant as per returns filed with Income Tax Department for the past 3 (three) financial years ending 2024-25",
+        "threshold_amount": null,
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "document",
+        "type": "document",
+        "threshold_raw": "Photocopy of GST registration with latest monthly Return filed",
+        "threshold_amount": null,
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "80% of Estimated Cost",
+        "threshold_amount": {
+          "raw_text": "80% of Estimated Cost",
+          "amount_inr": "1005248.80"
+        },
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "50% of Estimated Cost",
+        "threshold_amount": {
+          "raw_text": "50% of Estimated Cost",
+          "amount_inr": "628280.50"
+        },
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "40% of Estimated Cost",
+        "threshold_amount": {
+          "raw_text": "40% of Estimated Cost",
+          "amount_inr": "502624.40"
+        },
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "7 (Seven) years",
+        "threshold_amount": null,
+        "threshold_number": 7.0,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "numeric",
+        "type": "numeric",
+        "threshold_raw": "3 (three) financial years",
+        "threshold_amount": null,
+        "threshold_number": 3.0,
+        "unit": null,
+        "is_mandatory": true
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "criterion": "boolean",
+        "type": "boolean",
+        "threshold_raw": "not blacklisted",
+        "threshold_amount": null,
+        "threshold_number": null,
+        "unit": null,
+        "is_mandatory": true
+      }
+    ],
+    "mandatory_documents": [
+      {
+        "provenance": {
+          "clause_ref": "2.8(a)",
+          "source_page": 12,
+          "source_snippet": "Photocopy of PAN card.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Photocopy of PAN card",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(b)",
+          "source_page": 12,
+          "source_snippet": "A tenderer shall produce annual turnover on works of the individual/firm/company from Chartered Accountant as per returns filed with Income Tax Department for the past 3 (three) financial years ending 2024-25. Average Annual financial turnover during the last 3 (three) financial years ending 2024-25, should be at least 30% of the estimated cost",
+          "extraction_confidence": null
+        },
+        "doc_name": "A tenderer shall produce annual turnover on works of the individual/firm/company from Chartered Accountant as per returns filed with Income Tax Department for the past 3 (three) financial years ending 2024-25. Average Annual financial turnover during the last 3 (three) financial years ending 2024-25, should be at least 30% of the estimated cost",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(c)",
+          "source_page": 12,
+          "source_snippet": "Photocopy of GST registration with latest monthly Return filed",
+          "extraction_confidence": null
+        },
+        "doc_name": "Photocopy of GST registration with latest monthly Return filed",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(d)",
+          "source_page": 13,
+          "source_snippet": "Experience of having successfully completed similar type of works during last 07 (Seven) years ending last day of previous month to the one in which applications invited should be either of: (i) One Work Order/Job of similar nature, value not less than 80% of Estimated Cost. (ii) Two Work Orders/Jobs of similar nature, value not less than 50% of Estimated Cost. (iii) Three Work Orders/Jobs of similar nature, value not less than 40% of Estimated Cost.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Experience of having successfully completed similar type of works during last 07 (Seven) years ending last day of previous month to the one in which applications invited should be either of: (i) One Work Order/Job of similar nature, value not less than 80% of Estimated Cost. (ii) Two Work Orders/Jobs of similar nature, value not less than 50% of Estimated Cost. (iii) Three Work Orders/Jobs of similar nature, value not less than 40% of Estimated Cost.",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(e)",
+          "source_page": 13,
+          "source_snippet": "Bidder needs to submit scan copy of EMD amount.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Bidder needs to submit scan copy of EMD amount",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(f)",
+          "source_page": 13,
+          "source_snippet": "Copy of registration in ESIC and EPFO",
+          "extraction_confidence": null
+        },
+        "doc_name": "Copy of registration in ESIC and EPFO",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(g)",
+          "source_page": 13,
+          "source_snippet": "Financial status, Balance sheet, Profit and Loss Account for last three years ending 2024-25.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Financial status, Balance sheet, Profit and Loss Account for last three years ending 2024-25",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(h)",
+          "source_page": 13,
+          "source_snippet": "Bid capacity as per format in Annexure IV",
+          "extraction_confidence": null
+        },
+        "doc_name": "Bid capacity as per format in Annexure IV",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(i)",
+          "source_page": 13,
+          "source_snippet": "Duly filled and signed copy of Annexure I, Annexure II and Annexure III",
+          "extraction_confidence": null
+        },
+        "doc_name": "Duly filled and signed copy of Annexure I, Annexure II and Annexure III",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.8(j)",
+          "source_page": 13,
+          "source_snippet": "Duly filled Self-certification/undertaking in the format as per Annexure V",
+          "extraction_confidence": null
+        },
+        "doc_name": "Duly filled Self-certification/undertaking in the format as per Annexure V",
+        "aliases": []
+      }
+    ],
+    "evaluation_criteria": [
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": null,
+          "source_snippet": null,
+          "extraction_confidence": null
+        },
+        "factor": "Hardcopy of EMD is not submitted within the period of bid submission",
+        "weightage_if_stated": null
+      }
+    ],
+    "technical_requirements": [
+      {
+        "provenance": {
+          "clause_ref": "Section 11",
+          "source_page": 11,
+          "source_snippet": "Preferred Makes of Material",
+          "extraction_confidence": null
+        },
+        "requirement": "Technical requirements the supplied goods, works or services must meet"
+      },
+      {
+        "provenance": {
+          "clause_ref": "Section 12",
+          "source_page": 12,
+          "source_snippet": "Price bid",
+          "extraction_confidence": null
+        },
+        "requirement": "Technical requirements the supplied goods, works or services must meet"
+      }
+    ],
+    "submission_format_rules": [
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 7,
+          "source_snippet": "Tenders shall be opened on 24 August 2026 at 17:00 Hours in the presence of the tenderers at the Office of Dy. Superintending Engineer, IIT (ISM) Dhanbad, who may be present.",
+          "extraction_confidence": null
+        },
+        "rule": "envelope structure"
+      },
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 10,
+          "source_snippet": "The bidder should make a note of the unique Tender ID assigned to each tender; in case they want to obtain any clarification / help from the Helpdesk.",
+          "extraction_confidence": null
+        },
+        "rule": "page limits"
+      },
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 63,
+          "source_snippet": "The tender form must be filled and all entries must be made by the handwritten in ink. All the rates must be filled both in words and figures. If any of the documents is missing or un-signed, the tender will be considered invalid. All erasers and alterations made while filling the tender must be attested by dated initials of the tenderers. Overwriting of the figures is not permitted.",
+          "extraction_confidence": null
+        },
+        "rule": "signing and stamping"
+      },
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 10,
+          "source_snippet": "Bidders are required to enroll on the e-Procurement module of the Central Public Procurement Portal (URL:http://eprocure.gov.in/eprocure/app) by clicking on the link \"Click here to Enroll\".",
+          "extraction_confidence": null
+        },
+        "rule": "serial numbering"
+      },
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 10,
+          "source_snippet": "The bidder should make a note of the unique Tender ID assigned to each tender; in case they want to obtain any clarification / help from the Helpdesk.",
+          "extraction_confidence": null
+        },
+        "rule": "annexure order"
+      },
+      {
+        "provenance": {
+          "clause_ref": "N/A",
+          "source_page": 11,
+          "source_snippet": "The bidder has to digitally sign and upload the required bid documents one by one as indicated in the tender document.",
+          "extraction_confidence": null
+        },
+        "rule": "format of submission"
+      }
+    ],
+    "emd_amount": {
+      "raw_text": "Rs. 31,500/-",
+      "amount_inr": "31500.00"
+    },
+    "contract_value_estimate": {
+      "raw_text": "Rs. 12,56,561/-",
+      "amount_inr": "1256561.00"
+    }
+  },
+  "findings": [
+    {
+      "field": "submission_deadline",
+      "severity": "warning",
+      "message": "the deadline read from the document (2026-08-22) has already passed. Either this tender is closed, or the date was misread."
+    }
+  ],
+  "deliberately_removed_deadline_detected_by_regex": true,
+  "scope": "Live lower-tier full graph; upstream retirement and missing deadline are injected faults, not observed quota exhaustion/model omission."
+}

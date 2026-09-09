@@ -1,0 +1,68 @@
+{
+  "requests": 12,
+  "workers": 4,
+  "document_pages": 382,
+  "wall_seconds": 3.588,
+  "results": [
+    {
+      "page": 1,
+      "seconds": 1.892,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 1.659,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 1.556,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 1.873,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.286,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.371,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.267,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.242,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.303,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.384,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.287,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.245,
+      "highlights": 2
+    }
+  ]
+}

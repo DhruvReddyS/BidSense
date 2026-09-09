@@ -1,0 +1,15 @@
+{
+  "processes": 8,
+  "exit_codes": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "seconds": 3.399,
+  "scope": "independent processes contend on same lock; exclusive marker verifies no simultaneous holder"
+}

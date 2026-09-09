@@ -1,0 +1,38 @@
+[
+  {
+    "mutation": "cache_hit_increment",
+    "test": "tests/test_concurrent_storage.py::test_concurrent_cache_lookups_count_every_hit",
+    "killed": true,
+    "summary": "1 failed in 1.46s"
+  },
+  {
+    "mutation": "citation_atomic_publish",
+    "test": "tests/test_concurrent_storage.py::test_same_document_concurrent_writers_publish_complete_bytes",
+    "killed": true,
+    "summary": "1 failed in 0.81s"
+  },
+  {
+    "mutation": "routing_attribution",
+    "test": "tests/test_provider_attribution.py::test_concurrent_tier_recovery_keeps_attribution_with_the_call",
+    "killed": true,
+    "summary": "1 failed in 0.04s"
+  },
+  {
+    "mutation": "graph_attribution",
+    "test": "tests/test_provider_attribution.py::test_graph_keeps_every_nodes_serving_tier",
+    "killed": true,
+    "summary": "1 failed in 1.06s"
+  },
+  {
+    "mutation": "token_reservation",
+    "test": "tests/test_hardening_probes.py::test_token_budget_does_not_spend_the_same_refill_twice",
+    "killed": true,
+    "summary": "1 failed in 0.23s"
+  },
+  {
+    "mutation": "literal_export_text",
+    "test": "tests/test_hardening_probes.py::test_pdf_preserves_literal_markup_in_source_values",
+    "killed": true,
+    "summary": "1 failed in 11.60s"
+  }
+]

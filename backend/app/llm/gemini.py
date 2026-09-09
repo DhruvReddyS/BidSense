@@ -10,6 +10,7 @@ from app.config import settings
 from app.llm.base import LLMError, LLMProvider, TModel
 from app.llm.ratelimit import (
     RateLimiter,
+    estimate_tokens,
     is_daily_quota_exhausted,
     retry_transient,
 )
@@ -52,7 +53,9 @@ class GeminiProvider(LLMProvider):
         # gemini-2.5-flash). Unpaced, the six-way extractor fan-out exceeds it
         # on the first document and the losing branches look like extraction
         # failures rather than quota errors.
-        self._limiter = RateLimiter(settings.gemini_rpm)
+        self._limiter = RateLimiter(settings.gemini_rpm, tokens_per_minute=settings.gemini_tpm)
+        #: Set by the chain when a live tier sits below this one.
+        self.has_fallback = False
 
         # Free-tier quota is per model per day (20/day for gemini-2.5-flash),
         # and the extraction graph spends six requests per document -- three
@@ -120,8 +123,10 @@ class GeminiProvider(LLMProvider):
             if model is None:
                 break
 
+            cost = estimate_tokens(contents, config.get("system_instruction"))
+
             def once(model=model):
-                self._limiter.acquire()
+                self._limiter.acquire(cost)
                 # Re-checked AFTER the rate-limiter slot, not only before it.
                 # The extraction graph fans out five or six extractors at once
                 # and they all choose a model before any of them has an answer,
@@ -138,7 +143,13 @@ class GeminiProvider(LLMProvider):
 
             try:
                 response = retry_transient(
-                    once, label=f"gemini {label} [{model}]", attempts=settings.gemini_retries
+                    once,
+                    label=f"gemini {label} [{model}]",
+                    # Impatient when something live sits below: waiting out a
+                    # 60-second retry hint on a rate-limited primary is worse
+                    # than falling through to a tier that answers in seconds.
+                    attempts=2 if self.has_fallback else settings.gemini_retries,
+                    max_delay=8.0 if self.has_fallback else 60.0,
                 )
                 with self._state:
                     self.last_model_used = model

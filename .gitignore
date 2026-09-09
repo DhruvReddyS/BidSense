@@ -12,4 +12,9 @@ data/**/*.pdf
 data/**/*.docx
 !data/README.md
 !data/*.csv
+data/store/
+tmp/
+output/**/*.pdf
+output/**/*.docx
+output/**/*.log
 .DS_Store

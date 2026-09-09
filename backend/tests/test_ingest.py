@@ -117,7 +117,7 @@ def test_scanned_page_falls_back_to_ocr_when_available(tmp_path, monkeypatch):
     )
 
     parsed = parse_document(make_blank_pdf(tmp_path / "scan.pdf", pages=2))
-    assert calls == [1, 2], "every text-less page should be sent to OCR"
+    assert sorted(calls) == [1, 2], "every text-less page should be sent to OCR"
     assert parsed.ocr_page_count == 2
     assert parsed.is_scanned is True
     assert "Rs. 5 Cr" in parsed.page(1).text

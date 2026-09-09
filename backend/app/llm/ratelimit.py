@@ -7,8 +7,8 @@ branches lost the race -- which looks exactly like an extraction failure.
 
 Two mechanisms, both needed:
 
-  RateLimiter     spaces requests so the quota is not exceeded in the first
-                  place.
+  RateLimiter     allows a provider-safe burst, then paces sustained traffic
+                  so the quota is not exceeded.
   retry_transient honours the server's own `retryDelay` when it is exceeded
                   anyway (shared quota, another process, a burst at a minute
                   boundary), and also retries 503 UNAVAILABLE -- a shared free
@@ -34,31 +34,97 @@ _RETRY_SECONDS = re.compile(r"retry in (\d+(?:\.\d+)?)s")
 
 
 class RateLimiter:
-    """Thread-safe minimum-interval pacer.
+    """Paces requests against whichever quota actually binds.
 
-    The lock is deliberately held across the sleep: callers queue and are
-    released one interval apart, which is the behaviour that keeps a parallel
-    fan-out inside a per-minute quota. Releasing the lock before sleeping would
-    let every thread compute the same slot and fire together.
+    A free tier caps two different things -- requests per minute and TOKENS per
+    minute -- and which one binds depends on the size of what you are sending.
+    Pacing on requests alone makes every call pay the price of the largest one:
+    Groq's 8,000 TPM allows roughly two 4,400-token extraction calls a minute,
+    so a fixed 2 rpm was configured, and a 1,500-token question then waited 30
+    seconds for no reason. Measured: 30s of latency around 1.6s of generation.
+
+    So the limiter tracks both. A caller declares roughly how many tokens it is
+    about to spend, and waits only for the constraint it actually trips. Small
+    requests go almost immediately; large ones still queue.
+
+    Nothing about WHAT is sent changes -- only when. This is pacing, not
+    sampling, and it cannot affect an answer's content.
     """
 
-    def __init__(self, requests_per_minute: int) -> None:
+    def __init__(
+        self, requests_per_minute: int, tokens_per_minute: int | None = None
+    ) -> None:
         self.rpm = requests_per_minute
-        self._interval = 60.0 / requests_per_minute if requests_per_minute > 0 else 0.0
+        self.tpm = tokens_per_minute
         self._lock = threading.Lock()
-        self._next_slot = 0.0
+        # Both buckets start full and refill continuously. This is important for
+        # extraction: a fresh provider budget can safely absorb the five/six-way
+        # graph fan-out. The old fixed-spacing limiter added 20 seconds at
+        # 15 RPM even when all six requests fitted inside the available minute.
+        self._requests = float(requests_per_minute or 0)
+        self._tokens = float(tokens_per_minute or 0)
+        self._refilled = time.monotonic()
 
-    def acquire(self) -> None:
-        if self._interval <= 0:
+    @staticmethod
+    def _take(
+        available: float,
+        capacity: int | None,
+        cost: int,
+        elapsed: float,
+    ) -> tuple[float, float]:
+        """Return (reserved balance, wait seconds) for one token bucket."""
+        if not capacity or cost <= 0:
+            return available, 0.0
+        rate = capacity / 60.0
+        available = min(float(capacity), available + elapsed * rate)
+        # A single request larger than the full budget can never become
+        # admissible by waiting. Let the provider return its useful 413.
+        if cost > capacity:
+            return available, 0.0
+        available -= cost
+        return available, max(-available / rate, 0.0)
+
+    def _reserve(self, tokens: int) -> float:
+        """Reserve request and token capacity, returning the binding wait."""
+        if self.rpm <= 0 and not self.tpm:
+            return 0.0
+        now = time.monotonic()
+        elapsed = now - self._refilled
+        self._requests, request_wait = self._take(
+            self._requests, self.rpm, 1, elapsed
+        )
+        self._tokens, token_wait = self._take(
+            self._tokens, self.tpm, tokens, elapsed
+        )
+        self._refilled = now
+        return max(request_wait, token_wait)
+
+    def acquire(self, tokens: int = 0) -> None:
+        """Block until this request may be sent.
+
+        The lock is held across the sleep on purpose: callers queue and are
+        released in order. Releasing it before sleeping would let every thread
+        in a fan-out compute the same slot and fire together, which is the
+        behaviour the pacing exists to prevent.
+        """
+        if self.rpm <= 0 and not self.tpm:
             return
         with self._lock:
-            now = time.monotonic()
-            wait = self._next_slot - now
+            wait = self._reserve(tokens)
             if wait > 0:
-                logger.debug("rate limiter: waiting %.1fs", wait)
+                logger.debug("rate limiter: waiting %.1fs (%d tokens)", wait, tokens)
                 time.sleep(wait)
-                now = time.monotonic()
-            self._next_slot = now + self._interval
+
+
+#: Characters per token for English legal prose. Only ever used to SIZE a
+#: request for pacing, so an approximation is fine -- being out by 20% shifts a
+#: wait by 20%, it does not change what is sent.
+CHARS_PER_TOKEN = 3.5
+
+
+def estimate_tokens(*parts: str | None) -> int:
+    """Rough token cost of a request, for the limiter."""
+    return int(sum(len(p) for p in parts if p) / CHARS_PER_TOKEN)
 
 
 def is_daily_quota_exhausted(exc: Exception) -> bool:
@@ -148,8 +214,22 @@ def _suggested_delay(exc: Exception, attempt: int) -> float:
     return min(60.0, (2**attempt) + random.uniform(0, 1))
 
 
-def retry_transient(fn: Callable[[], T], *, attempts: int = 4, label: str = "request") -> T:
-    """Run `fn`, retrying only on quota and temporary-overload errors."""
+def retry_transient(
+    fn: Callable[[], T],
+    *,
+    attempts: int = 4,
+    label: str = "request",
+    max_delay: float = 60.0,
+) -> T:
+    """Run `fn`, retrying only on quota and temporary-overload errors.
+
+    `max_delay` caps how long a single retry will wait. It exists because the
+    server's own `retryDelay` hint is often 60 seconds, and honouring that is
+    only correct when this provider is the last resort. With a live tier below
+    it, waiting a minute for a rate-limited primary is strictly worse than
+    falling through to a provider that answers in two seconds -- measured, on a
+    cold chain, as 121 seconds of a 181-second extraction.
+    """
     last: Exception | None = None
     for attempt in range(attempts):
         try:
@@ -160,7 +240,7 @@ def retry_transient(fn: Callable[[], T], *, attempts: int = 4, label: str = "req
             last = exc
             if attempt == attempts - 1:
                 break
-            delay = _suggested_delay(exc, attempt)
+            delay = min(_suggested_delay(exc, attempt), max_delay)
             logger.warning(
                 "%s: %s (attempt %d/%d), retrying in %.1fs",
                 label,

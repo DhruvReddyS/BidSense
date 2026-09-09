@@ -7,6 +7,7 @@ Section 10's elimination precision measures the fixture, not the pipeline.
 
 from __future__ import annotations
 
+from dataclasses import replace
 import re
 
 import pytest
@@ -144,6 +145,35 @@ def test_an_omitted_document_is_listed_but_marked_absent():
     entries = re.findall(r"\d+\.\s+\[([X ])\]\s+(.+)", text)
     assert [flag for flag, _ in entries] == ["X", "X", " "]
     assert entries[-1][1].startswith("Manufacturers authorization form")
+
+
+@pytest.mark.parametrize(
+    "vendor_id",
+    ["VENDOR_civilworks_01_01", "VENDOR_civilworks_01_05"],
+)
+def test_iit_pass_bids_execute_the_required_annexure_v_undertaking(vendor_id):
+    """A checklist tick and an unrelated Annexure V are not the signed form.
+
+    These two bids are production-gate true negatives, so their source must
+    contain the actual site-inspection undertaking required by tender page 79.
+    """
+    vendor = spec_for(vendor_id)
+    text = " ".join(build_pages(vendor, PROFILES[vendor.notification_id]))
+
+    assert "TENDER ANNEXURE V — SELF-CERTIFICATION/UNDERTAKING" in text
+    assert re.search(r"personally\s+inspected the site", text)
+    assert f"Name of firm/agency : {vendor.vendor_name}" in text
+
+
+def test_iit_annexure_v_undertaking_can_be_deliberately_omitted():
+    base = spec_for("VENDOR_civilworks_01_01")
+    required = list(PROFILES[base.notification_id].key_documents)
+    missing = "Duly filled Self-certification/undertaking in the format as per Annexure V"
+    vendor = replace(base, omitted_documents=(missing,))
+    text = " ".join(build_pages(vendor, PROFILES[vendor.notification_id], required))
+
+    assert f"[ ]  {missing}   — NOT ENCLOSED" in text
+    assert "TENDER ANNEXURE V — SELF-CERTIFICATION/UNDERTAKING" not in text
 
 
 def test_omission_matching_is_not_exact_string_only():

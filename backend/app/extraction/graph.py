@@ -28,7 +28,7 @@ from langgraph.graph import END, START, StateGraph
 from app.extraction import llm_schemas as raw
 from app.extraction import prompts
 from app.extraction.convert import to_notification, to_submission
-from app.extraction.selection import select_pages
+from app.extraction.selection import PageEmbeddingCache, select_pages
 from app.ingest.models import ParsedDocument
 from app.llm import LLMError, LLMProvider, get_llm
 from app.schemas.notification import TenderNotification
@@ -83,6 +83,9 @@ class ExtractionState(TypedDict, total=False):
     on_node_complete: Any
     errors: Annotated[list[str], operator.add]
     timings: Annotated[list[tuple[str, float]], operator.add]
+    providers: Annotated[list[tuple[str, str]], operator.add]
+    selections: Annotated[list[tuple[str, list[int]]], operator.add]
+    embedding_cache: Any
 
 
 def notification_node_names() -> list[str]:
@@ -106,15 +109,18 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
     # Each extractor reads only the pages likely to hold its field group. On a
     # 382-page tender, sending the whole document either truncates silently or
     # buries three relevant clauses in 380 pages of contract boilerplate.
-    # The budget comes from the PROVIDER, not from a constant. A selection sized
-    # for a hosted context silently overflows a local one -- the request
-    # succeeds and the model answers from whatever survived the truncation,
-    # which looks exactly like a model that missed the clause.
-    budget = getattr(llm, "input_char_budget", None)
-    text, pages = select_pages(
-        state["document"], node, **({"char_budget": budget} if budget else {})
-    )
-    logger.debug("%s: reading pages %s", node, pages)
+    # Selection is repeated if the chain falls through to a smaller tier.
+    pages = []
+    def prompt_for(input_char_budget):
+        nonlocal pages
+        text, pages = select_pages(
+            state["document"], node,
+            embedding_cache=state.get("embedding_cache"),
+            **({"char_budget": input_char_budget} if input_char_budget else {}),
+        )
+        logger.debug("%s: reading pages %s", node, pages)
+        return prompt_template.format(text=text)
+
     _notify(state, node, "start")
 
     try:
@@ -122,33 +128,37 @@ def _run(state: ExtractionState, node: str, prompt_template: str, schema):
         # Against a local model this serializes the extractors; against a hosted
         # API it is effectively a no-op.
         with llm:
-            result = llm.generate_structured(
-                prompt_template.format(text=text),
+            result = llm.generate_structured_from(
+                prompt_for,
                 schema,
                 system=prompts.SYSTEM_PROMPT,
             )
+        label = getattr(llm, "active_provider", None)
+        if not label:
+            model = getattr(llm, "last_model_used", None)
+            label = f"{llm.name}:{model}" if model else llm.name
         elapsed = time.perf_counter() - started
         logger.info("%s: ok in %.2fs (%d pages)", node, elapsed, len(pages))
         _notify(state, node)
-        return result, [], [(node, elapsed)]
+        return result, [], [(node, elapsed)], [(node, label)], [(node, pages)]
     except (LLMError, Exception) as exc:  # noqa: BLE001 - deliberately broad
         elapsed = time.perf_counter() - started
         logger.warning("%s: failed after %.2fs: %s", node, elapsed, exc)
         _notify(state, node)   # a failed group still advances progress
-        return None, [f"{node}: {exc}"], [(node, elapsed)]
+        return None, [f"{node}: {exc}"], [(node, elapsed)], [], [(node, pages)]
 
 
 def _list_node(state, node, prompt_template, schema, key):
-    result, errors, timings = _run(state, node, prompt_template, schema)
-    return {key: list(result.items) if result else [], "errors": errors, "timings": timings}
+    result, errors, timings, providers, selections = _run(state, node, prompt_template, schema)
+    return {key: list(result.items) if result else [], "errors": errors, "timings": timings, "providers": providers, "selections": selections}
 
 
 # --------------------------------------------------------------------------- #
 # Notification extractors
 # --------------------------------------------------------------------------- #
 def extract_header(state: ExtractionState) -> dict:
-    result, errors, timings = _run(state, "header", prompts.HEADER_PROMPT, raw.RawHeader)
-    return {"header": result, "errors": errors, "timings": timings}
+    result, errors, timings, providers, selections = _run(state, "header", prompts.HEADER_PROMPT, raw.RawHeader)
+    return {"header": result, "errors": errors, "timings": timings, "providers": providers, "selections": selections}
 
 
 def extract_eligibility(state: ExtractionState) -> dict:
@@ -185,10 +195,10 @@ def extract_format_rules(state: ExtractionState) -> dict:
 # Vendor extractors
 # --------------------------------------------------------------------------- #
 def extract_vendor_header(state: ExtractionState) -> dict:
-    result, errors, timings = _run(
+    result, errors, timings, providers, selections = _run(
         state, "vendor_header", prompts.VENDOR_HEADER_PROMPT, raw.RawVendorHeader
     )
-    return {"vendor_header": result, "errors": errors, "timings": timings}
+    return {"vendor_header": result, "errors": errors, "timings": timings, "providers": providers, "selections": selections}
 
 
 def extract_turnover(state: ExtractionState) -> dict:
@@ -278,6 +288,8 @@ class ExtractionResult(TypedDict):
     errors: list[str]
     timings: list[tuple[str, float]]
     parse_warnings: list[str]
+    providers: list[tuple[str, str]]
+    selections: list[tuple[str, list[int]]]
 
 
 def extract_notification(
@@ -294,6 +306,7 @@ def extract_notification(
         "on_node_complete": on_node_complete,
         "errors": [],
         "timings": [],
+        "embedding_cache": PageEmbeddingCache(),
     }
     final = notification_graph().invoke(state)
 
@@ -311,6 +324,8 @@ def extract_notification(
         "errors": final.get("errors", []),
         "timings": final.get("timings", []),
         "parse_warnings": document.parse_warnings,
+        "providers": final.get("providers", []),
+        "selections": final.get("selections", []),
     }
 
 
@@ -330,6 +345,7 @@ def extract_submission(
         "on_node_complete": on_node_complete,
         "errors": [],
         "timings": [],
+        "embedding_cache": PageEmbeddingCache(),
     }
     final = vendor_graph().invoke(state)
 
@@ -347,6 +363,8 @@ def extract_submission(
         "errors": final.get("errors", []),
         "timings": final.get("timings", []),
         "parse_warnings": document.parse_warnings,
+        "providers": final.get("providers", []),
+        "selections": final.get("selections", []),
     }
 
 
@@ -359,13 +377,13 @@ def extract_submission(
 # fan-out over it would spend six requests to re-read fields the corrigendum does
 # not restate, against a free tier of twenty per model per day.
 def extract_corrigendum_header(state: ExtractionState) -> dict:
-    result, errors, timings = _run(
+    result, errors, timings, providers, selections = _run(
         state,
         "corrigendum_header",
         prompts.CORRIGENDUM_HEADER_PROMPT,
         raw.RawCorrigendumHeader,
     )
-    return {"corrigendum_header": result, "errors": errors, "timings": timings}
+    return {"corrigendum_header": result, "errors": errors, "timings": timings, "providers": providers, "selections": selections}
 
 
 def extract_corrigendum_changes(state: ExtractionState) -> dict:
@@ -433,4 +451,6 @@ def extract_corrigendum(
         "errors": final.get("errors", []),
         "timings": final.get("timings", []),
         "parse_warnings": document.parse_warnings,
+        "providers": final.get("providers", []),
+        "selections": final.get("selections", []),
     }

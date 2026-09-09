@@ -19,6 +19,19 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5433
 
+    # --- Authentication ---
+    auth_secret: str = "development-only-change-me"
+    auth_token_minutes: int = 60
+    reviewer_registration_code: str = "development-reviewer"
+
+    # Worker concurrency is deliberately environment-sized. Two is safe for a
+    # free-tier/local setup; a paid hosted provider can raise this without a
+    # code change. Provider gates and token buckets remain the final authority.
+    ingest_workers: int = Field(default=2, ge=1, le=64)
+    index_workers: int = Field(default=1, ge=1, le=16)
+    defer_vector_indexing: bool = False
+    ocr_workers: int = Field(default=3, ge=1, le=16)
+
     # --- Qdrant ---
     qdrant_host: str = "localhost"
     qdrant_port: int = 6343
@@ -28,7 +41,10 @@ class Settings(BaseSettings):
     # --- Embeddings (Section 8: BGE, local, no API dependency) ---
     embedding_model: str = "BAAI/bge-base-en-v1.5"
     embedding_dim: int = 768
-    embedding_device: str = "cpu"
+    # `auto` prefers CUDA, then Apple Metal, and falls back to CPU. Explicit
+    # cpu/cuda/mps values remain available for reproducible benchmarks.
+    embedding_device: str = "auto"
+    embedding_batch_size: int = Field(default=64, ge=1, le=512)
 
     # --- LLM (Section 8.1) ---
     llm_provider: Literal["gemini", "groq", "xai", "ollama", "chain"] = "gemini"
@@ -42,7 +58,12 @@ class Settings(BaseSettings):
     # Each model has its own daily free-tier quota, so exhausting one is
     # recoverable: fail over to the next rather than stopping the run.
     gemini_fallback_models: str = "gemini-3.5-flash,gemini-3.5-flash-lite,gemini-2.5-flash"
-    gemini_rpm: int = 5
+    # Requests/minute AND tokens/minute. 5 rpm was tuned for gemini-2.5-flash
+    # and made every model pay its price; the flash-lite tiers allow more. An
+    # occasional 429 now costs about a second and a fall to the next tier,
+    # rather than a stall, because the retry is impatient when a tier is live.
+    gemini_rpm: int = 15
+    gemini_tpm: int = 240_000
     gemini_retries: int = 4
     # Milliseconds. Generous enough for a large structured extraction, bounded
     # enough that a stalled connection cannot hold a worker for ever.
@@ -58,10 +79,11 @@ class Settings(BaseSettings):
     # --- Groq (tier 2: hosted, own quota) ---
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-120b"
-    # Two per minute, not thirty. The binding limit is TOKENS per minute, not
-    # requests: at 8,000 TPM and ~4,400 tokens per extraction request, three
-    # requests in a minute is already a 429. Measured, not guessed.
-    groq_rpm: int = 2
+    # A ceiling, not the real control. The binding limit is TOKENS per minute,
+    # and the limiter paces on that: a 1,500-token question no longer waits as
+    # long as a 4,400-token extraction, which was 30s of latency around 1.6s of
+    # generation.
+    groq_rpm: int = 20
     groq_retries: int = 3
     groq_timeout_s: int = 180
     # Free tier is 8,000 TPM, measured from a 413. Raise on a paid tier.

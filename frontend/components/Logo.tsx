@@ -44,7 +44,7 @@ function AngularS({ className = "" }: { className?: string }) {
       />
       {/* The notch: a sliver of the page ground cutting the stroke, which is
           what stops the S reading as a plain lightning bolt. */}
-      <path d="M13.2 19.4 22 23.5l-1.9 3.1-8.8-4.1 1.9-3.1Z" fill="hsl(var(--bg))" />
+      <path d="M13.2 19.4 22 23.5l-1.9 3.1-8.8-4.1 1.9-3.1Z" fill="hsl(var(--surface))" />
     </svg>
   );
 }

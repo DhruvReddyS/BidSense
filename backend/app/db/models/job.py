@@ -59,6 +59,7 @@ class IngestJob(Base, UUIDPrimaryKey, Timestamps):
     )
 
     file_name: Mapped[str] = mapped_column(Text, nullable=False)
+    source_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     tender_id: Mapped[str | None] = mapped_column(String(255), index=True)
     vendor_id: Mapped[str | None] = mapped_column(String(255))
 

@@ -180,6 +180,8 @@ class Citation(BaseModel):
 class GroundedAnswer(BaseModel):
     """An answer plus the evidence it is allowed to rest on."""
 
+    provider: str | None = None
+
     model_config = ConfigDict(extra="forbid")
 
     question: str
@@ -293,9 +295,12 @@ def answer_question(
             confidence=confidence,
         )
 
-    return _verify_citations(
+    answer = _verify_citations(
         question, strip_reasoning_preamble(raw), retrieved, confidence
     )
+    model = getattr(llm, "last_model_used", None)
+    answer.provider = getattr(llm, "active_provider", None) or (f"{llm.name}:{model}" if model else llm.name)
+    return answer
 
 
 def classify_confidence(chunks: list[RetrievedChunk]) -> Confidence:

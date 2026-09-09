@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, pollJob } from "@/lib/api";
 import type { JobStatus } from "@/lib/types";
 import { Chip } from "./ui";
+import { DocumentProcess } from "./DocumentProcess";
 
 /**
  * Live progress for a background extraction.
@@ -52,7 +53,7 @@ export function JobProgress({
     );
   }
   if (!job) {
-    return <div className="h-16 skeleton rounded-xl" />;
+    return <DocumentProcess label="Opening the document" detail="Preparing the extraction record" compact />;
   }
 
   const failed = job.status === "failed";
@@ -61,6 +62,7 @@ export function JobProgress({
 
   return (
     <div className="animate-rise space-y-3">
+      {!finished && !failed && <DocumentProcess label="Reading clause by clause" detail={job.stage ?? "Preparing the document"} compact />}
       <div className="flex items-baseline justify-between gap-4">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{job.file_name}</p>
@@ -119,17 +121,53 @@ export function JobProgress({
 
 function JobResultSummary({ result }: { result: NonNullable<JobStatus["result"]> }) {
   const { extraction_errors: errors, parse_warnings: warnings } = result;
+  const timingRows = result.timing ? [
+    ["Parse", result.timing.parse],
+    ["Extract", result.timing.extract],
+    ["Save", result.timing.persist],
+    ["Search index", result.timing.index],
+  ] as const : [];
+  const timingMax = Math.max(0.01, ...timingRows.map(([, seconds]) => seconds));
   return (
     <div className="space-y-3">
+      <div className="process-receipt">
+        <div className="process-receipt-head">
+          <div>
+            <span className="eyebrow">Processing receipt</span>
+            <strong>{result.from_cache ? "Verified cache reuse" : "Fresh document read"}</strong>
+          </div>
+          <span className={`receipt-signal ${errors.length ? "is-review" : "is-clear"}`}>
+            <i />{errors.length ? "Review required" : "Quality gates passed"}
+          </span>
+        </div>
+        {timingRows.length > 0 && <div className="timing-map" aria-label="Processing time by stage">
+          {timingRows.map(([label, seconds]) => <div className="timing-row" key={label}>
+            <span>{label}</span>
+            <div><i style={{ width: `${Math.max(3, seconds / timingMax * 100)}%` }} /></div>
+            <b>{seconds.toFixed(1)}s</b>
+          </div>)}
+        </div>}
+        <p>
+          {result.from_cache
+            ? "The same bytes were already verified, so model extraction was safely skipped."
+            : `${result.pages} pages processed${result.ocr_pages ? ` · ${result.ocr_pages} required OCR` : " from their native text layer"}.`}
+          {" "}Provider: <code>{result.extracted_by ?? "not recorded"}</code>.
+        </p>
+        {result.index_state === "pending" && <p className="receipt-index-note"><b>Review is ready.</b> Evidence search is finishing independently in the background.</p>}
+        {result.index_state === "failed" && <p className="receipt-index-note is-failed"><b>Structured review is ready.</b> Evidence-search indexing needs a retry.</p>}
+      </div>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4">
         <Stat label="Reference" value={result.identifier ?? "—"} mono />
         <Stat
           label="Pages"
           value={`${result.pages}${result.ocr_pages ? ` (${result.ocr_pages} scanned)` : ""}`}
         />
-        <Stat label="Indexed" value={`${result.chunks_indexed} passages`} />
+        <Stat label="Evidence search" value={result.index_state === "pending" ? "Building…" : `${result.chunks_indexed} passages`} />
         <Stat label="Time" value={`${result.seconds}s`} />
+        <Stat label="Extracted by" value={result.extracted_by ?? "Not recorded"} mono />
       </dl>
+
+      {result.validation_summary && <p role="status" className="text-xs text-[hsl(var(--warn))]">{result.validation_summary}</p>}
 
       {errors.length > 0 && (
         <div className="rounded-lg border border-[hsl(var(--warn-border))] bg-[hsl(var(--warn-soft))] p-3">

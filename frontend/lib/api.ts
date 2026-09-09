@@ -6,7 +6,12 @@ import type {
   JobAccepted,
   JobStatus,
   NotificationList,
+  ReviewLevel1Response,
+  ReviewLevel2Response,
+  PoolQueryResponse,
+  PerformanceSummary,
   TenderDetail,
+  VendorSubmissionSummary,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8100";
@@ -23,7 +28,10 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${BASE}${path}`, { cache: "no-store", ...init });
+    const token = typeof window !== "undefined" ? window.localStorage.getItem("bidsense_token") : null;
+    const headers = new Headers(init?.headers);
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    response = await fetch(`${BASE}${path}`, { cache: "no-store", ...init, headers });
   } catch {
     // A dead backend is the single most common local failure. Say so plainly
     // instead of surfacing "Failed to fetch" to the user.
@@ -48,6 +56,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  register: (payload: { email: string; password: string; full_name?: string; organisation?: string; role: "vendor" | "reviewer"; reviewer_code?: string }) => request<{ access_token: string; user: { email: string; role: string } }>("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
+  login: (email: string, password: string) => request<{ access_token: string; user: { email: string; role: string } }>("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) }),
   health: () => request<Health>("/api/health"),
 
   listNotifications: (limit = 50, offset = 0) =>
@@ -165,15 +175,35 @@ export const api = {
     }),
 
   submissions: (tenderId: string) =>
-    request<
-      {
-        vendor_id: string;
-        vendor_name: string;
-        status: string;
-        is_blacklisted: boolean;
-        elimination_reason: string | null;
-      }[]
-    >(`/api/notifications/${encodeURIComponent(tenderId)}/submissions`),
+    request<VendorSubmissionSummary[]>(`/api/notifications/${encodeURIComponent(tenderId)}/submissions`),
+
+  reviewPerformance: () => request<PerformanceSummary>("/api/review/performance"),
+
+  reviewLevel1: (tenderId: string) => request<ReviewLevel1Response>("/api/review/level1", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tender_id: tenderId }),
+  }),
+
+  reviewLevel2: (tenderId: string, targetCount: number, factorWeights: Record<string, number>) => request<ReviewLevel2Response>("/api/review/level2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tender_id: tenderId, target_count: targetCount, factor_weights: factorWeights }),
+  }),
+
+  queryPool: (tenderId: string, question: string) => request<PoolQueryResponse>("/api/review/query", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tender_id: tenderId, question }),
+  }),
+
+  exportCommitteeReport: async (tenderId: string, fmt: "pdf" | "docx" = "pdf") => {
+    const token = window.localStorage.getItem("bidsense_token");
+    const response = await fetch(`${BASE}/api/review/committee-report?tender_id=${encodeURIComponent(tenderId)}&fmt=${fmt}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!response.ok) throw new ApiError(`Committee export failed (${response.status}).`, response.status);
+    const blob = await response.blob(); const url = URL.createObjectURL(blob); const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = `committee_${tenderId}.${fmt}`.replace(/[^\w.-]+/g, "_"); document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+  },
 };
 
 /**

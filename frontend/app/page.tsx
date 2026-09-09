@@ -1,153 +1,113 @@
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import type { NotificationList, NotificationSummary } from "@/lib/types";
-import { Card, Chip, EmptyState, ErrorNote, formatDate, formatInr } from "@/components/ui";
+import { Chip, EmptyState, ErrorNote, formatDate, formatInr } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   let data: NotificationList | null = null;
   let error: string | null = null;
-
-  try {
-    data = await api.listNotifications();
-  } catch (e) {
-    error = e instanceof ApiError ? e.message : "Something went wrong.";
-  }
+  try { data = await api.listNotifications(); }
+  catch (e) { error = e instanceof ApiError ? e.message : "Could not load tenders."; }
 
   const tenders = data?.items ?? [];
-  const totalBids = tenders.reduce((sum, t) => sum + t.submission_count, 0);
-  const totalCriteria = tenders.reduce(
-    (sum, t) => sum + t.eligibility_count + t.document_count,
-    0,
-  );
+  const now = Date.now();
+  const active = tenders.filter((t) => !t.submission_deadline || new Date(t.submission_deadline).getTime() >= now).length;
+  const archived = tenders.length - active;
+  const bids = tenders.reduce((sum, t) => sum + t.submission_count, 0);
+  const requirements = tenders.reduce((sum, t) => sum + t.eligibility_count + t.document_count, 0);
 
   return (
-    <div className="space-y-8">
-      <section className="relative -mx-5 -mt-9 px-5 pb-2 pt-12">
-        <div className="grid-backdrop pointer-events-none absolute inset-0 -z-10" />
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div className="max-w-2xl">
-            <h1 className="text-[2rem] font-semibold leading-tight tracking-tight">
-              Know what is missing
-              <br />
-              <span className="text-[hsl(var(--fg-muted))]">
-                before you submit.
-              </span>
-            </h1>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-[hsl(var(--fg-muted))]">
-              Upload a tender notification and your draft bid. Every requirement
-              is checked against the clause it comes from, and anything we
-              cannot verify is said plainly rather than guessed.
-            </p>
-          </div>
-
-          {tenders.length > 0 && (
-            <dl className="flex gap-7">
-              <Metric label="Tenders" value={String(data!.page.total)} />
-              <Metric label="Bids checked" value={String(totalBids)} />
-              <Metric label="Requirements" value={String(totalCriteria)} />
-            </dl>
-          )}
+    <div className="space-y-9">
+      <section className="flex flex-col justify-between gap-5 border-b pb-8 sm:flex-row sm:items-end">
+        <div>
+          <p className="eyebrow">Workspace</p>
+          <h1 className="font-display mt-2 text-4xl font-medium tracking-[-.025em] sm:text-5xl">Tenders</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[hsl(var(--fg-muted))]">
+            Review tender requirements, check draft bids, and keep every decision connected to its source clause.
+          </p>
         </div>
+        <Link href="/upload" className="btn btn-primary shrink-0">Add tender</Link>
+      </section>
+
+      <section aria-labelledby="overview-heading">
+        <h2 id="overview-heading" className="sr-only">Portfolio overview</h2>
+        <dl className="grid grid-cols-2 border-y lg:grid-cols-4">
+          <Summary label="Active tenders" value={active} note={active === 1 ? "Open workspace" : "Open workspaces"} />
+          <Summary label="Archived" value={archived} note="Past deadlines" />
+          <Summary label="Bids checked" value={bids} note="Across all tenders" />
+          <Summary label="Requirements" value={requirements} note="Tracked to source" accent />
+        </dl>
       </section>
 
       {error && <ErrorNote>{error}</ErrorNote>}
-
       {!error && tenders.length === 0 && (
         <EmptyState
           title="No tenders yet"
-          body="Upload the official tender notification. Everything your bid is checked against is read from that document, so use the version the authority published."
-          action={
-            <Link href="/upload" className="btn btn-primary">
-              Add your first tender
-            </Link>
-          }
+          body="Add the official tender notification to create your first review workspace."
+          action={<Link href="/upload" className="btn btn-primary">Add your first tender</Link>}
         />
       )}
 
       {tenders.length > 0 && (
-        <div className="stagger grid gap-3">
-          {tenders.map((tender) => (
-            <TenderCard key={tender.tender_id} tender={tender} />
-          ))}
-        </div>
+        <section aria-labelledby="portfolio-heading">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 id="portfolio-heading" className="text-lg font-semibold">All tenders</h2>
+              <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">Select a tender to continue your review.</p>
+            </div>
+            <span className="tnum text-xs text-[hsl(var(--fg-subtle))]">{tenders.length} total</span>
+          </div>
+          <div className="overflow-hidden border-y">
+            <div className="hidden grid-cols-[minmax(0,1fr)_8rem_7rem_7rem_2rem] gap-5 border-b bg-[hsl(var(--surface-2))] px-5 py-3 lg:grid">
+              <span className="label">Tender</span><span className="label">Deadline</span><span className="label">EMD</span><span className="label">Bids</span><span />
+            </div>
+            <div className="divide-y">
+              {tenders.map((tender) => <TenderRow key={tender.tender_id} tender={tender} />)}
+            </div>
+          </div>
+        </section>
       )}
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Summary({ label, value, note, accent = false }: { label: string; value: number; note: string; accent?: boolean }) {
   return (
-    <div>
+    <div className="border-b px-1 py-5 odd:border-r lg:border-b-0 lg:border-r lg:px-5 lg:first:pl-0 lg:last:border-r-0">
       <dt className="label">{label}</dt>
-      <dd className="tnum mt-1 text-2xl font-semibold leading-none">{value}</dd>
+      <dd className={`font-display tnum mt-2 text-3xl font-medium sm:text-4xl ${accent ? "text-[hsl(var(--accent))]" : ""}`}>{value}</dd>
+      <p className="mt-1 text-[11px] text-[hsl(var(--fg-subtle))]">{note}</p>
     </div>
   );
 }
 
-function TenderCard({ tender }: { tender: NotificationSummary }) {
+function TenderRow({ tender }: { tender: NotificationSummary }) {
   const deadline = tender.submission_deadline;
-  const daysLeft = deadline
-    ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000)
-    : null;
+  const daysLeft = deadline ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000) : null;
   const closed = daysLeft !== null && daysLeft < 0;
   const urgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 14;
 
   return (
-    <Link
-      href={`/tenders/${encodeURIComponent(tender.tender_id)}`}
-      className="block"
-    >
-      <Card className="card-hover group relative overflow-hidden p-5">
-        {/* A hairline that warms on hover — enough to signal the whole card is
-            a target without adding a button that competes with it. */}
-        <span className="absolute inset-y-0 left-0 w-[2px] bg-[hsl(var(--accent))] opacity-0 transition-opacity group-hover:opacity-100" />
-
-        <div className="flex items-start justify-between gap-5">
-          <div className="min-w-0 flex-1">
-            <h2 className="break-anywhere font-medium leading-snug transition-colors group-hover:text-[hsl(var(--accent))]">
-              {tender.title}
-            </h2>
-            <p className="mt-1.5 truncate text-sm text-[hsl(var(--fg-muted))]">
-              {tender.issuing_authority ?? "Issuing authority not stated"}
-            </p>
-            <p className="mt-1.5 break-anywhere font-mono text-[11px] text-[hsl(var(--fg-subtle))]">
-              {tender.tender_id}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 flex-col items-end gap-1.5">
-            {tender.sector && <Chip>{tender.sector}</Chip>}
-            {tender.submission_count > 0 && (
-              <Chip tone="accent">
-                {tender.submission_count} bid
-                {tender.submission_count === 1 ? "" : "s"}
-              </Chip>
-            )}
-            {closed && <Chip tone="neutral">closed</Chip>}
-            {urgent && <Chip tone="warn">{daysLeft}d left</Chip>}
-          </div>
+    <Link href={`/tenders/${encodeURIComponent(tender.tender_id)}`} className="group grid gap-4 px-5 py-5 transition-colors hover:bg-[hsl(var(--surface-2))] lg:grid-cols-[minmax(0,1fr)_8rem_7rem_7rem_2rem] lg:items-center lg:gap-5">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          {closed ? <Chip>Closed</Chip> : urgent ? <Chip tone="warn">Closing soon</Chip> : <Chip tone="ok">Active</Chip>}
+          {tender.sector && <span className="text-[11px] capitalize text-[hsl(var(--fg-muted))]">{tender.sector}</span>}
         </div>
-
-        <dl className="mt-5 grid grid-cols-2 gap-4 border-t pt-4 text-xs sm:grid-cols-4">
-          <Field label="Closes" value={formatDate(deadline)} />
-          <Field label="EMD" value={formatInr(tender.emd_amount_inr)} />
-          <Field label="Eligibility" value={`${tender.eligibility_count} criteria`} />
-          <Field label="Documents" value={`${tender.document_count} required`} />
-        </dl>
-      </Card>
+        <h3 className="mt-2 break-anywhere text-sm font-semibold leading-5 transition-colors group-hover:text-[hsl(var(--accent))]">{tender.title}</h3>
+        <p className="mt-1 truncate text-xs text-[hsl(var(--fg-muted))]">{tender.issuing_authority ?? "Issuing authority not stated"}</p>
+        <p className="mt-1 truncate font-mono text-[9px] text-[hsl(var(--fg-subtle))]">{tender.tender_id}</p>
+      </div>
+      <Data label="Deadline" value={formatDate(deadline)} />
+      <Data label="EMD" value={formatInr(tender.emd_amount_inr)} />
+      <Data label="Bids checked" value={String(tender.submission_count)} accent />
+      <span className="hidden text-lg text-[hsl(var(--fg-subtle))] transition-transform group-hover:translate-x-0.5 group-hover:text-[hsl(var(--accent))] lg:block">→</span>
     </Link>
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="label">{label}</dt>
-      <dd className="tnum mt-1 truncate font-medium" title={value}>
-        {value}
-      </dd>
-    </div>
-  );
+function Data({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return <div className="min-w-0"><p className="label lg:hidden">{label}</p><p className={`tnum mt-1 truncate text-xs font-medium lg:mt-0 ${accent ? "text-[hsl(var(--accent))]" : ""}`}>{value}</p></div>;
 }

@@ -15,6 +15,7 @@ from __future__ import annotations
 import threading
 from abc import ABC, abstractmethod
 from functools import cached_property
+from contextvars import ContextVar
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -36,6 +37,19 @@ class LLMProvider(ABC):
     #: requests internally while every caller's clock runs, so firing six
     #: extractors at once there produces six timeouts instead of six results.
     max_concurrency: int = 1
+
+    @cached_property
+    def _served_model(self) -> ContextVar[str | None]:
+        return ContextVar(f"served_model_{id(self)}", default=None)
+
+    @property
+    def last_model_used(self) -> str | None:
+        """The model serving this execution context, never another worker's."""
+        return self._served_model.get()
+
+    @last_model_used.setter
+    def last_model_used(self, value: str | None) -> None:
+        self._served_model.set(value)
 
     @property
     def input_char_budget(self) -> int | None:
@@ -76,3 +90,9 @@ class LLMProvider(ABC):
         assume the result conforms, which is what keeps the extraction pipeline
         from having to defensively re-parse everywhere.
         """
+
+    def generate_structured_from(self, prompt_factory, schema: type[TModel], *, system=None) -> TModel:
+        """Build document context for this provider's window at call time."""
+        return self.generate_structured(
+            prompt_factory(self.input_char_budget), schema, system=system
+        )

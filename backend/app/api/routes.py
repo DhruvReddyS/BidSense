@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import hmac
 import re
 import shutil
 import tempfile
@@ -22,7 +23,8 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_notification, require_submission
+from app.api.quality import quality_for, provider_label
+from app.api.deps import get_db, require_notification, require_submission, current_user, reviewer_user, ensure_submission_access
 from app.api import jobs as job_runner
 from app.api.schemas import (
     AskRequest,
@@ -37,14 +39,29 @@ from app.api.schemas import (
     HealthResponse,
     JobAccepted,
     JobStatusResponse,
+    Level1RunRequest,
+    Level1RunResponse,
+    Level1VendorResult,
+    Level2RunRequest,
+    Level2RunResponse,
+    ShortlistCandidateOut,
+    PoolQueryRequest,
+    PoolQueryResponse,
+    PoolCitationOut,
     NotificationList,
     NotificationSummary,
     Page,
+    PerformanceSummary,
     SourceDocuments,
     StalenessOut,
+    RegisterRequest,
+    LoginRequest,
+    TokenResponse,
+    UserOut,
 )
-from app.db.models import IngestJob, JobKind
+from app.db.models import IngestJob, JobKind, JobStatus
 from app.compliance.gap import build_gap_report
+from app.compliance.elimination import decide
 from app.corrigendum.diff import FIELD_LABELS
 from app.corrigendum.staleness import mark_report_generated, staleness_for
 from app.extraction.validate import (
@@ -67,11 +84,50 @@ from app.ingest import missing_dependencies, ocr_available
 from app.ingest.loader import SUPPORTED_SUFFIXES, UnsupportedDocumentError
 from app.rag import answer_question, retrieve, retrieve_for_pair
 from app.schemas.common import ChunkSection, DocumentKind
+from app.schemas.common import VendorStatus
+from app.review import build_candidate, choose_shortlist, classify_query, structured_answer
+from app.documents import store_document
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # tender PDFs are large but not unbounded
+
+
+def _user_out(user) -> UserOut:
+    return UserOut(id=str(user.id), email=user.email, full_name=user.full_name, organisation=user.organisation, role=user.role)
+
+
+@router.post("/auth/register", response_model=TokenResponse, status_code=201)
+def register(request: RegisterRequest, session: Session = Depends(get_db)) -> TokenResponse:
+    from sqlalchemy import func, select
+    from app.auth import create_token, hash_password
+    from app.db.models import User
+    email = request.email.strip().casefold()
+    from app.schemas.common import UserRole
+    if request.role == UserRole.REVIEWER and not hmac.compare_digest(request.reviewer_code or "", settings.reviewer_registration_code):
+        raise HTTPException(status_code=403, detail="A valid reviewer invitation code is required")
+    if session.scalar(select(User).where(func.lower(User.email) == email)):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    user = User(email=email, full_name=request.full_name, organisation=request.organisation, role=request.role, hashed_password=hash_password(request.password))
+    session.add(user); session.commit(); session.refresh(user)
+    return TokenResponse(access_token=create_token(str(user.id), user.role.value), user=_user_out(user))
+
+
+@router.post("/auth/login", response_model=TokenResponse)
+def login(request: LoginRequest, session: Session = Depends(get_db)) -> TokenResponse:
+    from sqlalchemy import func, select
+    from app.auth import create_token, verify_password
+    from app.db.models import User
+    user = session.scalar(select(User).where(func.lower(User.email) == request.email.strip().casefold()))
+    if user is None or not user.is_active or not verify_password(request.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Incorrect email or password", headers={"WWW-Authenticate": "Bearer"})
+    return TokenResponse(access_token=create_token(str(user.id), user.role.value), user=_user_out(user))
+
+
+@router.get("/auth/me", response_model=UserOut)
+def me(user=Depends(current_user)) -> UserOut:
+    return _user_out(user)
 
 
 # --------------------------------------------------------------------------- #
@@ -161,6 +217,14 @@ def _to_response(report) -> IngestResponse:
         parse_warnings=report.parse_warnings,
         extraction_errors=report.extraction_errors,
         seconds=round(report.total_seconds, 2),
+        extracted_by=report.extracted_by,
+        from_cache=report.from_cache,
+        timing={
+            "parse": round(report.parse_seconds, 2),
+            "extract": round(report.extract_seconds, 2),
+            "persist": round(report.persist_seconds, 2),
+            "index": round(report.index_seconds, 2),
+        },
     )
 
 
@@ -174,15 +238,16 @@ def _accept(job_id, file_name: str) -> JobAccepted:
 
 
 @router.post("/notifications", response_model=JobAccepted, status_code=202)
-def upload_notification(file: UploadFile = File(...)) -> JobAccepted:
+def upload_notification(file: UploadFile = File(...), reviewer=Depends(reviewer_user)) -> JobAccepted:
     """Section 4.1 -- ingest the official tender notification.
 
     Returns 202 immediately; poll `poll_url` for progress.
     """
     path = _save_upload(file)
     try:
-        job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name)
-        job_runner.submit(job_id, JobKind.NOTIFICATION, path)
+        digest = store_document(path)
+        job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name, owner_user_id=reviewer.id, source_hash=digest)
+        job_runner.submit(job_id, JobKind.NOTIFICATION, path, owner_user_id=reviewer.id)
     except Exception:
         # The worker deletes the upload when it finishes. If queueing itself
         # fails there is no worker, so the temp directory would be orphaned --
@@ -198,6 +263,7 @@ def upload_submission(
     vendor_id: str = Form(..., min_length=1, max_length=255),
     tender_id: str = Form(..., min_length=1, max_length=255),
     session: Session = Depends(get_db),
+    user=Depends(current_user),
 ) -> JobAccepted:
     """Section 4.2 -- ingest a vendor's draft bid against a notification."""
     # Validated before the job is queued: a bid filed against a tender that does
@@ -207,11 +273,12 @@ def upload_submission(
 
     path = _save_upload(file)
     try:
+        digest = store_document(path)
         job_id = job_runner.create_job(
-            JobKind.SUBMISSION, path.name, tender_id=tender_id, vendor_id=vendor_id
+            JobKind.SUBMISSION, path.name, tender_id=tender_id, vendor_id=vendor_id, owner_user_id=user.id, source_hash=digest
         )
         job_runner.submit(
-            job_id, JobKind.SUBMISSION, path, vendor_id=vendor_id, tender_id=tender_id
+            job_id, JobKind.SUBMISSION, path, vendor_id=vendor_id, tender_id=tender_id, owner_user_id=user.id
         )
     except Exception:
         shutil.rmtree(path.parent, ignore_errors=True)
@@ -224,6 +291,7 @@ def upload_corrigendum(
     file: UploadFile = File(...),
     tender_id: str = Form(..., min_length=1, max_length=255),
     session: Session = Depends(get_db),
+    reviewer=Depends(reviewer_user),
 ) -> JobAccepted:
     """Section 5.6 (Part 1 slice) -- amend a notification already extracted.
 
@@ -235,8 +303,9 @@ def upload_corrigendum(
 
     path = _save_upload(file)
     try:
+        digest = store_document(path)
         job_id = job_runner.create_job(
-            JobKind.CORRIGENDUM, path.name, tender_id=tender_id
+            JobKind.CORRIGENDUM, path.name, tender_id=tender_id, owner_user_id=reviewer.id, source_hash=digest
         )
         job_runner.submit(job_id, JobKind.CORRIGENDUM, path, tender_id=tender_id)
     except Exception:
@@ -361,6 +430,54 @@ def job_status(job_id: str, session: Session = Depends(get_db)) -> JobStatusResp
     )
 
 
+@router.get("/review/performance", response_model=PerformanceSummary)
+def review_performance(
+    session: Session = Depends(get_db), reviewer=Depends(reviewer_user)
+) -> PerformanceSummary:
+    """A compact operational pulse over recent completed document jobs."""
+    rows = session.scalars(
+        select(IngestJob)
+        .where(
+            IngestJob.status.in_([JobStatus.SUCCEEDED, JobStatus.PARTIAL]),
+            IngestJob.result.is_not(None),
+        )
+        .order_by(IngestJob.finished_at.desc())
+        .limit(200)
+    ).all()
+    samples = []
+    cached = 0
+    total_pages = 0
+    total_seconds = 0.0
+    for row in rows:
+        result = row.result or {}
+        seconds = result.get("seconds")
+        if isinstance(seconds, (int, float)) and seconds >= 0:
+            samples.append(float(seconds))
+            pages = result.get("pages")
+            if isinstance(pages, int) and pages > 0 and seconds > 0:
+                total_pages += pages
+                total_seconds += float(seconds)
+        cached += int(bool(result.get("from_cache")))
+    samples.sort()
+
+    def percentile(fraction: float) -> float | None:
+        if not samples:
+            return None
+        position = (len(samples) - 1) * fraction
+        lower = int(position)
+        upper = min(lower + 1, len(samples) - 1)
+        value = samples[lower] + (samples[upper] - samples[lower]) * (position - lower)
+        return round(value, 1)
+
+    return PerformanceSummary(
+        completed_jobs=len(samples),
+        median_seconds=percentile(0.5),
+        p95_seconds=percentile(0.95),
+        cache_reuse_percent=round(cached / len(rows) * 100, 1) if rows else 0.0,
+        pages_per_second=round(total_pages / total_seconds, 2) if total_seconds else None,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Reading extracted data
 # --------------------------------------------------------------------------- #
@@ -399,7 +516,7 @@ def get_notifications(
 # 2024-25" -- so the path converter is required, and a greedy converter matched
 # first would swallow the "/submissions" suffix into the id.
 @router.get("/notifications/{tender_id:path}/submissions")
-def get_submissions(tender_id: str, session: Session = Depends(get_db)):
+def get_submissions(tender_id: str, session: Session = Depends(get_db), reviewer=Depends(reviewer_user)):
     row = require_notification(session, tender_id)
     return [
         {
@@ -411,6 +528,202 @@ def get_submissions(tender_id: str, session: Session = Depends(get_db)):
         }
         for s in list_submissions(session, row.id)
     ]
+
+
+# --------------------------------------------------------------------------- #
+# Part 2, Level 1 — deterministic pool elimination
+# --------------------------------------------------------------------------- #
+@router.post("/review/level1", response_model=Level1RunResponse)
+def run_level1(
+    request: Level1RunRequest,
+    session: Session = Depends(get_db),
+    _reviewer=Depends(reviewer_user),
+) -> Level1RunResponse:
+    """Evaluate every bid against hard tender criteria and persist the result.
+
+    The LLM is deliberately absent: this consumes already extracted structured
+    fields and the same auditable rule engine used by the vendor gap report.
+    """
+    from app.vector.qdrant import retag_status
+
+    notification_row = require_notification(session, request.tender_id)
+    notification = to_notification_schema(notification_row)
+    rows = list_submissions(session, notification_row.id)
+    results: list[Level1VendorResult] = []
+    originals: list[tuple[object, VendorStatus]] = []
+    retagged: list[tuple[str, VendorStatus]] = []
+
+    try:
+        for row in rows:
+            report = build_gap_report(notification, to_submission_schema(row))
+            decision = decide(report)
+            originals.append((row, row.status))
+            row.status = decision.status
+            row.elimination_reason = decision.reason
+            row.elimination_clause_ref = decision.clause_ref
+            row.elimination_source_page = decision.source_page
+            row.elimination_source_snippet = decision.source_snippet
+            results.append(
+                Level1VendorResult(
+                    vendor_id=row.vendor_id,
+                    vendor_name=row.vendor_name,
+                    status=decision.status.value,
+                    elimination_reason=decision.reason,
+                    clause_ref=decision.clause_ref,
+                    source_page=decision.source_page,
+                )
+            )
+
+        session.flush()
+        for row, old_status in originals:
+            retag_status(str(row.id), row.status)
+            retagged.append((str(row.id), old_status))
+        session.commit()
+    except Exception:
+        session.rollback()
+        for submission_id, old_status in retagged:
+            try:
+                retag_status(submission_id, old_status)
+            except Exception:
+                logger.critical("Could not compensate Qdrant status for %s", submission_id)
+        raise
+
+    eliminated = sum(result.status == VendorStatus.ELIMINATED.value for result in results)
+    return Level1RunResponse(
+        tender_id=request.tender_id,
+        total=len(results),
+        eliminated=eliminated,
+        pending=len(results) - eliminated,
+        results=results,
+    )
+
+
+@router.post("/review/level2", response_model=Level2RunResponse)
+def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _reviewer=Depends(reviewer_user)) -> Level2RunResponse:
+    """Create a reviewer-sized qualified pool without publishing a ranking."""
+    from app.vector.qdrant import retag_status
+
+    notification_row = require_notification(session, request.tender_id)
+    rows = list_submissions(session, notification_row.id)
+    eligible_rows = [row for row in rows if row.status != VendorStatus.ELIMINATED]
+    candidates = [build_candidate(row) for row in eligible_rows]
+    selected = choose_shortlist(candidates, min(request.target_count, len(candidates)), request.factor_weights)
+    selected_ids = {candidate.vendor_id for candidate in selected}
+    originals = [(row, row.status) for row in eligible_rows]
+    retagged: list[tuple[str, VendorStatus]] = []
+    try:
+        for row in eligible_rows:
+            row.status = VendorStatus.SHORTLISTED if row.vendor_id in selected_ids else VendorStatus.PENDING
+        session.flush()
+        for row, old_status in originals:
+            retag_status(str(row.id), row.status)
+            retagged.append((str(row.id), old_status))
+        session.commit()
+    except Exception:
+        session.rollback()
+        for submission_id, old_status in retagged:
+            try:
+                retag_status(submission_id, old_status)
+            except Exception:
+                logger.critical("Could not compensate Qdrant shortlist status for %s", submission_id)
+        raise
+
+    output = []
+    for candidate in selected:
+        evidence = [f"{candidate.experience:g} years in business"]
+        if candidate.project_scale is not None:
+            evidence.append(f"Largest recorded project ₹{candidate.project_scale:,.0f}")
+        if candidate.pricing is not None:
+            evidence.append(f"Quoted price ₹{candidate.pricing:,.0f}")
+        if candidate.technical_approach:
+            evidence.append("Technical approach present")
+        output.append(ShortlistCandidateOut(
+            vendor_id=candidate.vendor_id,
+            vendor_name=candidate.vendor_name,
+            status=VendorStatus.SHORTLISTED.value,
+            summary="Selected into the qualified pool from the reviewer-chosen factors and recorded bid facts.",
+            evidence=evidence,
+        ))
+    return Level2RunResponse(
+        tender_id=request.tender_id,
+        eligible=len(candidates),
+        shortlisted=len(output),
+        requested=request.target_count,
+        factors=list(request.factor_weights) or ["experience", "project_scale", "technical_approach", "pricing"],
+        candidates=output,
+    )
+
+
+@router.post("/review/query", response_model=PoolQueryResponse)
+def query_vendor_pool(request: PoolQueryRequest, session: Session = Depends(get_db), _reviewer=Depends(reviewer_user)) -> PoolQueryResponse:
+    """Route audit/structured questions to SQL facts and narrative questions to Qdrant."""
+    notification_row = require_notification(session, request.tender_id)
+    rows = list_submissions(session, notification_row.id)
+    candidates = [build_candidate(row) for row in rows]
+    statuses = {row.vendor_id: row.status.value for row in rows}
+    reasons = {row.vendor_id: row.elimination_reason for row in rows}
+    route = classify_query(request.question)
+    citations: list[PoolCitationOut] = []
+
+    if route in {"qualitative", "hybrid"}:
+        chunks = retrieve(
+            request.question,
+            tender_id=request.tender_id,
+            doc_kind=DocumentKind.SUBMISSION,
+            sections=[ChunkSection.TECHNICAL_APPROACH, ChunkSection.PAST_PERFORMANCE],
+            top_k=8,
+        )
+        citations = [PoolCitationOut(
+            vendor_id=chunk.vendor_id,
+            source_file=chunk.source_file,
+            source_page=chunk.source_page,
+            clause_ref=chunk.clause_ref,
+            snippet=chunk.text[:500],
+        ) for chunk in chunks]
+        narrative = " ".join(
+            f"{chunk.vendor_id or 'Submission'} records: {chunk.text[:240].strip()}"
+            for chunk in chunks[:4]
+        ) or "No sufficiently relevant narrative evidence was found."
+        if route == "hybrid":
+            facts = structured_answer(request.question, candidates, statuses, reasons)
+            answer = f"Recorded facts: {facts}\n\nNarrative evidence: {narrative}"
+        else:
+            answer = narrative
+    else:
+        answer = structured_answer(request.question, candidates, statuses, reasons)
+        if route == "audit":
+            for row in rows:
+                if row.elimination_reason and (row.vendor_name.casefold() in request.question.casefold() or row.vendor_id.casefold() in request.question.casefold()):
+                    citations.append(PoolCitationOut(
+                        vendor_id=row.vendor_id,
+                        source_page=row.elimination_source_page,
+                        clause_ref=row.elimination_clause_ref,
+                        snippet=row.elimination_source_snippet or row.elimination_reason,
+                    ))
+    return PoolQueryResponse(route=route, answer=answer, citations=citations)
+
+
+@router.get("/review/committee-report")
+def committee_report(
+    tender_id: str,
+    fmt: str = Query(default="pdf", pattern="^(pdf|docx)$"),
+    session: Session = Depends(get_db),
+    _reviewer=Depends(reviewer_user),
+):
+    """Export the full status register and decision audit for a committee meeting."""
+    from fastapi.responses import Response
+    from app.review.export import export_docx, export_pdf
+
+    notification_row = require_notification(session, tender_id)
+    notification = to_notification_schema(notification_row)
+    rows = list_submissions(session, notification_row.id)
+    body = export_pdf(notification, rows) if fmt == "pdf" else export_docx(notification, rows)
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "_", tender_id)[:100]
+    return Response(
+        content=body,
+        media_type="application/pdf" if fmt == "pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="committee_{safe}.{fmt}"'},
+    )
 
 
 # Also before the greedy route below -- same reason as /submissions.
@@ -441,6 +754,7 @@ def get_corrigenda(tender_id: str, session: Session = Depends(get_db)):
                 )
                 for f in c.changed_fields
             ],
+            applied=c.applied,
         )
         for c in sorted(row.corrigenda, key=lambda c: c.created_at, reverse=True)
     ]
@@ -465,46 +779,17 @@ def get_notification(tender_id: str, session: Session = Depends(get_db)):
 # --------------------------------------------------------------------------- #
 @router.post("/gap-report", response_model=GapReportResponse)
 def gap_report(
-    request: GapReportRequest, session: Session = Depends(get_db)
+    request: GapReportRequest, session: Session = Depends(get_db), user=Depends(current_user)
 ) -> GapReportResponse:
     notification_row = require_notification(session, request.tender_id)
     submission_row = require_submission(session, request.tender_id, request.vendor_id)
+    ensure_submission_access(user, submission_row)
 
     notification = to_notification_schema(notification_row)
     submission = to_submission_schema(submission_row)
     report = build_gap_report(notification, submission)
 
-    # Re-validated here rather than read back from the ingest job: this checks
-    # what is actually STORED, which is what the report was computed from. A
-    # job's findings describe the run, and the two can diverge after a partial
-    # re-extraction.
-    findings = [
-        ValidationFindingOut(
-            field=f.field, severity=f.severity.value, message=f.message,
-            value=f.value, affects_confidence=f.affects_confidence, source=source,
-        )
-        for source, items in (
-            ("notification", validate_notification(notification)),
-            ("bid", validate_submission(submission)),
-        )
-        for f in items
-    ]
-    quality = DataQualityOut(
-        ok=not any(f.affects_confidence for f in findings),
-        banner=summarise(
-            [
-                Finding(
-                    field=f.field,
-                    severity=ValidationSeverity(f.severity),
-                    message=f.message,
-                    value=f.value,
-                    affects_confidence=f.affects_confidence,
-                )
-                for f in findings
-            ]
-        ),
-        findings=findings,
-    )
+    quality = quality_for(notification_row, notification, submission_row, submission)
 
     # Stamped on the FIRST report and on an explicit re-check, never on every
     # read. Stamping on every read would clear the staleness banner the instant
@@ -548,6 +833,7 @@ def export_gap_report(
     request: GapReportRequest,
     fmt: str = Query(default="pdf", pattern="^(pdf|docx)$"),
     session: Session = Depends(get_db),
+    user=Depends(current_user),
 ):
     """Section 4.6 -- the report as a file the vendor can hand to their team.
 
@@ -564,22 +850,28 @@ def export_gap_report(
 
     notification_row = require_notification(session, request.tender_id)
     submission_row = require_submission(session, request.tender_id, request.vendor_id)
+    ensure_submission_access(user, submission_row)
     notification = to_notification_schema(notification_row)
     submission = to_submission_schema(submission_row)
     report = build_gap_report(notification, submission)
 
-    findings = validate_notification(notification) + validate_submission(submission)
+    quality = quality_for(notification_row, notification, submission_row, submission)
     state = staleness_for(session, notification_row.id, submission_row)
 
     context = ExportContext(
         tender_title=notification.title,
         issuing_authority=notification.issuing_authority,
         submission_deadline=notification.submission_deadline,
-        data_quality_banner=summarise(findings),
+        data_quality_banner=quality.banner,
+        extracted_by=provider_label(quality),
         staleness_banner=state.banner,
     )
 
-    body = export_pdf(report, context) if fmt == "pdf" else export_docx(report, context)
+    from app.compliance.pdf_fonts import UnsupportedPDFText
+    try:
+        body = export_pdf(report, context) if fmt == "pdf" else export_docx(report, context)
+    except UnsupportedPDFText as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", f"{request.tender_id}_{request.vendor_id}")[:120]
     return Response(
         content=body,
@@ -595,12 +887,13 @@ def export_gap_report(
 # Section 4.5 -- RAG Q&A
 # --------------------------------------------------------------------------- #
 @router.post("/ask", response_model=AskResponse)
-def ask(request: AskRequest, session: Session = Depends(get_db)) -> AskResponse:
+def ask(request: AskRequest, session: Session = Depends(get_db), user=Depends(current_user)) -> AskResponse:
     notification_row = require_notification(session, request.tender_id)
     submission_row = None
 
     if request.vendor_id:
         submission_row = require_submission(session, request.tender_id, request.vendor_id)
+        ensure_submission_access(user, submission_row)
         chunks = retrieve_for_pair(
             request.question,
             tender_id=request.tender_id,
@@ -617,6 +910,8 @@ def ask(request: AskRequest, session: Session = Depends(get_db)) -> AskResponse:
 
     answer = answer_question(request.question, chunks)
     return AskResponse(
+        data_quality=quality_for(notification_row, to_notification_schema(notification_row),
+                                 submission_row, to_submission_schema(submission_row) if submission_row else None),
         answer=answer,
         grounded=answer.is_grounded,
         confidence=answer.confidence.value,

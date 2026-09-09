@@ -1,0 +1,23 @@
+{
+  "http_status": 200,
+  "annexure_ii": {
+    "requirement": "Submit Process Compliance Statement (Annexure-II)",
+    "kind": "document",
+    "status": "missing",
+    "severity": "disqualifying",
+    "required_value": "Process Compliance Statement (Annexure-II)",
+    "found_value": null,
+    "explanation": "Your submission lists Process Compliance Statement (Annexure-II) but marks it as not enclosed.",
+    "is_mandatory": true,
+    "match_method": null,
+    "match_score": null,
+    "conditional_on": null,
+    "notification_provenance": {
+      "clause_ref": null,
+      "source_page": 8,
+      "source_snippet": "All the Bidders are required to submit the Process Compliance Statement (Annexure-II) duly signed to M/s Antares Systems Limited.",
+      "extraction_confidence": null
+    },
+    "submission_provenance": null
+  }
+}

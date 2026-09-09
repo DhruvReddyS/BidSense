@@ -9,16 +9,20 @@ import { Card, ErrorNote } from "@/components/ui";
 
 const STEPS = [
   {
-    title: "Upload the notification",
-    body: "The official tender document as the authority published it — PDF or DOCX. Scanned documents are read with OCR.",
+    title: "Preserve the source",
+    body: "The exact file is retained by content hash so every citation remains auditable.",
   },
   {
-    title: "We read it clause by clause",
-    body: "Eligibility thresholds, required documents, deadlines and submission rules, each recorded with the clause and page it came from.",
+    title: "Read in parallel",
+    body: "Specialists extract deadlines, eligibility, documents and evaluation rules concurrently.",
   },
   {
-    title: "Then check your bid against it",
-    body: "Upload your draft and see what is missing while you can still fix it.",
+    title: "Validate before use",
+    body: "Dates, money, citations and required coverage pass deterministic quality gates.",
+  },
+  {
+    title: "Open review early",
+    body: "Structured review becomes usable first; evidence-search indexing can finish independently.",
   },
 ];
 
@@ -47,17 +51,21 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_16rem]">
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Add a tender</h1>
-          <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[hsl(var(--fg-muted))]">
-            Every check we run is measured against this document, so use the
-            version the authority published rather than a summary.
-          </p>
-        </div>
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-10 max-w-3xl">
+        <span className="eyebrow">New tender</span>
+        <h1 className="font-display text-balance mt-3 text-4xl font-medium leading-tight sm:text-5xl">Upload the tender notification</h1>
+        <p className="mt-4 max-w-2xl text-sm leading-6 text-[hsl(var(--fg-muted))]">Use the official document published by the authority. All requirements and subsequent bid checks will be traced back to this source.</p>
+      </div>
 
-        <Card className="p-6">
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
+      <div className="space-y-6">
+
+        <Card className="p-5 sm:p-8">
+          <div className="relative mb-6 flex items-center justify-between gap-4">
+            <div><p className="label">Source document</p><h2 className="mt-2 text-xl font-semibold">Official tender notification</h2></div>
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--accent-soft))] text-lg text-[hsl(var(--accent))]">↥</span>
+          </div>
           <FileDrop
             onSelect={(f) => {
               setFile(f);
@@ -65,14 +73,15 @@ export default function UploadPage() {
               setError(null);
             }}
             disabled={busy || (!!jobId && !tenderId)}
-            hint="PDF or DOCX, up to 50 MB"
+            hint="PDF or DOCX · scanned files supported · up to 50 MB"
+            label="Drop the official tender here"
           />
 
           {!jobId && (
             <button
               onClick={submit}
               disabled={!file || busy}
-              className="btn btn-primary mt-5 w-full sm:w-auto"
+              className="btn btn-primary mt-5 w-full !min-h-12 sm:w-auto sm:!px-6"
             >
               {busy ? "Uploading…" : "Upload and read"}
             </button>
@@ -120,16 +129,17 @@ export default function UploadPage() {
         </Card>
       </div>
 
-      <aside className="lg:pt-16">
-        <ol className="space-y-5">
+      <aside className="card h-fit p-6 lg:sticky lg:top-28">
+        <div className="mb-6 flex items-center justify-between"><p className="label">Fast, but defensible</p><span className="font-mono text-[10px] text-[hsl(var(--accent))]">LIVE STAGES</span></div>
+        <ol className="space-y-6">
           {STEPS.map((step, i) => (
-            <li key={i} className="flex gap-3">
-              <span className="tnum mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border text-[11px] font-semibold text-[hsl(var(--fg-muted))]">
-                {i + 1}
+            <li key={i} className="feature-line flex gap-4 pl-5">
+              <span className="tnum mt-0.5 text-[10px] font-semibold text-[hsl(var(--accent))]">
+                0{i + 1}
               </span>
               <div>
-                <p className="text-sm font-medium leading-snug">{step.title}</p>
-                <p className="mt-1 text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
+                <p className="text-sm font-semibold leading-snug">{step.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
                   {step.body}
                 </p>
               </div>
@@ -137,11 +147,12 @@ export default function UploadPage() {
           ))}
         </ol>
 
-        <p className="mt-7 border-t pt-5 text-xs leading-relaxed text-[hsl(var(--fg-subtle))]">
-          Large tenders take two to three minutes to read. You can leave the page
-          once the upload starts — extraction continues on the server.
+        <p className="mt-7 border-l border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft)/.25)] p-4 text-xs leading-relaxed text-[hsl(var(--fg-muted))]">
+          <span className="mb-1 block font-semibold text-[hsl(var(--fg))]">Nothing is hidden behind a spinner</span>
+          You will see the active field group, elapsed time, model, cache reuse, OCR count and a stage-by-stage timing receipt.
         </p>
       </aside>
+      </div>
     </div>
   );
 }

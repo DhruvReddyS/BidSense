@@ -1,0 +1,17 @@
+[
+  {
+    "mutation": "tier_context",
+    "killed": true,
+    "summary": "1 failed in 1.03s"
+  },
+  {
+    "mutation": "tier_concurrency",
+    "killed": true,
+    "summary": "1 failed in 1.00s"
+  },
+  {
+    "mutation": "validation_coverage",
+    "killed": true,
+    "summary": "1 failed in 0.89s"
+  }
+]

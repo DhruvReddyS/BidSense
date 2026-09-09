@@ -1,0 +1,26 @@
+[
+  {
+    "mutation": "dedup_form_identity",
+    "test": "tests/test_document_identifiers.py::test_identifiers_survive_deduplication[Process Compliance Statement (Annexure-B)-Process Compliance Statement (Annexure-II)]",
+    "killed": true,
+    "summary": "1 failed in 0.08s"
+  },
+  {
+    "mutation": "conflicting_form_guard",
+    "test": "tests/test_document_identifiers.py::test_conflicting_annexures_cannot_match_even_with_high_similarity[True]",
+    "killed": true,
+    "summary": "1 failed in 0.05s"
+  },
+  {
+    "mutation": "explicit_absence_priority",
+    "test": "tests/test_document_identifiers.py::test_declared_absence_beats_a_positive_lexical_candidate",
+    "killed": true,
+    "summary": "1 failed in 0.05s"
+  },
+  {
+    "mutation": "all_expected_clauses",
+    "test": "tests/test_evaluation_gate.py::test_clause_check_uses_full_references",
+    "killed": true,
+    "summary": "2 failed, 11 passed in 0.33s"
+  }
+]

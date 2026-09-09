@@ -85,6 +85,7 @@ IITISM = TenderProfile(
         "Compliance sheet",
         "Proforma for earnest money deposit declaration",
         "Possession of Valid Class II/III Digital Signature Certificate",
+        "Duly filled Self-certification/undertaking in the format as per Annexure V",
     ),
     technical_context="reinforced cement concrete boundary wall construction",
     # Rs. 12.5 lakh works contract. Bids for small works are genuinely shorter,

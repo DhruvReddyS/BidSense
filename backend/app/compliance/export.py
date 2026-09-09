@@ -47,38 +47,7 @@ class ExportContext:
     extracted_by: str | None = None
 
 
-# ReportLab's built-in Type 1 fonts are Latin-1: they have no glyph for the
-# rupee sign, and render it as a filled box. Registering a Unicode TTF would fix
-# it on this machine and silently reintroduce the boxes on a Linux deploy with a
-# different font set, so the export substitutes instead.
-#
-# "Rs." is not a compromise here. Indian tenders print it far more often than
-# the symbol, and this document is going to an Indian procurement team.
-_PDF_SUBSTITUTIONS = (
-    ("\u20b9", "Rs. "),   # rupee sign
-    ("\u2014", "-"),      # em dash
-    ("\u2013", "-"),      # en dash
-    ("\u201c", '"'), ("\u201d", '"'),
-    ("\u2018", "'"), ("\u2019", "'"),
-    ("\u26a0", "!"),      # warning sign
-    ("\u00b7", "-"),      # middle dot
-    ("\u202f", " "),      # narrow no-break space, which some models emit
-)
-
-
-def _pdf_text(value) -> str:
-    """Make a string safe for ReportLab's Latin-1 core fonts.
-
-    Applied at every point where extracted text reaches the PDF, because the
-    text comes from tender documents and from model output -- neither of which
-    is under our control, and both of which contain the rupee sign constantly.
-    """
-    text = "" if value is None else str(value)
-    for source, target in _PDF_SUBSTITUTIONS:
-        text = text.replace(source, target)
-    # Anything else outside Latin-1 becomes a box too. Dropped rather than
-    # guessed at: a box in a compliance report reads as corruption.
-    return text.encode("latin-1", "replace").decode("latin-1").replace("?", "?")
+from app.compliance.pdf_fonts import pdf_text as _pdf_text
 
 
 _STATUS_LABEL = {
@@ -129,6 +98,7 @@ def _sections(report: GapReport, context: ExportContext) -> dict:
         "verdict": _VERDICT_LABEL.get(report.verdict, report.verdict),
         "verdict_key": report.verdict,
         "completion": completion,
+        "completion_label": completion.label + (f" - {completion.undetermined} not established either way" if completion.undetermined else ""),
         "banners": [b for b in (context.staleness_banner, context.data_quality_banner) if b],
         "groups": [
             (_GROUP_HEADING[group], by_group[group])
@@ -147,132 +117,9 @@ def _sections(report: GapReport, context: ExportContext) -> dict:
 # PDF
 # --------------------------------------------------------------------------- #
 def export_pdf(report: GapReport, context: ExportContext | None = None) -> bytes:
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_LEFT
-    from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
-    from reportlab.platypus import (
-        HRFlowable, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate,
-        Spacer, Table, TableStyle,
-    )
-
+    from app.compliance.pdf_document import render_pdf
     context = context or ExportContext()
-    data = _sections(report, context)
-
-    buffer = io.BytesIO()
-    document = SimpleDocTemplate(
-        buffer, pagesize=A4,
-        topMargin=18 * mm, bottomMargin=18 * mm,
-        leftMargin=18 * mm, rightMargin=18 * mm,
-        title=f"Compliance check — {report.tender_id}",
-        author="BidSense",
-    )
-    sheet = getSampleStyleSheet()
-    ink = colors.HexColor("#12161f")
-    muted = colors.HexColor("#5b6472")
-
-    h1 = ParagraphStyle("h1", parent=sheet["Title"], fontSize=17, leading=21,
-                        alignment=TA_LEFT, textColor=ink, spaceAfter=2)
-    sub = ParagraphStyle("sub", parent=sheet["BodyText"], fontSize=10.5,
-                         textColor=muted, spaceAfter=10)
-    h2 = ParagraphStyle("h2", parent=sheet["Heading2"], fontSize=12, leading=15,
-                        textColor=ink, spaceBefore=14, spaceAfter=6)
-    body = ParagraphStyle("body", parent=sheet["BodyText"], fontSize=9.5, leading=13.5)
-    small = ParagraphStyle("small", parent=body, fontSize=8.5, leading=11.5, textColor=muted)
-
-    story: list = [Paragraph(_pdf_text(data["title"]), h1),
-                   Paragraph(_pdf_text(data["subtitle"]), sub)]
-
-    meta = Table(
-        [[Paragraph(f"<b>{_pdf_text(k)}</b>", small), Paragraph(_pdf_text(v), small)]
-         for k, v in data["meta"]],
-        colWidths=[42 * mm, None], hAlign="LEFT",
-    )
-    meta.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-    ]))
-    story += [meta, Spacer(1, 10),
-              HRFlowable(width="100%", color=colors.HexColor("#dfe3ea")), Spacer(1, 10)]
-
-    # Verdict, coloured by outcome rather than uniformly green.
-    tone = {
-        "not_compliant": colors.HexColor("#b4232a"),
-        "needs_review": colors.HexColor("#8a6100"),
-        "compliant": colors.HexColor("#1c6b45"),
-        "not_checked": colors.HexColor("#5b6472"),
-    }.get(data["verdict_key"], ink)
-    story.append(Paragraph(f'<font color="{tone}"><b>{_pdf_text(data["verdict"])}</b></font>',
-                           ParagraphStyle("v", parent=body, fontSize=12, leading=16)))
-
-    completion = data["completion"]
-    story += [
-        Spacer(1, 4),
-        Paragraph(_pdf_text(f"<b>{completion.label}</b>"
-                  + (f" - {completion.undetermined} not established either way"
-                     if completion.undetermined else "")), body),
-        Paragraph(_pdf_text(completion.caveat), small),
-    ]
-
-    for banner in data["banners"]:
-        story += [Spacer(1, 6),
-                  Paragraph(f'<font color="#8a6100">{_pdf_text("! " + banner)}</font>', small)]
-
-    # The to-do list first: it is what the reader has to act on.
-    for heading, actions in data["groups"]:
-        rows = [[Paragraph(f"<b>{_pdf_text(heading)}</b>", body), ""]]
-        for action in actions:
-            clause = f"clause {action.clause_ref}" if action.clause_ref else "—"
-            rows.append([Paragraph(_pdf_text(action.action), body), Paragraph(_pdf_text(clause), small)])
-        table = Table(rows, colWidths=[None, 28 * mm], hAlign="LEFT")
-        table.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("SPAN", (0, 0), (1, 0)),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.4, colors.HexColor("#e6e9ef")),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f4f6f9")),
-        ]))
-        story += [Spacer(1, 12), KeepTogether([table])]
-
-    story += [PageBreak(), Paragraph("Every requirement checked", h2)]
-    rows = [[Paragraph(f"<b>{h}</b>", small) for h in
-             ("Requirement", "Status", "Required", "Found", "Clause")]]
-    for item in data["items"]:
-        provenance = item.notification_provenance
-        rows.append([
-            Paragraph(_pdf_text(item.requirement), small),
-            Paragraph(_STATUS_LABEL.get(item.status, item.status.value), small),
-            Paragraph(_pdf_text(item.required_value or "-"), small),
-            Paragraph(_pdf_text(item.found_value or "-"), small),
-            Paragraph(
-                _pdf_text((f"{provenance.clause_ref or '-'}"
-                 + (f" p{provenance.source_page}" if provenance.source_page else ""))
-                if provenance else "-"), small),
-        ])
-    table = Table(rows, colWidths=[58 * mm, 20 * mm, 32 * mm, 34 * mm, 20 * mm], repeatRows=1)
-    table.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f4f6f9")),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.35, colors.HexColor("#e6e9ef")),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-    ]))
-    story.append(table)
-
-    story += [
-        Spacer(1, 12),
-        Paragraph(
-            _pdf_text(
-                "Generated by BidSense"
-                + (f" using {context.extracted_by}" if context.extracted_by else "")
-                + ". Format and signing rules are always left to a human reviewer, "
-                  "so no bid is ever reported as fully clear."), small),
-    ]
-    document.build(story)
-    return buffer.getvalue()
+    return render_pdf(report, context, _sections(report, context), _STATUS_LABEL)
 
 
 # --------------------------------------------------------------------------- #
@@ -311,13 +158,13 @@ def export_docx(report: GapReport, context: ExportContext | None = None) -> byte
     }.get(data["verdict_key"], RGBColor(0x33, 0x33, 0x33))
 
     completion = data["completion"]
-    document.add_paragraph(completion.label).runs[0].bold = True
+    document.add_paragraph(data["completion_label"]).runs[0].bold = True
     caveat = document.add_paragraph(completion.caveat)
     caveat.runs[0].italic = True
     caveat.runs[0].font.size = Pt(8.5)
 
     for banner in data["banners"]:
-        paragraph = document.add_paragraph(f"⚠ {banner}")
+        paragraph = document.add_paragraph(f"Warning: {banner}")
         paragraph.runs[0].font.color.rgb = RGBColor(0x8A, 0x61, 0x00)
         paragraph.runs[0].font.size = Pt(9)
 

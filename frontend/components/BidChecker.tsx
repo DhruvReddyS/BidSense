@@ -7,6 +7,7 @@ import type { GapReportResponse, JobStatus } from "@/lib/types";
 import { FileDrop } from "./FileDrop";
 import { GapReport } from "./GapReport";
 import { JobProgress } from "./JobProgress";
+import { DocumentProcess } from "./DocumentProcess";
 import { Card, Chip, ErrorNote, SectionTitle } from "./ui";
 
 interface Bid {
@@ -152,10 +153,7 @@ export function BidChecker({
       </Card>
 
       {checking && !report && (
-        <div className="space-y-3">
-          <div className="h-32 skeleton rounded-xl" />
-          <div className="h-24 skeleton rounded-xl" />
-        </div>
+        <div className="card p-6"><DocumentProcess label="Comparing the bid" detail="Matching evidence to tender clauses" /></div>
       )}
 
       {report && (

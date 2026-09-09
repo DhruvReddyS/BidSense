@@ -22,6 +22,7 @@ class OllamaProvider(LLMProvider):
         self._url = settings.ollama_base_url.rstrip("/")
         self._model = settings.ollama_model
         self.last_model_used: str | None = None
+        self.has_fallback = False
 
     #: Roughly how many characters of English legal prose a token holds. Used
     #: only to size the page-selection budget, so an approximation is fine --

@@ -32,22 +32,27 @@ export function ThemeToggle() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const stored = (localStorage.getItem(KEY) as Mode | null) ?? "system";
+    let stored: Mode = "system";
+    try { const value = localStorage.getItem(KEY); if (value === "light" || value === "dark") stored = value; } catch {}
     setMode(stored);
     setReady(true);
 
     // Follow the OS while the user has not made an explicit choice.
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
-      if ((localStorage.getItem(KEY) as Mode | null) === "system") apply("system");
+      let preference: string | null = null;
+      try { preference = localStorage.getItem(KEY); } catch {}
+      if (!preference || preference === "system") apply("system");
     };
     media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
+    const onTheme = (event: Event) => { const next = (event as CustomEvent).detail; if (["light", "dark", "system"].includes(next)) choose(next); };
+    window.addEventListener("bidsense:theme", onTheme);
+    return () => { media.removeEventListener("change", onChange); window.removeEventListener("bidsense:theme", onTheme); };
   }, []);
 
   function choose(next: Mode) {
     setMode(next);
-    localStorage.setItem(KEY, next);
+    try { localStorage.setItem(KEY, next); } catch {}
     apply(next);
   }
 

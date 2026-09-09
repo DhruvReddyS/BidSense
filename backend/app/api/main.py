@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.api.security import SecurityMiddleware
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -20,12 +21,14 @@ logger = logging.getLogger("tenderiq")
 async def lifespan(_: FastAPI):
     # A process kill mid-extraction leaves jobs stuck in RUNNING for ever, and
     # the UI polls them until the user gives up. Fail them at startup instead.
-    from app.api.jobs import purge_old_jobs, reap_stale_jobs
+    from app.api.jobs import purge_old_jobs, recover_interrupted_jobs
 
     try:
-        reaped = reap_stale_jobs()
-        if reaped:
-            logger.warning("marked %d interrupted job(s) as failed", reaped)
+        recovered, failed = recover_interrupted_jobs()
+        if recovered:
+            logger.warning("recovered %d interrupted job(s)", recovered)
+        if failed:
+            logger.warning("could not recover %d legacy job(s) without retained sources", failed)
     except Exception:
         logger.exception("could not reap stale jobs at startup")
 
@@ -53,6 +56,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityMiddleware)
 
 app.include_router(router)
 

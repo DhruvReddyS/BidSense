@@ -227,6 +227,6 @@ class _FastLimiter:
     def __init__(self):
         self._lock = __import__("threading").Lock()
 
-    def acquire(self):
+    def acquire(self, tokens=0):
         with self._lock:
             __import__("time").sleep(0.01)

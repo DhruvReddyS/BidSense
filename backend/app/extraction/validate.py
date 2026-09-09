@@ -137,6 +137,40 @@ def _page_findings(
     return findings
 
 
+def _evidence_findings(
+    prefix: str, provenances: list[tuple[str, object]], document: ParsedDocument | None
+) -> list[Finding]:
+    """A mandatory fact without a page and quote is not audit-ready.
+
+    This is deliberately a gate, not an auto-correction. It catches plausible
+    model output that cannot be verified against the real PDF—the class of
+    error ordinary value-range validation cannot see.
+    """
+    if document is None:
+        return []
+    findings: list[Finding] = []
+    for label, provenance in provenances:
+        page = getattr(provenance, "source_page", None)
+        snippet = (getattr(provenance, "source_snippet", None) or "").strip()
+        missing = []
+        if page is None:
+            missing.append("page")
+        if not snippet:
+            missing.append("verbatim source text")
+        if missing:
+            findings.append(
+                Finding(
+                    field=f"{prefix}.{label}.provenance",
+                    severity=Severity.WARNING,
+                    message=(
+                        "extracted evidence has no " + " or ".join(missing)
+                        + ". It cannot be treated as audit-ready until checked against the PDF."
+                    ),
+                )
+            )
+    return findings
+
+
 def validate_notification(
     notification: TenderNotification,
     document: ParsedDocument | None = None,
@@ -303,6 +337,16 @@ def validate_notification(
         [(str(i), d.provenance) for i, d in enumerate(notification.mandatory_documents)],
         document,
     )
+    findings += _evidence_findings(
+        "eligibility_criteria",
+        [(str(i), c.provenance) for i, c in enumerate(notification.eligibility_criteria)],
+        document,
+    )
+    findings += _evidence_findings(
+        "mandatory_documents",
+        [(str(i), d.provenance) for i, d in enumerate(notification.mandatory_documents)],
+        document,
+    )
     return findings
 
 
@@ -389,6 +433,16 @@ def validate_submission(
         document,
     )
     findings += _page_findings(
+        "documents_submitted",
+        [(str(i), d.provenance) for i, d in enumerate(submission.documents_submitted)],
+        document,
+    )
+    findings += _evidence_findings(
+        "turnover",
+        [(str(i), t.provenance) for i, t in enumerate(submission.turnover)],
+        document,
+    )
+    findings += _evidence_findings(
         "documents_submitted",
         [(str(i), d.provenance) for i, d in enumerate(submission.documents_submitted)],
         document,

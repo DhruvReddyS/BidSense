@@ -77,6 +77,7 @@ class TenderNotificationRow(Base, UUIDPrimaryKey, Timestamps):
         JSONB, nullable=False, server_default="[]"
     )
 
+    extraction_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     source_file: Mapped[str | None] = mapped_column(Text)
     #: SHA-256 of the uploaded bytes, and the key into the document store. What
     #: makes a citation clickable: without the original file, "page 5, clause

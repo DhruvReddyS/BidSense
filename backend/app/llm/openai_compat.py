@@ -22,7 +22,7 @@ import httpx
 
 from app.llm.base import LLMError, LLMProvider, TModel
 from app.llm.cleanup import strip_thinking
-from app.llm.ratelimit import RateLimiter, retry_transient
+from app.llm.ratelimit import RateLimiter, estimate_tokens, retry_transient
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,14 @@ class OpenAICompatibleProvider(LLMProvider):
             raise LLMError(
                 f"{self.name}: no API key configured; cannot use this provider."
             )
-        self._limiter = RateLimiter(rpm)
+        # Both constraints. The TPM is the one that actually binds here, and
+        # pacing on requests alone made a 1,500-token question wait as long as a
+        # 4,400-token extraction.
+        self._limiter = RateLimiter(rpm, tokens_per_minute=self.tokens_per_minute)
+        #: Set by the chain when a live tier sits below this one. A provider
+        #: with somewhere to fall through to should not wait out a 60-second
+        #: server retry hint.
+        self.has_fallback = False
         # Whether this backend accepted a json_schema response_format. Learned
         # once from a real response rather than hard-coded per model, because
         # support varies by model within the same provider and changes over time.
@@ -74,8 +81,12 @@ class OpenAICompatibleProvider(LLMProvider):
         return messages
 
     def _post(self, payload: dict) -> dict:
+        cost = estimate_tokens(
+            *(message.get("content") for message in payload.get("messages", []))
+        )
+
         def once() -> dict:
-            self._limiter.acquire()
+            self._limiter.acquire(cost)
             response = httpx.post(
                 f"{self.base_url.rstrip('/')}/chat/completions",
                 json=payload,
@@ -94,7 +105,12 @@ class OpenAICompatibleProvider(LLMProvider):
                 )
             return response.json()
 
-        return retry_transient(once, attempts=self.retries, label=f"{self.name} {self.model}")
+        return retry_transient(
+            once,
+            attempts=2 if self.has_fallback else self.retries,
+            label=f"{self.name} {self.model}",
+            max_delay=8.0 if self.has_fallback else 60.0,
+        )
 
     @staticmethod
     def _content(data: dict) -> str:

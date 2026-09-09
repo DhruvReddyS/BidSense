@@ -7,6 +7,7 @@ without an API key; the stores are real.
 from __future__ import annotations
 
 from unittest.mock import patch
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +50,16 @@ TENDER_ID = NOTIFICATION_TRUTH["tender_id"]
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    client = TestClient(app)
+    response = client.post("/api/auth/register", json={
+        "email": f"reviewer-{uuid.uuid4()}@example.com",
+        "password": "correct-horse-battery-staple",
+        "role": "reviewer",
+        "reviewer_code": "development-reviewer",
+    })
+    assert response.status_code == 201, response.text
+    client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
+    return client
 
 
 @pytest.fixture
@@ -161,6 +171,14 @@ def test_job_reports_a_completed_extraction(client, pdf, clean, stubbed):
     assert set(result["node_timings"]) == {
         "header", "eligibility", "documents", "evaluation", "technical", "format_rules",
     }
+    assert set(result["timing"]) == {"parse", "extract", "persist", "index"}
+    assert result["index_state"] == "ready"
+
+    performance = client.get("/api/review/performance")
+    assert performance.status_code == 200
+    pulse = performance.json()
+    assert pulse["completed_jobs"] >= 1
+    assert pulse["median_seconds"] is not None
 
 
 @live
@@ -463,6 +481,37 @@ def test_a_recently_started_job_is_left_alone(client):
         session.execute(
             text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id}
         )
+
+
+@live
+def test_an_interrupted_job_can_be_replayed_from_its_retained_source(tmp_path, monkeypatch):
+    from app.api import jobs as job_runner
+    from app.db.models import IngestJob, JobKind, JobStatus
+
+    source = tmp_path / "stored.pdf"
+    source.write_bytes(b"retained source")
+    with session_scope() as session:
+        job = IngestJob(
+            kind=JobKind.NOTIFICATION,
+            status=JobStatus.QUEUED,
+            stage="queued",
+            file_name="original.pdf",
+            source_hash="a" * 64,
+        )
+        session.add(job)
+        session.flush()
+        job_id = job.id
+
+    dispatched = []
+    monkeypatch.setattr(job_runner, "path_for", lambda _: source)
+    monkeypatch.setattr(job_runner, "submit", lambda *args, **kwargs: dispatched.append((args, kwargs)))
+    recovered, failed = job_runner.recover_interrupted_jobs()
+    assert recovered >= 1 and failed == 0
+    assert any(args[0] == job_id for args, _ in dispatched)
+    assert next(args[2] for args, _ in dispatched if args[0] == job_id).name == "original.pdf"
+
+    with session_scope() as session:
+        session.execute(text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id})
 
 
 # --------------------------------------------------------------------------- #

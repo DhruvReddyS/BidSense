@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from contextvars import ContextVar
 
 from app.llm.base import LLMError, LLMProvider, TModel
 
@@ -70,7 +71,8 @@ class ChainProvider(LLMProvider):
         self._built: dict[str, LLMProvider] = {}
         self._retired: dict[str, str] = {}
         self._lock = threading.Lock()
-        self._last_used: str | None = None
+        self._last_used: ContextVar[str | None] = ContextVar(f"chain_provider_{id(self)}", default=None)
+        self._build_lock = threading.Lock()
         if not names:
             raise LLMError("LLM_CHAIN is empty; nothing to call.")
 
@@ -93,8 +95,8 @@ class ChainProvider(LLMProvider):
 
     @property
     def active_provider(self) -> str | None:
-        """Which tier answered the last call. None before the first one."""
-        return self._last_used
+        """Which tier answered this context's call; None before success or on failure."""
+        return self._last_used.get()
 
     @property
     def retired(self) -> dict[str, str]:
@@ -103,10 +105,19 @@ class ChainProvider(LLMProvider):
 
     # ------------------------------------------------------------------ #
     def _build(self, name: str) -> LLMProvider:
+        with self._build_lock:
+            return self._build_once(name)
+
+    def _build_once(self, name: str) -> LLMProvider:
         if name not in self._built:
             from app.llm import build_provider
 
-            self._built[name] = build_provider(name)
+            provider = build_provider(name)
+            # Every tier except the last has somewhere to fall through to, and
+            # should therefore stop waiting out long server retry hints. The
+            # last one has nowhere to go and keeps its full patience.
+            provider.has_fallback = name != self._names[-1]
+            self._built[name] = provider
         return self._built[name]
 
     def _peek(self) -> LLMProvider | None:
@@ -134,7 +145,8 @@ class ChainProvider(LLMProvider):
             f"falling back to {remaining[0]}" if remaining else "no tiers left",
         )
 
-    def _call(self, method: str, *args, **kwargs):
+    def _call(self, method: str, *args, _prompt_factory=None, **kwargs):
+        self._last_used.set(None)
         errors: list[str] = []
         for name in self._names:
             with self._lock:
@@ -150,7 +162,16 @@ class ChainProvider(LLMProvider):
                 continue
 
             try:
-                result = getattr(provider, method)(*args, **kwargs)
+                # The outer chain gate may have been created while a hosted
+                # tier was live. Always enforce the serving tier's own limit.
+                with provider:
+                    with self._lock:
+                        if name in self._retired:
+                            continue
+                    call_args = args
+                    if _prompt_factory is not None:
+                        call_args = (_prompt_factory(provider.input_char_budget), *args)
+                    result = getattr(provider, method)(*call_args, **kwargs)
             except Exception as exc:
                 errors.append(f"{name}: {str(exc)[:300]}")
                 if _is_persistent(exc):
@@ -165,7 +186,7 @@ class ChainProvider(LLMProvider):
                 # it would pick NEXT, which after a mid-call retirement is a
                 # different model from the one that answered.
                 served = getattr(provider, "last_model_used", None)
-                self._last_used = f"{name}:{served}" if served else name
+                self._last_used.set(f"{name}:{served}" if served else name)
             return result
 
         raise LLMError(
@@ -182,3 +203,7 @@ class ChainProvider(LLMProvider):
         self, prompt: str, schema: type[TModel], *, system: str | None = None
     ) -> TModel:
         return self._call("generate_structured", prompt, schema, system=system)
+
+    def generate_structured_from(self, prompt_factory, schema: type[TModel], *, system=None) -> TModel:
+        """Reselect context for each attempted tier; never truncate a hosted prompt locally."""
+        return self._call("generate_structured", schema, _prompt_factory=prompt_factory, system=system)

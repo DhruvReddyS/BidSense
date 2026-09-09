@@ -1,0 +1,7 @@
+{
+  "backend/app/llm/base.py": "ddc54f09dfe2d3a4a1586525db86039dae1466a7947bd9b654c92b7ab21403de",
+  "backend/app/llm/chain.py": "9aab65baa6df4dc48be173de49d1cb774e1bd5216f76081319b5717f0eb21f62",
+  "backend/app/extraction/graph.py": "f7fce0f781c51eb43cd2aea06235654f1c7497bc349d2be4abb1590cbbf63939",
+  "backend/app/extraction/pipeline.py": "1737c7cf6aef2ede5155b6cc8e9e4b1ae0bf159119807d04f6269a7c111ecce2",
+  "backend/tests/test_fallback_capacity.py": "dd6aae06d45394cb44b98a13531cf6e8495b048bb3d6a36702081accaea5e2e0"
+}

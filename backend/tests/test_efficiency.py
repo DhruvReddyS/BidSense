@@ -345,6 +345,15 @@ def test_the_version_covers_every_file_that_decides_an_extraction() -> None:
         "app/extraction/llm_schemas.py",
         "app/extraction/graph.py",
         "app/extraction/selection.py",
+        "app/normalize/money.py",
+        "app/schemas/common.py",
+        "app/schemas/notification.py",
+        "app/schemas/submission.py",
+        "app/ingest/loader.py",
+        "app/ingest/models.py",
+        "app/ingest/pdf.py",
+        "app/ingest/docx.py",
+        "app/ingest/ocr.py",
     ):
         assert required in covered, f"{required} can change without invalidating the cache"
 

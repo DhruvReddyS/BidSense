@@ -64,12 +64,12 @@ export function FileDrop({
           setOver(false);
           if (!disabled) accept(e.dataTransfer.files?.[0] ?? null);
         }}
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors
-          ${over ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))]" : "hover:bg-[hsl(var(--surface-2))]"}
+        className={`group relative flex min-h-[13rem] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[4px] border border-dashed px-6 py-8 text-center transition-all
+          ${over ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))]" : "bg-[hsl(var(--surface-2)/.55)] hover:border-[hsl(var(--accent)/.55)] hover:bg-[hsl(var(--accent-soft)/.35)]"}
           ${disabled ? "pointer-events-none opacity-50" : ""}`}
       >
         <svg
-          className="mb-3 h-8 w-8 text-[hsl(var(--fg-subtle))]"
+          className="relative mb-4 h-10 w-10 rounded bg-[hsl(var(--accent-soft))] p-2.5 text-[hsl(var(--accent))]"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -84,15 +84,16 @@ export function FileDrop({
         </svg>
         {name ? (
           <>
-            <p className="text-sm font-medium break-anywhere">{name}</p>
-            <p className="mt-0.5 text-xs text-[hsl(var(--fg-muted))]">
+            <p className="relative break-anywhere text-base font-semibold">{name}</p>
+            <p className="relative mt-1 text-xs text-[hsl(var(--fg-muted))]">
               {(size / 1024 / 1024).toFixed(1)} MB · click to replace
             </p>
           </>
         ) : (
           <>
-            <p className="text-sm font-medium">{label}</p>
-            {hint && <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">{hint}</p>}
+            <p className="relative text-base font-semibold">{label}</p>
+            <p className="relative mt-2 text-xs text-[hsl(var(--fg-muted))]">or click to browse from your device</p>
+            {hint && <p className="relative mt-4 rounded-full border bg-[hsl(var(--surface)/.7)] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.08em] text-[hsl(var(--fg-muted))]">{hint}</p>}
           </>
         )}
       </div>

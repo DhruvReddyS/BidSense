@@ -1,0 +1,30 @@
+{
+  "notification_sha256": "3e1c07e78cecf537e93a8dd2ef3e6bf89fd9c5cfa67e66ffb53f0ff892cd17bf",
+  "required_form_page": 79,
+  "requirement_page": 13,
+  "required_form_text": " \n \n \n   P a g e  | 79 \n \nAnnexure \u2013 V \n \nSELF CERTIFICATION/UNDERATKING BY THE BIDDER \nI/We, ________________________________________, authorized representative of M/s \n________________________________________, hereby certify and undertake that: \n1. I/We have visited the site of the proposed work and inspected the site and its surroundings \nbefore submission of our bid. \n2. I/We have carefully examined and familiarized ourselves with the site conditions, existing \nstructures, access to the site, working conditions, availability of working space, approach \nroads, site constraints, existing services/utilities, storage facilities,  and other relevant \nphysical conditions which may affect the execution of the work. \n3. I/We have taken into account all such site conditions and constraints while quoting our rates. \nNo additional claim on account of lack of knowledge or unfamiliarity with the site conditions \nshall be entertained after award of the work. \n4. I/We understand that submission of this Self -Certification/Undertaking is a confirmation \nthat we have personally inspected the site and familiarized ourselves with all relevant \nconditions before submitting the tender. \nAccordingly, I/We hereby certify that the above information is true and correct and undertake to \nabide by the conditions stated above and the provisions of the NIT/Tender Document. \nPlace: ____________________  \nDate: _____________________ \nSignature of Authorized Signatory: __________________________ \nName: _________________________________________________ \nDesignation: ____________________________________________ \nName of Firm/Agency: ____________________________________ \nSeal of the Firm/Agency \n \n \n \n \n \n \n \n \n \n ",
+  "affected_vendors": [
+    {
+      "vendor": "VENDOR_civilworks_01_01",
+      "sha256": "558c8e98e3770d8ec5432151d0e4b1372dfeccccc0846bd19888e30c9c3a3945",
+      "annexure_v_pages": [
+        {
+          "page": 57,
+          "text": "ANNEXURE V \u2014 CERTIFICATIONS AND ACCREDITATIONS HELD\nBidder : Jharkhand Constructions\nTender ref : eTender Notice No. CMU-12011/17/2026-CMU\nWork : Construction of boundary wall of approximate length 300 metre at Part of IIT (ISM)\nCampus, Dhanbad\nContents of this annexure\nThe documents comprised in this annexure are listed below. Each is a true copy\nof the original, self-attested by our authorised signatory. The originals will be\nproduced for verification at any time on the demand of the Employer.\n1. Certifications and accreditations held \u2014 principal document\n2. Certifications and accreditations held \u2014 supporting correspondence\n3. Certifications and accreditations held \u2014 attestation by authorised signatory\nCertification\nWe certify that the documents reproduced in this annexure are true copies of the\noriginals in our possession, that none of them has been altered in any respect,\nand that all of them are valid and subsisting as on the date of submission of\nthis bid.\nFor Jharkhand Constructions\n(Authorised Signatory)\nDate : 22.08.2026\n"
+        }
+      ],
+      "status": "Answer key says pass; stored enclosure list has no required self-certification. Actual Annexure V is certifications/accreditations, not the notification form. Requires source/fixture reconciliation; no expected status or bid content changed."
+    },
+    {
+      "vendor": "VENDOR_civilworks_01_05",
+      "sha256": "7693e1054355564590d15dc8cbd3d04ab0493e4a679942edf044cabe328ea38d",
+      "annexure_v_pages": [
+        {
+          "page": 55,
+          "text": "ANNEXURE V \u2014 CERTIFICATIONS AND ACCREDITATIONS HELD\nBidder : Maithon Civil Contractors\nTender ref : eTender Notice No. CMU-12011/17/2026-CMU\nWork : Construction of boundary wall of approximate length 300 metre at Part of IIT (ISM)\nCampus, Dhanbad\nContents of this annexure\nThe documents comprised in this annexure are listed below. Each is a true copy\nof the original, self-attested by our authorised signatory. The originals will be\nproduced for verification at any time on the demand of the Employer.\n1. Certifications and accreditations held \u2014 principal document\n2. Certifications and accreditations held \u2014 supporting correspondence\n3. Certifications and accreditations held \u2014 attestation by authorised signatory\nCertification\nWe certify that the documents reproduced in this annexure are true copies of the\noriginals in our possession, that none of them has been altered in any respect,\nand that all of them are valid and subsisting as on the date of submission of\nthis bid.\nFor Maithon Civil Contractors\n(Authorised Signatory)\nDate : 22.08.2026\n"
+        }
+      ],
+      "status": "Answer key says pass; stored enclosure list has no required self-certification. Actual Annexure V is certifications/accreditations, not the notification form. Requires source/fixture reconciliation; no expected status or bid content changed."
+    }
+  ]
+}

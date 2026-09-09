@@ -1,0 +1,233 @@
+{
+  "destination": "groq",
+  "seconds": 194.997,
+  "nodes": 6,
+  "error_count": 3,
+  "providers": [
+    [
+      "documents",
+      "groq:openai/gpt-oss-120b"
+    ],
+    [
+      "evaluation",
+      "groq:openai/gpt-oss-120b"
+    ],
+    [
+      "technical",
+      "groq:openai/gpt-oss-120b"
+    ]
+  ],
+  "selections": [
+    [
+      "documents",
+      [
+        6,
+        7,
+        10,
+        11
+      ]
+    ],
+    [
+      "eligibility",
+      [
+        6,
+        7,
+        8,
+        12,
+        13
+      ]
+    ],
+    [
+      "evaluation",
+      [
+        14,
+        54,
+        89
+      ]
+    ],
+    [
+      "format_rules",
+      [
+        7,
+        10,
+        11,
+        12
+      ]
+    ],
+    [
+      "header",
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        10
+      ]
+    ],
+    [
+      "technical",
+      [
+        3,
+        5,
+        6,
+        7,
+        13
+      ]
+    ]
+  ],
+  "retired_tiers": [
+    "gemini"
+  ],
+  "notification": {
+    "tender_id": "NOTIF_civilworks_01.pdf",
+    "title": "NOTIF_civilworks_01.pdf",
+    "issuing_authority": null,
+    "sector": null,
+    "submission_deadline": null,
+    "pre_bid_query_deadline": null,
+    "eligibility_criteria": [],
+    "mandatory_documents": [
+      {
+        "provenance": {
+          "clause_ref": "(9)",
+          "source_page": 6,
+          "source_snippet": "A tenderer shall produce Annual Turnover on works of the individual/firm/company from Chartered Accountant as per returns filed with Income Tax Department for the past 3 (three) financial years.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Annual Turnover on works of the individual/firm/company from Chartered Accountant",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.4",
+          "source_page": 11,
+          "source_snippet": "To avoid the time and effort required in uploading the same set of standard documents which are required to be submitted as a part of every bid, a provision of uploading such standard documents (e.g. PAN card copy, annual reports, auditor certificates etc.) has been provided to the bidders.",
+          "extraction_confidence": null
+        },
+        "doc_name": "PAN card copy",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.4",
+          "source_page": 11,
+          "source_snippet": "To avoid the time and effort required in uploading the same set of standard documents which are required to be submitted as a part of every bid, a provision of uploading such standard documents (e.g. PAN card copy, annual reports, auditor certificates etc.) has been provided to the bidders.",
+          "extraction_confidence": null
+        },
+        "doc_name": "annual reports",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.4",
+          "source_page": 11,
+          "source_snippet": "To avoid the time and effort required in uploading the same set of standard documents which are required to be submitted as a part of every bid, a provision of uploading such standard documents (e.g. PAN card copy, annual reports, auditor certificates etc.) has been provided to the bidders.",
+          "extraction_confidence": null
+        },
+        "doc_name": "auditor certificates",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.1",
+          "source_page": 10,
+          "source_snippet": "The bidders are required to submit soft copies of their bids electronically on the CPP Portal, using valid Digital Signature Certificates.",
+          "extraction_confidence": null
+        },
+        "doc_name": "Digital Signature Certificates",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "(2)",
+          "source_page": 6,
+          "source_snippet": "The tender shall be in prescribed form, and it shall be valid for a minimum period of 90 days from the last day of receipt of TECHNICAL BID.",
+          "extraction_confidence": null
+        },
+        "doc_name": "TECHNICAL BID",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.5",
+          "source_page": 11,
+          "source_snippet": "A standard BOQ format has been provided with the tender document to be filled by all the bidders.",
+          "extraction_confidence": null
+        },
+        "doc_name": "standard BOQ format",
+        "aliases": []
+      },
+      {
+        "provenance": {
+          "clause_ref": "2.5",
+          "source_page": 11,
+          "source_snippet": "Bidders are required to download the BOQ file, open it and complete the white coloured (unprotected) cells with their respective financial quotes and other details.",
+          "extraction_confidence": null
+        },
+        "doc_name": "BOQ file",
+        "aliases": []
+      }
+    ],
+    "evaluation_criteria": [],
+    "technical_requirements": [
+      {
+        "provenance": {
+          "clause_ref": "1.1",
+          "source_page": 5,
+          "source_snippet": "Tenders are invited on behalf of the Director, Indian Institute of Technology (Indian School of Mines) Dhanbad from the interested vendors towards the work of Construction of boundary wall of approximate length 300 metre at Part A of Nirsa Campus of IIT (ISM) Dhanbad using Precast RCC sections.",
+          "extraction_confidence": null
+        },
+        "requirement": "Construction of boundary wall of approximate length 300 metre"
+      },
+      {
+        "provenance": {
+          "clause_ref": "1.1",
+          "source_page": 5,
+          "source_snippet": "Tenders are invited on behalf of the Director, Indian Institute of Technology (Indian School of Mines) Dhanbad from the interested vendors towards the work of Construction of boundary wall of approximate length 300 metre at Part A of Nirsa Campus of IIT (ISM) Dhanbad using Precast RCC sections.",
+          "extraction_confidence": null
+        },
+        "requirement": "Use Precast RCC sections for the boundary wall"
+      },
+      {
+        "provenance": {
+          "clause_ref": null,
+          "source_page": 6,
+          "source_snippet": "Time/Period of Completion 15 (Fifteen) Days",
+          "extraction_confidence": null
+        },
+        "requirement": "Time/Period of Completion 15 (Fifteen) Days"
+      }
+    ],
+    "submission_format_rules": [],
+    "emd_amount": null,
+    "contract_value_estimate": null
+  },
+  "findings": [
+    {
+      "field": "submission_deadline",
+      "severity": "error",
+      "message": "no value for the last date for submitting bids was extracted, but page 5 of the document appears to state it: \u201c22 August 2026\u201d, read from \u201cLast Date and Time for uploading of Bids 22 August 2026 (18:30 Hours)\u201d. The model missed a value that is present -- check it before relying on this extraction."
+    },
+    {
+      "field": "issuing_authority",
+      "severity": "error",
+      "message": "no value for the department or authority issuing the tender was extracted, but page 1 of the document appears to state it: \u201cIndian Institute of Technology (Indian School of Mines) Dhanbad\u201d, read from \u201cIndian Institute of Technology (Indian School of Mines) Dhanbad\u201d. The model missed a value that is present -- check it before relying on this extraction."
+    },
+    {
+      "field": "emd_amount",
+      "severity": "error",
+      "message": "no value for the earnest money deposit was extracted, but page 5 of the document appears to state it: \u201cRs. 31,500/-\u201d, read from \u201cEMD Rs. 31,500/- (Rupees Thirty One Thousand Five\u201d. The model missed a value that is present -- check it before relying on this extraction."
+    },
+    {
+      "field": "eligibility_criteria",
+      "severity": "warning",
+      "message": "no eligibility criteria were extracted. A gap report against this tender can only check documents, and would report a bid as clear without having tested any threshold."
+    }
+  ],
+  "deliberately_removed_deadline_detected_by_regex": true,
+  "scope": "Live lower-tier full graph; upstream retirement and missing deadline are injected faults, not observed quota exhaustion/model omission."
+}

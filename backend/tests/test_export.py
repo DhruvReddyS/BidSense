@@ -168,31 +168,19 @@ def test_the_two_formats_agree_on_the_verdict(rendered) -> None:
 # --------------------------------------------------------------------------- #
 # The rupee glyph
 # --------------------------------------------------------------------------- #
-def test_the_rupee_sign_is_never_emitted_into_the_pdf() -> None:
-    """ReportLab's built-in fonts are Latin-1 and render the rupee sign as a
-    filled black box. It went unnoticed until the export was actually opened,
-    which is why this is asserted on the produced bytes."""
+def test_the_pdf_preserves_the_rupee_sign() -> None:
     text = _pdf_strings(export_pdf(_report()))
-    assert "₹" not in text
-    assert "Rs." in text
+    assert "₹3.2 Cr" in text
+    assert "₹5 Cr" in text
 
 
-@pytest.mark.parametrize(
-    "source, expected",
-    [
-        ("₹3.2 Cr", "Rs. 3.2 Cr"),
-        ("a — b", "a - b"),
-        ("“quoted”", '"quoted"'),
-        ("22 August", "22 August"),
-    ],
-)
-def test_characters_that_have_no_latin1_glyph_are_substituted(source, expected) -> None:
-    assert _pdf_text(source) == expected
+@pytest.mark.parametrize("source", ["₹3.2 Cr", "a — b", "“quoted”", "22 August"])
+def test_unicode_characters_are_preserved(source) -> None:
+    assert _pdf_text(source) == source
 
 
 def test_the_docx_keeps_the_rupee_sign() -> None:
-    """DOCX is Unicode and rendered with system fonts, so the substitution is a
-    PDF concern only -- applying it there too would degrade the better format."""
+    """DOCX must preserve the same original currency character as PDF."""
     assert "\u20b9" in _docx_text(export_docx(_report()))
 
 

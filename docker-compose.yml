@@ -30,6 +30,32 @@ services:
       timeout: 5s
       retries: 10
 
+  api:
+    profiles: ["app"]
+    build: ./backend
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+    ports: ["8100:8100"]
+    volumes: ["documentstore:/data/store"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_healthy}
+    restart: unless-stopped
+
+  web:
+    profiles: ["app"]
+    build:
+      context: ./frontend
+      args: {NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8100}"}
+    ports: ["3000:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
 volumes:
   pgdata:
   qdrantdata:
+  documentstore:

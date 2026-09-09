@@ -387,6 +387,27 @@ class MatchResult:
 NO_MATCH = MatchResult(matched=False, method=None, score=None, matched_name=None)
 
 
+_FORM_REFERENCE = re.compile(
+    r"\b(annexure|appendix|form)\s*[-–—:]?\s*"
+    r"([a-z]-\d+|\d+-[a-z]|[ivxlcdm]+|[a-z]|\d+)\b", re.I
+)
+
+
+def document_identifiers(name: str) -> frozenset[tuple[str, str]]:
+    """Explicit form labels are identity, including inside trailing parentheses."""
+    return frozenset((kind.casefold(), ref.casefold())
+                     for kind, ref in _FORM_REFERENCE.findall(name))
+
+
+def _conflicting_identifiers(required: str, candidate: str) -> bool:
+    wanted, offered = document_identifiers(required), document_identifiers(candidate)
+    return any(
+        {ref for family, ref in wanted if family == kind}
+        != {ref for family, ref in offered if family == kind}
+        for kind in {family for family, _ in wanted} & {family for family, _ in offered}
+    )
+
+
 def match_document(
     required: str,
     submitted: list[str],
@@ -401,15 +422,22 @@ def match_document(
     notification that defines its own shorthand is honoured without editing the
     global table.
     """
+    submitted = [name for name in submitted if not _conflicting_identifiers(required, name)]
     if not submitted:
         return NO_MATCH
 
     required_norm = normalise(required)
 
+    def confirmed(method: str, score: float, name: str) -> MatchResult:
+        if not document_identifiers(required).issubset(document_identifiers(name)):
+            # A generic title does not establish which numbered form it is.
+            return MatchResult(False, None, score, None, review_candidate=name)
+        return MatchResult(True, method, score, name)
+
     # Tier 1: exact, after normalisation.
     for name in submitted:
         if normalise(name) == required_norm:
-            return MatchResult(True, "exact", 1.0, name)
+            return confirmed("exact", 1.0, name)
 
     # Tier 2: the curated alias table, plus any tender-specific aliases.
     required_canonical = canonical_form(required)
@@ -417,6 +445,7 @@ def match_document(
     for name in submitted:
         name_norm = normalise(name)
         if name_norm in extra_norms:
+            # The tender itself explicitly establishes this alternate label.
             return MatchResult(True, "alias", 1.0, name)
         submitted_canonical = canonical_form(name)
         if (
@@ -424,14 +453,14 @@ def match_document(
             and submitted_canonical is not None
             and required_canonical == submitted_canonical
         ):
-            return MatchResult(True, "alias", 1.0, name)
+            return confirmed("alias", 1.0, name)
 
     # Tier 3: shared vocabulary, after rewriting known synonyms. Cheap, runs
     # before the model, and catches the sentence-shaped requirement names that
     # cosine similarity scores too low to accept.
     lexical = _lexical_match(required, submitted)
     if lexical is not None:
-        return MatchResult(True, "lexical", lexical[1], lexical[0])
+        return confirmed("lexical", lexical[1], lexical[0])
 
     # Tier 4: embedding similarity for everything the tables don't know.
     if not use_embeddings:
@@ -444,7 +473,7 @@ def match_document(
         return NO_MATCH
 
     if best_score >= threshold:
-        return MatchResult(True, "embedding", round(best_score, 4), best_name)
+        return confirmed("embedding", round(best_score, 4), best_name)
     if best_score >= REVIEW_BAND_FLOOR:
         # Close, but not close enough to claim. Offered for confirmation.
         return MatchResult(

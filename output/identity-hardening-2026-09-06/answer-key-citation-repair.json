@@ -1,0 +1,14 @@
+[
+  {
+    "vendor_id": "VENDOR_civilworks_02_03",
+    "before": "\u2014",
+    "after": "11.II(a)(h)",
+    "source_pages": [
+      24,
+      25
+    ],
+    "document_sha256": "cfdfa5cc59c11b361207197957aece00c6d947d942130ea3e6de70ec56ad17fe",
+    "evidence": "Clause 11 heading on page 24; II Online Documents, II(a) Part-I, item (h) requires the solar inverter/module declaration, Form F-12, on page 25.",
+    "status_changed": false
+  }
+]

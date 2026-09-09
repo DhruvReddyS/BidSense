@@ -1,0 +1,82 @@
+{
+  "mode": "FastAPI TestClient concurrent real PDF rendering; no external HTTP server",
+  "requests": 12,
+  "workers": 4,
+  "dpi": 110,
+  "pages": 382,
+  "wall_seconds": 6.276,
+  "results": [
+    {
+      "page": 1,
+      "seconds": 4.632,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 5.245,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 4.716,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 4.431,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 1.029,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 1.186,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.931,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.421,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.417,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.622,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.421,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.291,
+      "bytes": 25307,
+      "highlights": 2
+    }
+  ]
+}

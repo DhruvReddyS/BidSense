@@ -225,6 +225,35 @@ def test_latest_resolved_turnover_skips_the_unparseable_year(parsed, stub):
     assert submission.latest_turnover().year == 2023
 
 
+def test_duplicate_turnover_years_are_coalesced_fail_closed():
+    from app.extraction import llm_schemas as raw
+    from app.extraction.convert import to_submission
+
+    header = raw.RawVendorHeader(vendor_name="Duplicate Figures Ltd")
+    same = to_submission(
+        header,
+        [
+            raw.RawTurnover(year="2023-24", amount_raw="Rs. 4.2 Cr"),
+            raw.RawTurnover(year="2023", amount_raw="4,20,00,000"),
+        ],
+        [], [], [], vendor_id="V-DUP", fallback_vendor_name="fallback",
+    )
+    assert len(same.turnover) == 1
+    assert same.turnover[0].amount.amount_inr == Decimal("42000000.00")
+
+    conflict = to_submission(
+        header,
+        [
+            raw.RawTurnover(year="2023", amount_raw="Rs. 4.2 Cr"),
+            raw.RawTurnover(year="2023", amount_raw="Rs. 5 Cr"),
+        ],
+        [], [], [], vendor_id="V-CONFLICT", fallback_vendor_name="fallback",
+    )
+    assert len(conflict.turnover) == 1
+    assert conflict.turnover[0].amount.amount_inr is None
+    assert "manual review" in conflict.turnover[0].amount.raw_text
+
+
 def test_technical_approach_preserved_verbatim_for_the_vector_store(parsed, stub):
     submission, _ = extract_submission(parsed, vendor_id="V-04", llm=stub)
     assert submission.technical_approach_text.startswith("Our delivery methodology")

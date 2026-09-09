@@ -22,12 +22,39 @@ if TYPE_CHECKING:  # pragma: no cover
 BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 
 
+def resolved_device() -> str:
+    """Select the fastest available accelerator without making it required."""
+    configured = settings.embedding_device.strip().lower()
+    if configured != "auto":
+        return configured
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            return "cuda"
+        mps = getattr(torch.backends, "mps", None)
+        if mps is not None and mps.is_available():
+            return "mps"
+    except Exception:
+        pass
+    return "cpu"
+
+
 @lru_cache(maxsize=1)
 def get_model() -> "SentenceTransformer":
     """Load once per process. First call downloads ~440MB for bge-base-en-v1.5."""
     from sentence_transformers import SentenceTransformer
 
-    model = SentenceTransformer(settings.embedding_model, device=settings.embedding_device)
+    device = resolved_device()
+    try:
+        model = SentenceTransformer(settings.embedding_model, device=device)
+    except Exception:
+        # Accelerator availability can be reported optimistically by a driver.
+        # Falling back preserves ingestion rather than turning an optimisation
+        # into an outage.
+        if settings.embedding_device.strip().lower() != "auto" or device == "cpu":
+            raise
+        model = SentenceTransformer(settings.embedding_model, device="cpu")
     # Renamed in sentence-transformers 6.x; keep both paths so the guard works
     # on either version rather than silently skipping the dimension check.
     get_dim = getattr(model, "get_embedding_dimension", None) or model.get_sentence_embedding_dimension
@@ -41,14 +68,14 @@ def get_model() -> "SentenceTransformer":
     return model
 
 
-def embed_passages(texts: list[str], batch_size: int = 32) -> list[list[float]]:
+def embed_passages(texts: list[str], batch_size: int | None = None) -> list[list[float]]:
     """Embed document chunks for indexing. No instruction prefix."""
     if not texts:
         return []
     model = get_model()
     vectors = model.encode(
         texts,
-        batch_size=batch_size,
+        batch_size=batch_size or settings.embedding_batch_size,
         normalize_embeddings=True,  # cosine distance assumes unit vectors
         show_progress_bar=False,
     )

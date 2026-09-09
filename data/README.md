@@ -36,10 +36,11 @@ for the test suite. Also not evaluation data.
 | NOTIF_civilworks_01 | civil works | IIT (ISM) Dhanbad | 101 | native |
 | NOTIF_supply_01 | supply/procurement | GHMC | 68 | native |
 | NOTIF_civilworks_02 | civil works | HGCL (solar EPC) | 382 | native |
+| NOTIF_interiorworks_01 | interior works | State Bank of India, RBO-6 Tehri Garhwal | 56 | native |
 
-All three are native-text PDFs, so OCR is not on the critical path for this set.
-Section 9.1 asks for 5–10 across 2–3 sectors; three are collected, covering two
-sectors. **Still needed: 2–7 more, ideally including IT services** (the third
+All four are native-text PDFs, so OCR is not on the critical path for this set.
+Section 9.1 asks for 5–10 across 2–3 sectors; four are collected, covering three
+sectors. **Still needed: 1–6 more, ideally including IT services** (an additional
 sector Section 9.1 suggests) and at least one scanned document so the OCR path
 is exercised against something real.
 

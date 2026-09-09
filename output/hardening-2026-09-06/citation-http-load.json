@@ -1,0 +1,154 @@
+{
+  "mode": "HTTP to running Uvicorn on loopback; concurrent real PDF rendering",
+  "requests": 24,
+  "workers": 6,
+  "dpi": 110,
+  "pages": 382,
+  "wall_seconds": 4.588,
+  "results": [
+    {
+      "page": 1,
+      "seconds": 3.713,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 3.83,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 3.382,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 3.341,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 3.415,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 3.808,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.401,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.304,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.3,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.387,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.274,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.235,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.268,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.357,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.245,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.208,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.248,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.373,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.25,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.256,
+      "bytes": 25307,
+      "highlights": 2
+    },
+    {
+      "page": 1,
+      "seconds": 0.262,
+      "bytes": 136317,
+      "highlights": 4
+    },
+    {
+      "page": 100,
+      "seconds": 0.354,
+      "bytes": 332760,
+      "highlights": 2
+    },
+    {
+      "page": 200,
+      "seconds": 0.239,
+      "bytes": 129477,
+      "highlights": 3
+    },
+    {
+      "page": 382,
+      "seconds": 0.176,
+      "bytes": 25307,
+      "highlights": 2
+    }
+  ]
+}

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import logging
 import statistics
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from app.config import settings
 from app.ingest.models import ExtractionMethod, PageText, ParsedDocument
 from app.ingest.ocr import missing_dependencies, ocr_available, ocr_pdf_page
 from app.schemas.common import DocumentKind
@@ -88,6 +90,7 @@ def parse_pdf(
 
     pages: list[PageText] = []
     warnings: list[str] = []
+    ocr_candidates: list[int] = []
 
     with pdfplumber.open(path) as pdf:
         for index, page in enumerate(pdf.pages, start=1):
@@ -102,40 +105,49 @@ def parse_pdf(
 
             method = ExtractionMethod.NATIVE
             if len(text) < MIN_NATIVE_CHARS and not tables:
-                # Short text is ambiguous: it is either a scanned page whose
-                # text layer is a stray artefact, or a genuinely near-empty page
-                # ("THIS PAGE IS LEFT INTENTIONALLY BLANK"). OCR settles it.
+                # OCR is run after native parsing so candidate pages can be
+                # processed concurrently without sharing pdfplumber objects.
                 if use_ocr and ocr_available():
-                    try:
-                        ocr_text = ocr_pdf_page(path, index)
-                        # Only prefer OCR when it actually recovered more than
-                        # the text layer held -- otherwise the page really is
-                        # near-empty and the native text is the better record.
-                        if len(ocr_text) > len(text):
-                            text, method = ocr_text, ExtractionMethod.OCR
-                    except Exception as exc:
-                        warnings.append(f"page {index}: OCR failed ({exc})")
-
-                if not text:
-                    # Nothing at all. Loud, not silent: an empty page reads
-                    # downstream as "this clause isn't in the tender", which is
-                    # a wrong answer rather than a missing feature.
+                    ocr_candidates.append(index)
+                elif not text:
                     method = ExtractionMethod.EMPTY
-                    if use_ocr and not ocr_available():
-                        warnings.append(
-                            f"page {index}: no extractable text and OCR unavailable "
-                            f"({', '.join(missing_dependencies())}) -- page content "
-                            "is MISSING from extraction"
-                        )
-                    else:
-                        warnings.append(
-                            f"page {index}: no extractable text found -- page "
-                            "content is MISSING from extraction"
-                        )
+                    warnings.append(
+                        f"page {index}: no extractable text and OCR unavailable "
+                        f"({', '.join(missing_dependencies())}) -- page content "
+                        "is MISSING from extraction"
+                    )
 
             pages.append(
                 PageText(page_number=index, text=text, method=method, tables=tables)
             )
+
+    if ocr_candidates:
+        outcomes: dict[int, tuple[str | None, Exception | None]] = {}
+        with ThreadPoolExecutor(
+            max_workers=min(settings.ocr_workers, len(ocr_candidates)),
+            thread_name_prefix="ocr",
+        ) as pool:
+            futures = {pool.submit(ocr_pdf_page, path, number): number for number in ocr_candidates}
+            for future in as_completed(futures):
+                number = futures[future]
+                try:
+                    outcomes[number] = (future.result(), None)
+                except Exception as exc:
+                    outcomes[number] = (None, exc)
+
+        for number in ocr_candidates:
+            page = pages[number - 1]
+            ocr_text, error = outcomes[number]
+            if error is not None:
+                warnings.append(f"page {number}: OCR failed ({error})")
+            elif ocr_text is not None and len(ocr_text) > len(page.text):
+                page.text = ocr_text
+                page.method = ExtractionMethod.OCR
+            if not page.text:
+                page.method = ExtractionMethod.EMPTY
+                warnings.append(
+                    f"page {number}: no extractable text found -- page content is MISSING from extraction"
+                )
 
     document = ParsedDocument(
         file_name=ParsedDocument.name_from_path(path),
