@@ -178,6 +178,9 @@ class Level1VendorResult(BaseModel):
 class Level1RunResponse(BaseModel):
     tender_id: str
     total: int
+    eliminated: int
+    pending: int
+    results: list[Level1VendorResult]
 
 
 class PerformanceSummary(BaseModel):
@@ -186,9 +189,6 @@ class PerformanceSummary(BaseModel):
     p95_seconds: float | None
     cache_reuse_percent: float
     pages_per_second: float | None
-    eliminated: int
-    pending: int
-    results: list[Level1VendorResult]
 
 
 class Level2RunRequest(BaseModel):

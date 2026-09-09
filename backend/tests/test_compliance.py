@@ -518,6 +518,39 @@ def test_alias_variants_of_a_declared_absent_document_are_also_suppressed():
     assert gst.status is CheckStatus.MISSING
 
 
+def test_shorter_explicit_absent_name_overrides_unrelated_near_match():
+    """Surrounding tender prose must not hide an explicit missing certificate."""
+    report = build_gap_report(
+        notification(
+            mandatory_documents=[
+                MandatoryDocument(
+                    doc_name=(
+                        "Possession of Valid Class II/III Digital Signature Certificate "
+                        "(DSC) in the company's name"
+                    )
+                )
+            ]
+        ),
+        submission(
+            documents_submitted=[
+                SubmittedDocument(
+                    doc_name="Possession of Valid Class II/III Digital Signature Certificate",
+                    present=False,
+                ),
+                SubmittedDocument(
+                    doc_name="Certificate of incorporation or registration of the firm",
+                    present=True,
+                ),
+            ]
+        ),
+        **NO_EMBED,
+    )
+    item = report.items[0]
+    assert item.status is CheckStatus.MISSING
+    assert item.severity is Severity.DISQUALIFYING
+    assert "not enclosed" in item.explanation.lower()
+
+
 def test_an_unrelated_certification_still_satisfies_its_own_requirement():
     """The suppression must be targeted -- one contradicted document must not
     invalidate every other certification in the bid."""

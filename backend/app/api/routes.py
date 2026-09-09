@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import hmac
+import importlib.util
 import re
 import shutil
 import tempfile
@@ -21,6 +22,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.quality import quality_for, provider_label
@@ -153,13 +155,14 @@ def health() -> HealthResponse:
         qdrant = bool(collection_stats().get("exists"))
     except Exception as exc:
         logger.warning("qdrant unhealthy: %s", exc)
-    try:
-        from app.vector.embeddings import get_model
-
-        get_model()
-        embeddings = True
-    except Exception as exc:
-        logger.warning("embeddings unavailable: %s", exc)
+    # Liveness must not trigger a 440 MB model load or accelerator warm-up.
+    # Those are intentionally lazy on the first search/index operation. Here we
+    # report whether the configured embedding runtime is installed; ingestion
+    # itself still performs the dimension/runtime checks before using it.
+    embeddings = (
+        importlib.util.find_spec("sentence_transformers") is not None
+        and settings.embedding_dim > 0
+    )
     try:
         from app.llm import get_llm
 
@@ -450,7 +453,9 @@ def review_performance(
     total_seconds = 0.0
     for row in rows:
         result = row.result or {}
-        seconds = result.get("seconds")
+        # Deferred Level-3 indexing may finish after Level-1 review is ready;
+        # report the user-visible decision latency, not background tail work.
+        seconds = result.get("decision_ready_seconds", result.get("seconds"))
         if isinstance(seconds, (int, float)) and seconds >= 0:
             samples.append(float(seconds))
             pages = result.get("pages")

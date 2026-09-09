@@ -263,7 +263,14 @@ def _document_item(
             suffix = candidate_normalised[len(target_normalised):].split()
             if suffix and all(len(token) == 1 for token in suffix):
                 return document_identifiers(name) == document_identifiers(doc_name)
-        return target_canonical is not None and canonical_form(name) == target_canonical
+        if target_canonical is not None and canonical_form(name) == target_canonical:
+            return True
+        # Extractors legitimately vary surrounding prose: the tender may say
+        # "Possession of ... (DSC) in the company's name" while the bid
+        # checklist says only "Digital Signature Certificate". Reuse the
+        # conservative deterministic tiers so an explicit NOT ENCLOSED signal
+        # cannot be softened by an unrelated embedding near-match.
+        return match_document(doc_name, [name], use_embeddings=False).matched
 
     explicitly_absent = doc_name.lower() in declared_absent or any(
         absent_name_matches(a) for a in declared_absent

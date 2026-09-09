@@ -28,7 +28,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 574 tests
+../.venv/bin/python -m pytest -q           # 782 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -263,6 +263,27 @@ All three collected notifications extract cleanly — **3/3, zero errors**:
 Wall-clock is dominated by free-tier pacing, not by document size — the
 382-page tender took the same time as the 101-page one.
 
+### Scalability and decision latency
+
+The ingestion path is now split into review-critical and background work.
+Parsing, six independent extraction groups, deterministic validation and
+persistence produce the Level 1 record first; semantic chunk indexing can then
+finish on its own bounded executor. A completed job records separate parse,
+extract, persist and index timings plus an immutable `decision_ready_seconds`,
+so background work cannot distort the reviewer SLA.
+
+Other measured-path optimisations preserve the same extracted values: a
+request-and-token-aware LLM limiter permits safe bursts, weak PDF pages OCR in
+parallel, page embeddings are shared across graph branches, duplicate chunks
+are embedded only once, and CUDA/Apple Metal is selected automatically with a
+safe CPU fallback. Upload batches use three browser lanes and backend workers
+are bounded, preventing a large batch from exhausting memory or provider quota.
+Interrupted jobs retain a content-addressed source and resume after restart.
+
+The reviewer workspace shows median/p95 decision latency, cache reuse and
+pages/second. `/api/health` remains a fast liveness check and deliberately does
+not cold-load the 440 MB embedding model.
+
 ### OCR
 
 Tesseract 5.5.3 and poppler are installed, and the OCR path is verified against
@@ -296,16 +317,17 @@ the clause the key names. A rule engine that rejects everybody scores perfect
 recall and is useless; one that rejects the right vendor for the wrong clause is
 not defensible if challenged, which is the point of Section 5.2.
 
-Across all three real tenders, 15 bids of 60–172 pages each:
+Across the certified corpus, 19 bids/versions derived from real tenders:
 
 | Metric | Value |
 |---|---|
 | Elimination precision | **100%** |
 | Elimination recall | **100%** |
 | F1 | **100%** |
+| Accuracy | **100%** |
 | Reason accuracy | **100%** |
 
-15 of 15 correct — 9 eliminations, 6 passes, no false positives or negatives,
+19 of 19 correct — 12 eliminations, 7 passes, no false positives or negatives,
 and every elimination citing the clause the answer key names.
 
 | Tender | Eliminations, with the clause cited |

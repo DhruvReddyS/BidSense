@@ -84,7 +84,15 @@ def _default_script() -> dict:
         ),
         "DocumentList": raw.DocumentList(
             items=[
-                raw.RawMandatoryDocument(doc_name=name, clause_ref="5.1", source_page=3)
+                raw.RawMandatoryDocument(
+                    doc_name=name,
+                    clause_ref="5.1",
+                    source_page=3,
+                    # The production gate requires audit-ready evidence. The
+                    # synthetic provider must therefore behave like a compliant
+                    # extractor and quote the exact list item from the fixture.
+                    source_snippet=name,
+                )
                 for name in t["mandatory_docs"]
             ]
         ),

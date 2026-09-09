@@ -74,6 +74,12 @@ LLM_PROVIDER=gemini          # or 'ollama' — no code change either way
 GEMINI_API_KEY=...
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_RPM=5                 # free-tier quota: 5 requests/minute per model
+EMBEDDING_DEVICE=auto        # CUDA, then Apple Metal, then safe CPU fallback
+EMBEDDING_BATCH_SIZE=64
+INGEST_WORKERS=2             # raise to 6–12 only with matching paid LLM quota
+INDEX_WORKERS=1
+DEFER_VECTOR_INDEXING=true   # Level 1 ready before Level 3 search indexing
+OCR_WORKERS=3
 ```
 
 `GEMINI_RPM` is the single most important knob. The extraction graph makes six

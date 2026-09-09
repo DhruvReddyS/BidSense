@@ -132,7 +132,12 @@ def _upload_bid(client, pdf, vendor_id="V-04"):
 def test_health_reports_each_dependency_separately(client):
     """A partial outage must be diagnosable, not surface as a generic failure
     three screens into a user flow."""
-    body = client.get("/api/health").json()
+    # A health probe must not cold-load the large embedding model.
+    with patch(
+        "app.vector.embeddings.get_model",
+        side_effect=AssertionError("health probe attempted model warm-up"),
+    ):
+        body = client.get("/api/health").json()
     assert body["status"] in {"ok", "degraded"}
     assert body["postgres"] is True
     assert body["qdrant"] is True
@@ -173,6 +178,7 @@ def test_job_reports_a_completed_extraction(client, pdf, clean, stubbed):
     }
     assert set(result["timing"]) == {"parse", "extract", "persist", "index"}
     assert result["index_state"] == "ready"
+    assert result["decision_ready_seconds"] == result["seconds"]
 
     performance = client.get("/api/review/performance")
     assert performance.status_code == 200

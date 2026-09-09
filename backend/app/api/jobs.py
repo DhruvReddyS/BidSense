@@ -212,6 +212,9 @@ def _run(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
                     for f in result.validation
                 ],
                 "seconds": round(result.total_seconds, 2),
+                # Keep the review SLA immutable when deferred semantic indexing
+                # later adds its own elapsed time to the end-to-end receipt.
+                "decision_ready_seconds": round(result.total_seconds, 2),
                 "node_timings": {k: round(v, 2) for k, v in result.node_timings},
             },
             finished_at=datetime.now(timezone.utc),
