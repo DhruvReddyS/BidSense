@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { CommandPalette } from "./CommandPalette";
 import { LogoMark } from "./Logo";
 import { ThemeToggle } from "./Theme";
+import { HealthPill } from "./HealthPill";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -24,6 +25,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   }, []);
   useEffect(() => { if (help) helpDialog.current?.showModal(); else helpDialog.current?.close(); }, [help]);
   return <>
+    <div className="workspace-aurora" aria-hidden><i /><i /><i /></div>
     <aside className="workspace-rail" aria-label="Workspace navigation">
       <Link href="/" className="workspace-brand" aria-label="BidSense home"><LogoMark className="h-7 w-7" /><span>BidSense<span className="brand-period">.</span></span></Link>
       <button className="workspace-search" onClick={() => setPalette(true)}><span aria-hidden>⌕</span> Search anything <kbd>⌘ K</kbd></button>
@@ -36,7 +38,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
       <div className="rail-bottom"><button className="rail-link" onClick={() => setHelp(true)}><span className="keycap">?</span> Keyboard shortcuts</button><div className="theme-row"><span>Appearance</span><ThemeToggle /></div><p>Every claim, connected to its source.</p></div>
     </aside>
     <div className="workspace-content">
-      <header className="workspace-topbar"><span><span className="text-fg-subtle">Workspace</span><span className="breadcrumb-slash">/</span>{pathname.endsWith("/review") ? "Company review" : pathname.includes("/bids/") ? "Bid review" : pathname.startsWith("/tenders/") ? "Tender workspace" : pathname === "/upload" ? "New tender" : "Overview"}</span><button onClick={() => setPalette(true)} className="topbar-command">Quick jump <kbd>⌘ K</kbd></button></header>
+      <header className="workspace-topbar"><span><span className="text-fg-subtle">Workspace</span><span className="breadcrumb-slash">/</span>{pathname.endsWith("/review") ? "Company review" : pathname.includes("/bids/") ? "Bid review" : pathname.startsWith("/tenders/") ? "Tender workspace" : pathname === "/upload" ? "New tender" : "Overview"}</span><div className="topbar-actions"><HealthPill /><button onClick={() => setPalette(true)} className="topbar-command">Quick jump <kbd>⌘ K</kbd></button></div></header>
       <main id="main" className="workspace-main">{children}</main>
       <footer className="workspace-footer"><span>Prepared with BidSense.</span><span>Always verify against the official document.</span></footer>
     </div>

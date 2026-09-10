@@ -219,14 +219,21 @@ export async function pollJob(
   signal?: AbortSignal,
 ): Promise<JobStatus> {
   const TERMINAL = new Set(["succeeded", "partial", "failed"]);
-  let delay = 900;
+  let delay = 1200;
 
   for (;;) {
     if (signal?.aborted) throw new ApiError("Cancelled", 0);
     const job = await api.job(jobId);
     onUpdate(job);
     if (TERMINAL.has(job.status)) return job;
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    delay = Math.min(delay * 1.25, 4000);
+    // At 1,000 open workspaces, sub-second polling is self-inflicted load.
+    // Back off while work is queued/running and poll much less when the tab is
+    // hidden; returning to the tab immediately restores the normal cadence.
+    const visibilityDelay =
+      typeof document !== "undefined" && document.visibilityState === "hidden"
+        ? 15_000
+        : delay;
+    await new Promise((resolve) => setTimeout(resolve, visibilityDelay));
+    delay = Math.min(delay * 1.35, 8000);
   }
 }

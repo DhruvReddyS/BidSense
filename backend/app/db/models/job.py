@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -52,6 +52,10 @@ job_kind_enum = SAEnum(
 
 class IngestJob(Base, UUIDPrimaryKey, Timestamps):
     __tablename__ = "ingest_jobs"
+    __table_args__ = (
+        Index("ix_ingest_jobs_queue_claim", "status", "created_at"),
+        Index("ix_ingest_jobs_owner_created", "owner_user_id", "created_at"),
+    )
 
     kind: Mapped[JobKind] = mapped_column(job_kind_enum, nullable=False)
     status: Mapped[JobStatus] = mapped_column(

@@ -80,6 +80,10 @@ INGEST_WORKERS=2             # raise to 6–12 only with matching paid LLM quota
 INDEX_WORKERS=1
 DEFER_VECTOR_INDEXING=true   # Level 1 ready before Level 3 search indexing
 OCR_WORKERS=3
+JOB_EXECUTION_MODE=thread    # local development
+JOB_POLL_SECONDS=0.5
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=10
 ```
 
 `GEMINI_RPM` is the single most important knob. The extraction graph makes six
@@ -101,6 +105,22 @@ cd frontend && npm run dev
 Then open **http://localhost:3000**. API docs are at
 http://127.0.0.1:8100/docs, and http://127.0.0.1:8100/api/health reports each
 dependency separately.
+
+### Production / 1,000-user topology
+
+The app Docker profile separates API and ingestion workers automatically:
+
+```bash
+docker compose --profile app up -d --build
+docker compose --profile app up -d --scale worker=4
+```
+
+`JOB_EXECUTION_MODE=database` is injected into both services. Scale API replicas
+behind a load balancer for request traffic and workers separately for document
+throughput. Keep the sum of `WEB_CONCURRENCY × (DB_POOL_SIZE +
+DB_MAX_OVERFLOW)` below PostgreSQL's connection ceiling; add PgBouncer before
+scaling to many hosts. Provider RPM/TPM remains the extraction ceiling even
+when compute capacity is available.
 
 ## Command line
 

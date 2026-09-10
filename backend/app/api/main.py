@@ -6,8 +6,10 @@ import logging
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as PoolTimeout
 
 from app.api.routes import router
 from app.api.security import SecurityMiddleware
@@ -57,6 +59,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SecurityMiddleware)
+
+
+@app.exception_handler(PoolTimeout)
+async def database_overloaded(_: Request, exc: PoolTimeout) -> JSONResponse:
+    """Shed excess load predictably instead of leaking an internal 500."""
+    logger.warning("database pool saturated: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "The service is at capacity. Retry shortly."},
+        headers={"Retry-After": "1"},
+    )
 
 app.include_router(router)
 

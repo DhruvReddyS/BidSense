@@ -51,9 +51,9 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="lux-upload mx-auto max-w-6xl">
       <div className="mb-10 max-w-3xl">
-        <span className="eyebrow">New tender</span>
+        <span className="eyebrow">Secure ingestion studio</span>
         <h1 className="font-display text-balance mt-3 text-4xl font-medium leading-tight sm:text-5xl">Upload the tender notification</h1>
         <p className="mt-4 max-w-2xl text-sm leading-6 text-[hsl(var(--fg-muted))]">Use the official document published by the authority. All requirements and subsequent bid checks will be traced back to this source.</p>
       </div>
@@ -61,7 +61,7 @@ export default function UploadPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-6">
 
-        <Card className="p-5 sm:p-8">
+        <Card className="lux-upload-card p-5 sm:p-8">
           <div className="relative mb-6 flex items-center justify-between gap-4">
             <div><p className="label">Source document</p><h2 className="mt-2 text-xl font-semibold">Official tender notification</h2></div>
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-[hsl(var(--accent-soft))] text-lg text-[hsl(var(--accent))]">↥</span>
@@ -129,7 +129,7 @@ export default function UploadPage() {
         </Card>
       </div>
 
-      <aside className="card h-fit p-6 lg:sticky lg:top-28">
+      <aside className="card lux-process-map h-fit p-6 lg:sticky lg:top-28">
         <div className="mb-6 flex items-center justify-between"><p className="label">Fast, but defensible</p><span className="font-mono text-[10px] text-[hsl(var(--accent))]">LIVE STAGES</span></div>
         <ol className="space-y-6">
           {STEPS.map((step, i) => (

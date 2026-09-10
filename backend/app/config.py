@@ -29,8 +29,19 @@ class Settings(BaseSettings):
     # code change. Provider gates and token buckets remain the final authority.
     ingest_workers: int = Field(default=2, ge=1, le=64)
     index_workers: int = Field(default=1, ge=1, le=16)
+    # `database` separates HTTP replicas from extraction workers. Postgres is
+    # already required and provides durable SKIP LOCKED claiming, so production
+    # can scale API and worker fleets independently without another broker.
+    job_execution_mode: Literal["thread", "database"] = "thread"
+    job_poll_seconds: float = Field(default=0.5, ge=0.05, le=30)
     defer_vector_indexing: bool = False
     ocr_workers: int = Field(default=3, ge=1, le=16)
+
+    # Per-process connection budget. Keep this bounded when adding replicas;
+    # 8 API replicas at these defaults peak at 160 rather than 1,000 sockets.
+    db_pool_size: int = Field(default=10, ge=1, le=100)
+    db_max_overflow: int = Field(default=10, ge=0, le=100)
+    db_pool_timeout_seconds: int = Field(default=15, ge=1, le=120)
 
     # --- Qdrant ---
     qdrant_host: str = "localhost"

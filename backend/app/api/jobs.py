@@ -1,11 +1,9 @@
-"""Background ingestion runner.
+"""Background ingestion runners for local and horizontally scaled deployments.
 
-Uploads return a job id immediately and the extraction runs on a worker thread.
-A thread pool rather than a task queue is a deliberate choice for this system's
-scale: the work is I/O-bound (waiting on the LLM), the bottleneck is a free-tier
-quota of a few requests per minute, and adding a broker would be infrastructure
-without benefit. The job table is in Postgres, so swapping the executor for
-Celery or RQ later is a change to this file only.
+Uploads always become durable PostgreSQL jobs. Local development executes them
+in a bounded thread pool; production API replicas leave them queued for one or
+more dedicated workers, which claim rows atomically with ``SKIP LOCKED``. This
+keeps extraction work out of web processes without requiring a separate broker.
 """
 
 from __future__ import annotations
@@ -16,7 +14,7 @@ import tempfile
 import threading
 import traceback
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -328,6 +326,13 @@ def submit(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
     The fallback matters during interpreter shutdown (and in tests): dropping
     the work silently would leave a job stuck in QUEUED for ever.
     """
+    if settings.job_execution_mode == "database":
+        # The content-addressed copy is the durable queue payload. API replicas
+        # should release their temporary upload immediately; a worker will
+        # claim the Postgres row with SKIP LOCKED and restore these bytes.
+        shutil.rmtree(path.parent, ignore_errors=True)
+        logger.info("job %s queued for a database worker", job_id)
+        return
     try:
         _executor.submit(_run, job_id, kind, path, **kwargs)
     except RuntimeError:
@@ -338,6 +343,68 @@ def submit(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
 def run_inline(job_id: uuid.UUID, kind: JobKind, path: Path, **kwargs) -> None:
     """Run a job on the calling thread. Used by tests to keep them deterministic."""
     _run(job_id, kind, path, **kwargs)
+
+
+def claim_next_job() -> tuple[uuid.UUID, JobKind, Path, dict] | None:
+    """Atomically claim the oldest queued job across every worker replica."""
+    from sqlalchemy import select
+
+    with session_scope() as session:
+        job = session.scalars(
+            select(IngestJob)
+            .where(IngestJob.status == JobStatus.QUEUED)
+            .order_by(IngestJob.created_at, IngestJob.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        ).first()
+        if job is None:
+            return None
+        source = path_for(job.source_hash or "")
+        if source is None:
+            job.status = JobStatus.FAILED
+            job.stage = "source unavailable"
+            job.error = "The retained upload is unavailable. Please upload the document again."
+            job.finished_at = datetime.now(timezone.utc)
+            return None
+
+        folder = Path(tempfile.mkdtemp(prefix="bidsense-worker-"))
+        restored = folder / Path(job.file_name).name
+        shutil.copyfile(source, restored)
+        kwargs: dict = {"owner_user_id": job.owner_user_id}
+        if job.kind is JobKind.SUBMISSION:
+            kwargs.update(vendor_id=job.vendor_id, tender_id=job.tender_id)
+        elif job.kind is JobKind.CORRIGENDUM:
+            kwargs = {"tender_id": job.tender_id}
+        worker_claim = uuid.uuid4().hex[:12]
+        job.status = JobStatus.RUNNING
+        job.stage = f"claimed:{worker_claim}"
+        job.started_at = datetime.now(timezone.utc)
+        job.finished_at = None
+        job.error = None
+        return job.id, job.kind, restored, kwargs
+
+
+def work_forever(stop_event: threading.Event | None = None) -> None:
+    """Run a bounded, horizontally scalable Postgres-backed worker process."""
+    stop_event = stop_event or threading.Event()
+    active: set[Future] = set()
+    logger.info("database worker ready with %d ingestion slots", settings.ingest_workers)
+    with ThreadPoolExecutor(
+        max_workers=settings.ingest_workers, thread_name_prefix="db-ingest"
+    ) as pool:
+        while not stop_event.is_set() or active:
+            active = {future for future in active if not future.done()}
+            while not stop_event.is_set() and len(active) < settings.ingest_workers:
+                claimed = claim_next_job()
+                if claimed is None:
+                    break
+                job_id, kind, path, kwargs = claimed
+                active.add(pool.submit(_run, job_id, kind, path, **kwargs))
+            if active:
+                wait(active, timeout=settings.job_poll_seconds, return_when=FIRST_COMPLETED)
+            else:
+                stop_event.wait(settings.job_poll_seconds)
+    logger.info("database worker stopped after draining active jobs")
 
 
 # A job that has not finished in this long is stuck, whatever the cause. Six
@@ -429,6 +496,37 @@ def recover_interrupted_jobs() -> tuple[int, int]:
     visible failures because their bytes genuinely cannot be recovered.
     """
     from sqlalchemy import and_, or_, select
+
+    if settings.job_execution_mode == "database":
+        # Queued rows already are the durable queue. Only leases that have been
+        # silent beyond the hard timeout are returned for another worker to
+        # claim; active workers owned by another replica are never disturbed.
+        recovered = 0
+        failed = 0
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=STALE_AFTER_SECONDS)
+        with session_scope() as session:
+            stale = session.scalars(
+                select(IngestJob)
+                .where(
+                    IngestJob.status == JobStatus.RUNNING,
+                    IngestJob.started_at < cutoff,
+                )
+                .with_for_update(skip_locked=True)
+            ).all()
+            for job in stale:
+                if path_for(job.source_hash or "") is None:
+                    job.status = JobStatus.FAILED
+                    job.stage = "source unavailable"
+                    job.error = "The retained upload is unavailable. Please upload it again."
+                    job.finished_at = datetime.now(timezone.utc)
+                    failed += 1
+                else:
+                    job.status = JobStatus.QUEUED
+                    job.stage = "queued after worker recovery"
+                    job.started_at = None
+                    job.error = None
+                    recovered += 1
+        return recovered, failed
 
     recovered: list[tuple[uuid.UUID, JobKind, Path, dict]] = []
     failed = 0

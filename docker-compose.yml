@@ -39,7 +39,30 @@ services:
       POSTGRES_PORT: 5432
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
+      JOB_EXECUTION_MODE: database
+      WEB_CONCURRENCY: 2
+      DB_POOL_SIZE: 5
+      DB_MAX_OVERFLOW: 5
     ports: ["8100:8100"]
+    volumes: ["documentstore:/data/store"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_healthy}
+    restart: unless-stopped
+
+  worker:
+    profiles: ["app"]
+    build: ./backend
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.worker"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      JOB_EXECUTION_MODE: database
+      DB_POOL_SIZE: 2
+      DB_MAX_OVERFLOW: 2
     volumes: ["documentstore:/data/store"]
     depends_on:
       postgres: {condition: service_healthy}

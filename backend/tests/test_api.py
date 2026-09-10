@@ -520,6 +520,57 @@ def test_an_interrupted_job_can_be_replayed_from_its_retained_source(tmp_path, m
         session.execute(text("DELETE FROM ingest_jobs WHERE id = :i"), {"i": job_id})
 
 
+def test_database_queue_releases_api_upload_without_using_local_pool(tmp_path, monkeypatch):
+    """Database mode keeps extraction out of API replica memory."""
+    from app.api import jobs as job_runner
+    from app.db.models import JobKind
+
+    folder = tmp_path / "upload"
+    folder.mkdir()
+    source = folder / "tender.pdf"
+    source.write_bytes(b"temporary upload; durable copy already retained")
+    monkeypatch.setattr(job_runner.settings, "job_execution_mode", "database")
+    monkeypatch.setattr(
+        job_runner._executor,
+        "submit",
+        lambda *a, **k: pytest.fail("API process used its local extraction pool"),
+    )
+    job_runner.submit(uuid.uuid4(), JobKind.NOTIFICATION, source)
+    assert not folder.exists()
+
+
+@live
+def test_database_queue_requeues_only_stale_worker_leases(tmp_path, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app.api import jobs as job_runner
+    from app.db.models import IngestJob, JobKind, JobStatus
+
+    stored = tmp_path / "stored.pdf"
+    stored.write_bytes(b"retained")
+    with session_scope() as session:
+        job = IngestJob(
+            kind=JobKind.NOTIFICATION,
+            status=JobStatus.RUNNING,
+            stage="claimed:dead-worker",
+            file_name="stale.pdf",
+            source_hash="b" * 64,
+            started_at=datetime.now(timezone.utc)
+            - timedelta(seconds=job_runner.STALE_AFTER_SECONDS + 1),
+        )
+        session.add(job)
+        session.flush()
+        job_id = job.id
+    monkeypatch.setattr(job_runner.settings, "job_execution_mode", "database")
+    monkeypatch.setattr(job_runner, "path_for", lambda _: stored)
+    recovered, failed = job_runner.recover_interrupted_jobs()
+    assert recovered >= 1 and failed == 0
+    with session_scope() as session:
+        restored = session.get(IngestJob, job_id)
+        assert restored.status is JobStatus.QUEUED
+        assert restored.started_at is None
+        session.delete(restored)
+
+
 # --------------------------------------------------------------------------- #
 # Failure messages a user can act on
 # --------------------------------------------------------------------------- #

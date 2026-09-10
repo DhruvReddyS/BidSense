@@ -8,6 +8,8 @@ import importlib.util
 import re
 import shutil
 import tempfile
+import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,11 +21,13 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     status,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.quality import quality_for, provider_label
 from app.api.deps import get_db, require_notification, require_submission, current_user, reviewer_user, ensure_submission_access
@@ -89,11 +93,15 @@ from app.schemas.common import ChunkSection, DocumentKind
 from app.schemas.common import VendorStatus
 from app.review import build_candidate, choose_shortlist, classify_query, structured_answer
 from app.documents import store_document
+from app.db.session import session_scope
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # tender PDFs are large but not unbounded
+_notification_cache: dict[tuple[int, int], tuple[float, NotificationList]] = {}
+_notification_cache_lock = threading.Lock()
+_NOTIFICATION_CACHE_SECONDS = 2.0
 
 
 def _user_out(user) -> UserOut:
@@ -487,33 +495,54 @@ def review_performance(
 # Reading extracted data
 # --------------------------------------------------------------------------- #
 @router.get("/notifications", response_model=NotificationList)
-def get_notifications(
+async def get_notifications(
+    response: Response,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    session: Session = Depends(get_db),
 ) -> NotificationList:
-    rows = list_notifications(session, limit=limit, offset=offset)
-    # One grouped query for every tender's bid count, rather than one query per
-    # tender inside the loop.
-    counts = submission_counts(session, [row.id for row in rows])
-    return NotificationList(
-        items=[
-            NotificationSummary(
-                tender_id=row.tender_id,
-                title=row.title,
-                issuing_authority=row.issuing_authority,
-                sector=row.sector,
-                submission_deadline=row.submission_deadline,
-                emd_amount_inr=row.emd_amount_inr,
-                eligibility_count=len(row.eligibility_criteria),
-                document_count=len(row.mandatory_documents),
-                submission_count=counts.get(row.id, 0),
-                created_at=row.created_at,
+    response.headers["Cache-Control"] = "public, max-age=2, stale-while-revalidate=15"
+    key = (limit, offset)
+    now = time.monotonic()
+    cached = _notification_cache.get(key)
+    if cached and now - cached[0] < _NOTIFICATION_CACHE_SECONDS:
+        return cached[1]
+    return await run_in_threadpool(_refresh_notification_cache, limit, offset)
+
+
+def _refresh_notification_cache(limit: int, offset: int) -> NotificationList:
+    """Refresh outside the async event loop; serialize only the rare miss."""
+    key = (limit, offset)
+
+    # Collapse a thundering herd to one three-query refresh per API replica.
+    # Crucially, cache hits never acquire a database connection.
+    with _notification_cache_lock:
+        cached = _notification_cache.get(key)
+        now = time.monotonic()
+        if cached and now - cached[0] < _NOTIFICATION_CACHE_SECONDS:
+            return cached[1]
+        with session_scope() as session:
+            rows = list_notifications(session, limit=limit, offset=offset)
+            counts = submission_counts(session, [row.id for row in rows])
+            response = NotificationList(
+                items=[
+                    NotificationSummary(
+                        tender_id=row.tender_id,
+                        title=row.title,
+                        issuing_authority=row.issuing_authority,
+                        sector=row.sector,
+                        submission_deadline=row.submission_deadline,
+                        emd_amount_inr=row.emd_amount_inr,
+                        eligibility_count=len(row.eligibility_criteria),
+                        document_count=len(row.mandatory_documents),
+                        submission_count=counts.get(row.id, 0),
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ],
+                page=Page(total=count_notifications(session), limit=limit, offset=offset),
             )
-            for row in rows
-        ],
-        page=Page(total=count_notifications(session), limit=limit, offset=offset),
-    )
+        _notification_cache[key] = (now, response)
+        return response
 
 
 # NOTE: this route MUST be declared before the bare /{tender_id:path} route

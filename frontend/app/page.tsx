@@ -20,20 +20,20 @@ export default async function Home() {
 
   return (
     <div className="space-y-9">
-      <section className="flex flex-col justify-between gap-5 border-b pb-8 sm:flex-row sm:items-end">
+      <section className="lux-hero flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Workspace</p>
+          <p className="eyebrow">Intelligence workspace</p>
           <h1 className="font-display mt-2 text-4xl font-medium tracking-[-.025em] sm:text-5xl">Tenders</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[hsl(var(--fg-muted))]">
             Review tender requirements, check draft bids, and keep every decision connected to its source clause.
           </p>
         </div>
-        <Link href="/upload" className="btn btn-primary shrink-0">Add tender</Link>
+        <div className="lux-hero-actions"><span><i /> Audit-grade evidence</span><Link href="/upload" className="btn btn-primary shrink-0">Add tender <b>↗</b></Link></div>
       </section>
 
       <section aria-labelledby="overview-heading">
         <h2 id="overview-heading" className="sr-only">Portfolio overview</h2>
-        <dl className="grid grid-cols-2 border-y lg:grid-cols-4">
+        <dl className="lux-stats grid grid-cols-2 lg:grid-cols-4">
           <Summary label="Active tenders" value={active} note={active === 1 ? "Open workspace" : "Open workspaces"} />
           <Summary label="Archived" value={archived} note="Past deadlines" />
           <Summary label="Bids checked" value={bids} note="Across all tenders" />
@@ -59,7 +59,7 @@ export default async function Home() {
             </div>
             <span className="tnum text-xs text-[hsl(var(--fg-subtle))]">{tenders.length} total</span>
           </div>
-          <div className="overflow-hidden border-y">
+          <div className="lux-table overflow-hidden">
             <div className="hidden grid-cols-[minmax(0,1fr)_8rem_7rem_7rem_2rem] gap-5 border-b bg-[hsl(var(--surface-2))] px-5 py-3 lg:grid">
               <span className="label">Tender</span><span className="label">Deadline</span><span className="label">EMD</span><span className="label">Bids</span><span />
             </div>

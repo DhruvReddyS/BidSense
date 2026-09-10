@@ -28,7 +28,7 @@ python -m venv .venv && .venv/bin/pip install -r backend/requirements.txt
 cd backend
 ../.venv/bin/python -m scripts.bootstrap   # Alembic migrate + create Qdrant collection
 ../.venv/bin/python -m scripts.verify      # health check
-../.venv/bin/python -m pytest -q           # 782 tests
+../.venv/bin/python -m pytest -q           # 785 tests
 ```
 
 `--recreate` on bootstrap drops and rebuilds both stores. Destructive.
@@ -283,6 +283,28 @@ Interrupted jobs retain a content-addressed source and resume after restart.
 The reviewer workspace shows median/p95 decision latency, cache reuse and
 pages/second. `/api/health` remains a fast liveness check and deliberately does
 not cold-load the 440 MB embedding model.
+
+For high concurrency, set `JOB_EXECUTION_MODE=database` and run dedicated
+`python -m scripts.worker` processes. API replicas only validate, retain and
+enqueue uploads; workers claim the oldest row with PostgreSQL `FOR UPDATE SKIP
+LOCKED`. API and extraction capacity therefore scale independently, worker
+crashes are replayable, and no broker is a new single point of failure. Queue
+claim and owner timelines have composite indexes, connection pools are bounded
+per process, hot portfolio reads use a two-second herd-collapsing cache, and
+clients back off polling to eight seconds (fifteen in hidden tabs).
+
+The repeatable local burst gate is:
+
+```bash
+cd backend
+../.venv/bin/python -m scripts.load_test --requests 1000 --concurrency 1000
+```
+
+On the development machine, one four-process API deployment served all
+**1,000 simultaneous requests with zero failures** at 180 requests/second;
+p95 was 5.52 seconds for the deliberately synchronized burst. This verifies
+request-path survival, not 1,000 simultaneous LLM extractions: extraction
+throughput must be provisioned with worker count and paid provider token quota.
 
 ### OCR
 
