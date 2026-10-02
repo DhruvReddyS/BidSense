@@ -101,6 +101,34 @@ DEFECTS: dict[str, str] = {
         "the purge deleted that vendor's chunks across every tender they had "
         "bid on."
     ),
+    "d10_unreadable_factor_is_not_worst_value": (
+        "Level 2 min-max normalisation mapped a missing factor to 0.0, so a "
+        "vendor whose quoted price the extractor could not read scored "
+        "identically to the vendor who quoted the WORST price in the pool, and "
+        "was dropped from the shortlist for our own extraction failure. The "
+        "vendor-side report says in as many words that unreadable is not "
+        "failing; the shortlist contradicted it."
+    ),
+    "d11_outlier_does_not_flatten_the_pool": (
+        "Min-max normalisation let one extreme bid compress the rest: project "
+        "values [50, 60, 70, 5000] normalised to [0.0, 0.002, 0.004, 1.0], "
+        "erasing the distinction between the three ordinary vendors that the "
+        "shortlist reduction exists to draw."
+    ),
+    "d12_shortlist_ties_are_not_broken_arbitrarily": (
+        "Candidates tied at the cut-off were separated by vendor_id sort order, "
+        "so of two equally-scored vendors the one whose id sorted later was "
+        "excluded from a procurement shortlist for no stated reason."
+    ),
+    "d13_table_rows_are_chunked_individually": (
+        "Tables were appended to page prose and split by size, so a seven-row "
+        "date grid became ONE 1,208-character chunk whose embedding stood for "
+        "seven different dates. Asked 'By when must I upload my bid?' the "
+        "system ranked that chunk 11th of 212, behind prose that discussed "
+        "uploading and contained no date. Measured hit@5 was 29.4% and "
+        "precision@1 was 5.9%, with misses clustered on EMD, deadlines and "
+        "conditions -- the fields that live in tables."
+    ),
     "d9_slashed_tender_ids_route_correctly": (
         "Real tender ids contain slashes ('TENDER No.01/SE(Electrical)/GHMC/"
         "2024-25'). The greedy {tender_id:path} route, declared first, swallowed "
@@ -141,6 +169,152 @@ def _prov(clause: str = "1") -> Provenance:
 # --------------------------------------------------------------------------- #
 # The meta-test. This is what makes the register binding.
 # --------------------------------------------------------------------------- #
+def _vendor_row(vendor_id, *, years=0, project=None, price=None, technical=False):
+    """A Level 2 candidate row, shaped as the ORM row the scorer reads."""
+    from types import SimpleNamespace
+
+    projects = [] if project is None else [SimpleNamespace(value_inr=Decimal(project))]
+    return SimpleNamespace(
+        vendor_id=vendor_id,
+        vendor_name=f"Vendor {vendor_id}",
+        years_in_business=years,
+        past_projects=projects,
+        quoted_price_inr=Decimal(price) if price is not None else None,
+        has_technical_approach=technical,
+    )
+
+
+def test_d10_unreadable_factor_is_not_worst_value() -> None:
+    """A factor the extractor could not read must not score as the worst one.
+
+    The scenario is the one that actually matters in procurement: a strong
+    bidder whose quoted price we failed to parse. Under the old min-max pass
+    that vendor scored 0.0 on pricing -- indistinguishable from the most
+    expensive bid in the pool -- and lost a shortlist place to a weak but
+    fully-parsed competitor.
+    """
+    from app.review.workflow import _normalise, build_candidate, score_candidates
+
+    # The normaliser must preserve the gap rather than fill it with a zero.
+    assert _normalise([100, 10, None]) == [1.0, 0.0, None]
+
+    strong = build_candidate(
+        _vendor_row("strong", years=20, project="900000000", price=None, technical=True)
+    )
+    weak = build_candidate(
+        _vendor_row("weak", years=1, project="1000", price="50", technical=False)
+    )
+    weights = {k: 1.0 for k in ("experience", "project_scale", "pricing", "technical_approach")}
+    by_id = {e.candidate.vendor_id: e for e in score_candidates([strong, weak], weights)}
+
+    # Scored on what it has, not punished for what we could not read.
+    assert by_id["strong"].unscored == ("pricing",)
+    assert by_id["strong"].scored_on == ("experience", "project_scale", "technical_approach")
+    assert by_id["strong"].score > by_id["weak"].score
+    # And the reviewer is told the basis, rather than shown a bare number.
+    assert "3 of 4" in by_id["strong"].basis
+
+    # The same error one level up: a missing age is unknown, not zero years.
+    assert build_candidate(_vendor_row("no-age", years=None)).experience is None
+
+
+def test_d11_outlier_does_not_flatten_the_pool() -> None:
+    """One extreme bid must not compress the rest into a near-tie."""
+    from app.review.workflow import _normalise
+
+    ordinary = _normalise([50, 60, 70])
+    with_outlier = _normalise([50, 60, 70, 5000])
+
+    # Rank spacing: the three ordinary vendors stay clearly separated.
+    assert ordinary == [0.0, 0.5, 1.0]
+    gaps = [
+        with_outlier[i + 1] - with_outlier[i] for i in range(2)
+    ]
+    assert all(gap > 0.3 for gap in gaps), (
+        f"an outlier flattened the ordinary vendors: {with_outlier}"
+    )
+
+
+def test_d12_shortlist_ties_are_not_broken_arbitrarily() -> None:
+    """Vendors tied at the cut-off are all included, not sorted off the list."""
+    from app.review.workflow import build_candidate, shortlist_with_basis
+
+    tied = [build_candidate(_vendor_row(v, years=5)) for v in ("A", "B", "C")]
+    chosen = shortlist_with_basis(tied, 1, {"experience": 1.0})
+
+    assert {e.candidate.vendor_id for e in chosen} == {"A", "B", "C"}, (
+        "a tied vendor was excluded by id sort order"
+    )
+    assert all(e.tied_at_cutoff for e in chosen)
+
+
+def test_d13_table_rows_are_chunked_individually() -> None:
+    """A table row is its own chunk, so each labelled fact gets its own vector.
+
+    Built from the exact grid that caused the defect: seven rows, five of them
+    dates, two of which share the same date under different labels. The old
+    size-based pass emitted one chunk for the lot.
+    """
+    from app.ingest.chunking import chunk_document
+    from app.ingest.models import ExtractionMethod, PageText, ParsedDocument
+
+    page = PageText(
+        page_number=5,
+        text="SECTION 1\nNOTICE INVITING eTENDER\nTenders are invited on behalf of the Director.",
+        method=ExtractionMethod.NATIVE,
+        tables=[[
+            ["Date of Issue/Publishing", "17 August 2026 (18:30 Hours)"],
+            ["Document Download/Sale Start Date", "17 August 2026 (18:30 Hours)"],
+            ["Document Download/Sale End Date", "22 August 2026 (18:30 Hours)"],
+            ["Last Date for submission of EMD", "24 August 2026 (16:00 Hours)"],
+            ["Last Date and Time for uploading of Bids", "22 August 2026 (18:30 Hours)"],
+            ["Last Date and Time for receipt of Queries", "19 August 2026 (11:00 Hours)"],
+            ["Pre-bid Meeting Date and Time", "19 August 2026 (11:00 Hours)"],
+        ]],
+    )
+    document = ParsedDocument(
+        file_name="grid.pdf", doc_kind=DocumentKind.NOTIFICATION, pages=[page]
+    )
+    chunks = chunk_document(document)
+
+    # Each of the seven rows is separately retrievable.
+    rows = [c for c in chunks if "table on page 5" in c.text]
+    assert len(rows) == 7, f"expected one chunk per row, got {len(rows)}"
+
+    # The bid-upload row stands alone -- it must NOT be bundled with the EMD
+    # deadline or the query deadline, which is precisely what diluted it.
+    upload = [c for c in rows if "uploading of Bids" in c.text]
+    assert len(upload) == 1
+    body = upload[0].text
+    assert "22 August 2026" in body
+    assert "submission of EMD" not in body
+    assert "receipt of Queries" not in body
+    assert len(body) < 200, f"row chunk is still a blob at {len(body)} chars"
+
+    # Every row keeps its page, so the citation anchor survives row splitting.
+    assert all(c.page_number == 5 for c in chunks)
+    # Chunk indexes stay contiguous across the prose/table split.
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
+
+
+def test_table_header_is_only_treated_as_a_header_when_it_is_one() -> None:
+    """A first row that states a fact is kept as data, not consumed as a header.
+
+    The date grid's first row IS a fact ("Date of Issue/Publishing | 17 August
+    2026"). Treating row zero as a header unconditionally would delete a value
+    from the index -- a silent loss, and the worst failure mode for a system
+    whose claim is that it loses nothing.
+    """
+    from app.ingest.chunking import _looks_like_header
+
+    # Carries digits -> it is data, whatever its position.
+    assert not _looks_like_header(["Date of Issue/Publishing", "17 August 2026"])
+    # Column labels with no digits -> a header.
+    assert _looks_like_header(["Criterion", "Threshold", "Unit"])
+    # A single cell cannot label columns.
+    assert not _looks_like_header(["Eligibility"])
+
+
 def test_every_known_defect_is_pinned() -> None:
     """Each id in DEFECTS has at least one test function carrying it.
 

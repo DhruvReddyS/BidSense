@@ -1,12 +1,36 @@
 """Chunking for the vector store (Section 7).
 
-Two rules drive the design:
+Three rules drive the design:
 
 1. A chunk never spans a page boundary. Section 4.5 requires every answer to
    cite a page; a chunk covering pages 7-8 cannot honestly cite either.
 2. Splits prefer paragraph, then sentence, then whitespace boundaries. Cutting
    mid-sentence in a legal clause ("...turnover of not less than Rs. 5" | "Cr")
    produces retrievable text that means the wrong thing.
+3. TABLES ARE CHUNKED BY ROW, prose by size. This rule was earned by
+   measurement, and it is the single largest retrieval win in the system.
+
+   Why rule 3 exists. Tables were originally appended to the page's prose and
+   split by size like everything else, which put an entire date grid into one
+   1,208-character chunk:
+
+       [TABLES ON PAGE 5] date of issue/publishing | 17 august 2026 ...
+       document download end date | 22 august 2026 ... last date for
+       submission of emd | 24 august 2026 ... last date and time for
+       uploading of bids | 22 august 2026 ... receipt of queries | 19
+       august 2026 ...
+
+   One vector had to stand for seven differently-labelled dates, so it was
+   diffuse -- about dates in general, specific to none of them. Asked "By when
+   must I upload my bid?", retrieval ranked that chunk 11th of 212 (0.589)
+   behind prose that merely DISCUSSED uploading and contained no date at all
+   (0.665). Measured over a 17-question labelled set, hit@5 was 29.4% and
+   precision@1 was 5.9%, with the misses clustered exactly on the fields that
+   live in tables: EMD, deadlines, conditions.
+
+   A row is already the unit of meaning in a tender grid -- "label | value" is
+   a complete fact -- so one row per chunk gives each fact its own vector.
+   `scripts/evaluate_retrieval.py` measures the difference.
 """
 
 from __future__ import annotations
@@ -22,6 +46,9 @@ from app.schemas.common import ChunkSection
 # 4 chars/token for English legal prose) with headroom for the query prefix.
 DEFAULT_CHUNK_SIZE = 1600
 DEFAULT_OVERLAP = 200
+#: A table row is a fact, not a size budget, so rows are not merged to fill
+#: this. It only bounds a pathologically long row before splitting it.
+TABLE_ROW_MAX = 600
 
 _PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
 _SENTENCE_END = re.compile(r"(?<=[.!?;:])\s+")
@@ -90,6 +117,75 @@ def _split_to_size(text: str, size: int, overlap: int) -> list[str]:
     return merged
 
 
+
+def _looks_like_header(row: list[str]) -> bool:
+    """True when a table's first row labels its columns rather than stating a fact.
+
+    Deliberately conservative. In the date grid that motivated row chunking the
+    FIRST row is itself a fact ("date of issue/publishing | 17 august 2026"),
+    so treating row zero as a header unconditionally would silently delete a
+    value from the index -- the worst possible failure for a system whose whole
+    claim is that it does not lose things.
+
+    The test is therefore: a header has at least two labelled cells, carries no
+    digits (a column called "Threshold" rarely does, a row stating 17 August
+    2026 always does), and sits above enough rows to be worth repeating.
+    """
+    cells = [c for c in row if c and c.strip()]
+    if len(cells) < 2:
+        return False
+    return not any(any(ch.isdigit() for ch in cell) for cell in cells)
+
+
+def _render_row(row: list[str | None]) -> str:
+    return " | ".join((cell or "").strip().replace("\n", " ") for cell in row).strip(" |")
+
+
+def _table_chunks(
+    page, section: ChunkSection, start_index: int, chunk_size: int, overlap: int
+) -> list["Chunk"]:
+    """One chunk per table row, so each labelled fact gets its own vector."""
+    chunks: list[Chunk] = []
+    index = start_index
+
+    for table in page.tables:
+        rows = [r for r in table if any(c and c.strip() for c in r)]
+        if not rows:
+            continue
+
+        header = None
+        body = rows
+        if len(rows) >= 3 and _looks_like_header(rows[0]):
+            header = _render_row(rows[0])
+            body = rows[1:]
+
+        for row in body:
+            rendered = _render_row(row)
+            if not rendered:
+                continue
+            # The page marker keeps the chunk self-describing once it is
+            # retrieved out of context; the header, when there is one, restores
+            # the column meaning a bare row would lose.
+            prefix = f"[table on page {page.page_number}]"
+            text = f"{prefix} {header}\n{rendered}" if header else f"{prefix} {rendered}"
+
+            for piece in (
+                [text] if len(text) <= TABLE_ROW_MAX
+                else _split_to_size(text, chunk_size, overlap)
+            ):
+                chunks.append(
+                    Chunk(
+                        text=piece,
+                        page_number=page.page_number,
+                        chunk_index=index,
+                        section=section,
+                        clause_ref=_detect_clause_ref(rendered),
+                    )
+                )
+                index += 1
+    return chunks
+
+
 def chunk_document(
     document: ParsedDocument,
     *,
@@ -101,20 +197,26 @@ def chunk_document(
     chunks: list[Chunk] = []
     index = 0
     for page in document.pages:
-        body = page.combined_text()
-        if not body.strip():
-            continue
-        for piece in _split_to_size(body, chunk_size, overlap):
-            chunks.append(
-                Chunk(
-                    text=piece,
-                    page_number=page.page_number,
-                    chunk_index=index,
-                    section=section,
-                    clause_ref=_detect_clause_ref(piece),
+        # Prose and tables are chunked by different rules -- see rule 3 in the
+        # module docstring. combined_text() is deliberately NOT used here: it
+        # concatenates the two, which is what produced the diffuse table blobs.
+        prose = (page.text or "").strip()
+        if prose:
+            for piece in _split_to_size(prose, chunk_size, overlap):
+                chunks.append(
+                    Chunk(
+                        text=piece,
+                        page_number=page.page_number,
+                        chunk_index=index,
+                        section=section,
+                        clause_ref=_detect_clause_ref(piece),
+                    )
                 )
-            )
-            index += 1
+                index += 1
+
+        table_chunks = _table_chunks(page, section, index, chunk_size, overlap)
+        chunks.extend(table_chunks)
+        index += len(table_chunks)
     return chunks
 
 

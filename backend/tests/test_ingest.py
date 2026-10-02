@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from app.ingest import (
@@ -181,15 +183,41 @@ def test_missing_file_raises(tmp_path):
 # Chunking
 # --------------------------------------------------------------------------- #
 def test_chunks_never_span_a_page_boundary(parsed_pdf):
-    """A chunk covering pages 7-8 cannot honestly cite either one."""
+    """A chunk covering pages 7-8 cannot honestly cite either one.
+
+    Table rows carry a synthesised "[table on page N]" prefix that is not
+    present verbatim in the source, so the check is on the row's CONTENT and on
+    the prefix's own honesty -- a prefix naming a page the chunk does not claim
+    would be a citation that lies, which is worse than no prefix at all.
+    """
     chunks = chunk_document(parsed_pdf)
     assert chunks
     for chunk in chunks:
         page = parsed_pdf.page(chunk.page_number)
         assert page is not None
-        # Every chunk's opening line must exist on the page it claims.
-        first_line = chunk.text.splitlines()[0].strip()
-        assert first_line[:40] in page.combined_text()
+
+        marker = re.match(r"\[table on page (\d+)\]\s*", chunk.text)
+        if marker:
+            # The prefix must agree with the page the chunk claims.
+            assert int(marker.group(1)) == chunk.page_number
+            body = chunk.text[marker.end():]
+            # Every cell of the row must appear in this page's own table text.
+            table_text = page.tables_as_text()
+            cells = [
+                cell.strip()
+                for line in body.splitlines()
+                for cell in line.split("|")
+                if cell.strip()
+            ]
+            assert cells, f"table chunk with no content: {chunk.text!r}"
+            for cell in cells:
+                assert cell in table_text, (
+                    f"cell {cell!r} is not on page {chunk.page_number}"
+                )
+        else:
+            # Prose chunks still come straight off the page.
+            first_line = chunk.text.splitlines()[0].strip()
+            assert first_line[:40] in page.combined_text()
 
 
 def test_chunk_indexes_are_contiguous_and_ordered(parsed_pdf):

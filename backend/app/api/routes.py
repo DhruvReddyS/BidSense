@@ -91,7 +91,7 @@ from app.ingest.loader import SUPPORTED_SUFFIXES, UnsupportedDocumentError
 from app.rag import answer_question, retrieve, retrieve_for_pair
 from app.schemas.common import ChunkSection, DocumentKind
 from app.schemas.common import VendorStatus
-from app.review import build_candidate, choose_shortlist, classify_query, structured_answer
+from app.review import build_candidate, classify_query, shortlist_with_basis, structured_answer
 from app.documents import store_document
 from app.db.session import session_scope
 
@@ -641,8 +641,8 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
     rows = list_submissions(session, notification_row.id)
     eligible_rows = [row for row in rows if row.status != VendorStatus.ELIMINATED]
     candidates = [build_candidate(row) for row in eligible_rows]
-    selected = choose_shortlist(candidates, min(request.target_count, len(candidates)), request.factor_weights)
-    selected_ids = {candidate.vendor_id for candidate in selected}
+    selected = shortlist_with_basis(candidates, min(request.target_count, len(candidates)), request.factor_weights)
+    selected_ids = {entry.candidate.vendor_id for entry in selected}
     originals = [(row, row.status) for row in eligible_rows]
     retagged: list[tuple[str, VendorStatus]] = []
     try:
@@ -663,14 +663,30 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
         raise
 
     output = []
-    for candidate in selected:
-        evidence = [f"{candidate.experience:g} years in business"]
+    for entry in selected:
+        candidate = entry.candidate
+        # "not stated" rather than "0 years" -- a field we could not read is
+        # reported as unread, never as a zero that reads like a real finding.
+        evidence = [
+            "Years in business not stated in the bid"
+            if candidate.experience is None
+            else f"{candidate.experience:g} years in business"
+        ]
         if candidate.project_scale is not None:
             evidence.append(f"Largest recorded project ₹{candidate.project_scale:,.0f}")
         if candidate.pricing is not None:
             evidence.append(f"Quoted price ₹{candidate.pricing:,.0f}")
         if candidate.technical_approach:
             evidence.append("Technical approach present")
+        # The basis of the reduction, stated to the reviewer. A pool member
+        # scored on three of four factors is a different claim from one scored
+        # on all four, and the committee is entitled to know which it is.
+        evidence.append(entry.basis)
+        if entry.tied_at_cutoff:
+            evidence.append(
+                "Tied with another candidate at the cut-off; both included "
+                "rather than separated arbitrarily."
+            )
         output.append(ShortlistCandidateOut(
             vendor_id=candidate.vendor_id,
             vendor_name=candidate.vendor_name,
