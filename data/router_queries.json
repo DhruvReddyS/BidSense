@@ -1,14 +1,252 @@
 [
-  {"question":"Why was Vendor A eliminated?","route":"audit"},
-  {"question":"Show the rejection reason for Vendor B","route":"audit"},
-  {"question":"Which vendors are shortlisted?","route":"structured"},
-  {"question":"Which vendors have turnover above five crore?","route":"structured"},
-  {"question":"Show years of experience for every bidder","route":"structured"},
-  {"question":"Compare vendors on experience","route":"comparative"},
-  {"question":"Compare shortlisted vendors on project value","route":"comparative"},
-  {"question":"Which approach discusses scalability?","route":"qualitative"},
-  {"question":"Summarise each bidder methodology","route":"qualitative"},
-  {"question":"Which narrative explains the technical approach?","route":"qualitative"},
-  {"question":"Compare shortlisted experience and technical approach","route":"hybrid"},
-  {"question":"Which low-price vendor explains its methodology?","route":"hybrid"}
+  {
+    "question": "Why was Vendor A eliminated?",
+    "route": "audit",
+    "split": "test"
+  },
+  {
+    "question": "Show the rejection reason for Vendor B",
+    "route": "audit",
+    "split": "test"
+  },
+  {
+    "question": "What was the reason Sharma Constructions did not qualify?",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "On what grounds was bidder 4 rejected?",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "Which clause did Vendor C fail?",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "Explain the disqualification of the third bidder",
+    "route": "audit",
+    "split": "test"
+  },
+  {
+    "question": "What knocked out the lowest bidder?",
+    "route": "audit",
+    "split": "test"
+  },
+  {
+    "question": "Justify the exclusion of Vendor E",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "Give me the audit trail for Vendor A's status",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "Tell me what went wrong with the Delhi bidder's submission",
+    "route": "audit",
+    "split": "dev"
+  },
+  {
+    "question": "Which vendors are shortlisted?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "Which vendors have turnover above five crore?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "Show years of experience for every bidder",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "List the quoted price of each vendor",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "How many bidders are still pending?",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "What is the largest project value on record for Vendor D?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "Who quoted the lowest?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "How many bids did we receive?",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "Which bidders submitted a technical approach?",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "Give me the status of every submission",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "What is the average quoted amount?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "Is Vendor B blacklisted?",
+    "route": "structured",
+    "split": "test"
+  },
+  {
+    "question": "Count the vendors above the turnover threshold",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "Name the bidders from Telangana",
+    "route": "structured",
+    "split": "dev"
+  },
+  {
+    "question": "Which approach addresses scalability best?",
+    "route": "qualitative",
+    "split": "test"
+  },
+  {
+    "question": "Summarise each bidder's methodology",
+    "route": "qualitative",
+    "split": "test"
+  },
+  {
+    "question": "Whose technical narrative is strongest?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "How does Vendor A propose to handle site safety?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "What quality assurance process does each bidder describe?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "Describe the maintenance plan each vendor offers",
+    "route": "qualitative",
+    "split": "test"
+  },
+  {
+    "question": "Who explains their staffing arrangements most clearly?",
+    "route": "qualitative",
+    "split": "test"
+  },
+  {
+    "question": "What risks does Vendor C acknowledge?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "How do the bidders intend to phase the work?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "Which submission reads as the most thought through?",
+    "route": "qualitative",
+    "split": "dev"
+  },
+  {
+    "question": "Compare vendors on experience",
+    "route": "comparative",
+    "split": "test"
+  },
+  {
+    "question": "Compare the shortlisted bidders side by side",
+    "route": "comparative",
+    "split": "test"
+  },
+  {
+    "question": "How does Vendor A stack up against Vendor B?",
+    "route": "comparative",
+    "split": "dev"
+  },
+  {
+    "question": "Rank the bidders by quoted amount",
+    "route": "comparative",
+    "split": "dev"
+  },
+  {
+    "question": "Which is better value, Vendor C or Vendor D?",
+    "route": "comparative",
+    "split": "dev"
+  },
+  {
+    "question": "Put the two lowest bids next to each other",
+    "route": "comparative",
+    "split": "test"
+  },
+  {
+    "question": "Contrast the turnover of the top three",
+    "route": "comparative",
+    "split": "test"
+  },
+  {
+    "question": "Show me the differences between the remaining bidders",
+    "route": "comparative",
+    "split": "dev"
+  },
+  {
+    "question": "Compare shortlisted vendors on experience and approach",
+    "route": "hybrid",
+    "split": "test"
+  },
+  {
+    "question": "Which high-turnover bidder also has the best methodology?",
+    "route": "hybrid",
+    "split": "test"
+  },
+  {
+    "question": "Show prices alongside each bidder's technical quality",
+    "route": "hybrid",
+    "split": "dev"
+  },
+  {
+    "question": "Of the vendors above five crore turnover, whose approach is strongest?",
+    "route": "hybrid",
+    "split": "dev"
+  },
+  {
+    "question": "List experience and summarise the narrative for each bidder",
+    "route": "hybrid",
+    "split": "dev"
+  },
+  {
+    "question": "Who is both cheapest and most credible on delivery?",
+    "route": "hybrid",
+    "split": "test"
+  },
+  {
+    "question": "Rank by price but tell me about their quality too",
+    "route": "hybrid",
+    "split": "test"
+  },
+  {
+    "question": "Give me turnover figures and an assessment of each approach",
+    "route": "hybrid",
+    "split": "dev"
+  }
 ]

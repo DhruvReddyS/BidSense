@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from app.config import settings
 from app.schemas.common import ChunkSection, DocumentKind, VendorStatus
+from app.rag.expand import expand_query
 from app.vector.embeddings import embed_query
 from app.vector.qdrant import build_filter, get_client
 
@@ -83,7 +84,10 @@ def retrieve(
     min_score: float = MIN_SCORE,
 ) -> list[RetrievedChunk]:
     """Dense retrieval, scoped by metadata before the search."""
-    query_vector = embed_query(query)
+    # Expanded for the EMBEDDING only. The caller's wording is what gets shown,
+    # cited and logged; this just stops "earnest money" and "EMD" being treated
+    # as unrelated by a model that has never read an Indian tender.
+    query_vector = embed_query(expand_query(query))
     results = get_client().query_points(
         collection_name=settings.qdrant_collection,
         query=query_vector,

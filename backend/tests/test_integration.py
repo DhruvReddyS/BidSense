@@ -229,9 +229,21 @@ def test_qdrant_scoped_retrieval_by_vendor_and_status(tender):
         found, _ = client.scroll(
             settings.qdrant_collection,
             scroll_filter=build_filter(vendor_id="V-04", statuses=[VendorStatus.PENDING]),
-            limit=10,
+            limit=1000,
         )
-        assert len(found) == 3
+        # Filter SEMANTICS, not global cardinality. "V-04" is a fixture id
+        # reused across the suite, so asserting this vendor owns exactly three
+        # chunks collection-wide made the test depend on whether some earlier
+        # test's Qdrant teardown had succeeded -- and that teardown swallows
+        # its own exceptions, so a leak was invisible and this test failed with
+        # a count that said nothing about filtering.
+        returned = {record.id for record in found}
+        assert {point["id"] for point in points} <= returned, (
+            "the vendor+status filter did not return this submission's chunks"
+        )
+        for record in found:
+            assert record.payload["vendor_id"] == "V-04"
+            assert record.payload["status"] == VendorStatus.PENDING.value
 
         # Eliminated-only scope must not see a pending vendor's chunks.
         none_found, _ = client.scroll(

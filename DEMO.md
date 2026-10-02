@@ -8,12 +8,13 @@ cd backend && ../.venv/bin/python -m uvicorn app.api.main:app --port 8100
 cd frontend && npm run dev
 ```
 
-Then **do one throwaway upload and delete it**, or leave the API process running
-from a previous session. This is measured, not a precaution:
+Then **do one throwaway upload AND ask one throwaway question**, or leave the API
+process running from a previous session. This is measured, not a precaution:
 
 ```
 notification, cold chain   181 s   ← 121 s of it was one model's exhaustion discovery
 bid, warm chain             61 s
+first Ask, cold process     72 s   ← settles to ~4 s by the fifth question
 ```
 
 Gemini's free-tier models are discovered as exhausted one at a time, and each
@@ -85,9 +86,19 @@ turnover shortfall and is the one with the **staleness banner** already armed.
 
 ## Say this before someone finds it
 
-- **Ask takes ~30 s per question.** Gemini's daily quota is spent, so answers
-  come from Groq, paced at 2 requests/minute to respect an 8,000 tokens/minute
-  free-tier cap. That is a rate limiter doing its job, not the model thinking.
+- **The FIRST question after an API restart is slow; it settles fast.** Measured
+  on five consecutive questions against the GHMC tender, cold process:
+
+  ```
+  71.8s  35.3s  10.5s  4.6s  3.8s
+  ```
+
+  The first two pay for discovering Gemini's exhausted free-tier models one at a
+  time; from the third onward every call goes straight to the live tier and the
+  token-bucket limiter stops being the bottleneck. Settled cost is ~4 s per
+  question. Ask one throwaway question before the panel arrives and the demo
+  never shows the 71 s figure. (Groq's free tier caps at 8,000 tokens/minute,
+  which is what the limiter is pacing against -- not the model thinking.)
 - **A live notification upload takes 1–3 minutes.** Six extractors, free-tier
   pacing. Start it and talk over it. Measured end to end on a tender the system
   had never seen: 181 s cold, and the bid that followed took 61 s.

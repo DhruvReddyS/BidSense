@@ -6,6 +6,9 @@ without an API key; the stores are real.
 
 from __future__ import annotations
 
+import logging
+import time
+
 from unittest.mock import patch
 import uuid
 
@@ -80,8 +83,16 @@ def clean():
             points_selector=build_filter(tender_id=TENDER_ID),
             wait=True,
         )
-    except Exception:
-        pass
+    except Exception as exc:  # pragma: no cover - teardown diagnostics
+        # Deliberately not re-raised: a teardown failure should not convert a
+        # passing test into a failing one. But it must not be SILENT either --
+        # an unnoticed leak here left nine chunks in the shared collection and
+        # broke an unrelated scoped-retrieval test with a count that looked
+        # like a filtering bug.
+        logging.getLogger(__name__).warning(
+            "Qdrant teardown for %s failed; the collection may be left dirty: %s",
+            TENDER_ID, exc,
+        )
 
 
 @pytest.fixture
@@ -105,6 +116,28 @@ def _await_job(client, response) -> dict:
     body = response.json()
     job = client.get(body["poll_url"]).json()
     assert job["status"] in {"succeeded", "partial", "failed"}, job
+    return job
+
+
+def _await_index(client, poll_url: str, timeout: float = 120.0) -> dict:
+    """Resolve a job whose vector indexing was deferred to a background thread.
+
+    With DEFER_VECTOR_INDEXING the structured review is ready before the index
+    is: `_finish_index` runs on its own executor and rewrites the job result
+    when it lands. A test that reads the job once sees chunks_indexed == 0 and
+    index_state == "pending", which is CORRECT for that moment and says nothing
+    about whether indexing works.
+    """
+    deadline = time.monotonic() + timeout
+    job = client.get(poll_url).json()
+    while job["result"].get("index_state") == "pending":
+        if time.monotonic() > deadline:
+            pytest.fail(
+                f"deferred indexing did not finish within {timeout}s; "
+                f"index_state still {job['result'].get('index_state')!r}"
+            )
+        time.sleep(0.25)
+        job = client.get(poll_url).json()
     return job
 
 
@@ -162,7 +195,8 @@ def test_upload_returns_immediately_with_a_job(client, pdf, clean, stubbed):
 
 @live
 def test_job_reports_a_completed_extraction(client, pdf, clean, stubbed):
-    job = _await_job(client, _upload(client, pdf))
+    response = _upload(client, pdf)
+    job = _await_job(client, response)
     assert job["status"] == "succeeded"
     assert job["progress"] == 1.0
     assert job["steps_done"] == job["steps_total"] == 6
@@ -171,14 +205,43 @@ def test_job_reports_a_completed_extraction(client, pdf, clean, stubbed):
     result = job["result"]
     assert result["ok"] is True
     assert result["pages"] == 3
-    assert result["chunks_indexed"] > 0
+
+    # Indexing is configurable, so the contract differs by mode and the test
+    # asserts whichever one is in force rather than assuming inline indexing.
+    # Under DEFER_VECTOR_INDEXING the job reports structured facts first and
+    # rewrites its own result when the index lands; asserting chunks_indexed on
+    # the first read made this test fail against a correct deferred run.
+    decision_ready = result["decision_ready_seconds"]
+    if settings.defer_vector_indexing:
+        assert result["index_state"] == "pending"
+        assert result["chunks_indexed"] == 0
+        # ...and the deferred work must actually complete, or "pending" would
+        # be an alias for "never indexed".
+        job = _await_index(client, response.json()["poll_url"])
+        result = job["result"]
+        assert result["index_state"] == "ready"
+        assert result["chunks_indexed"] > 0
+        assert result.get("index_error") is None
+        # The point of deferring: the decision was reviewable BEFORE indexing
+        # finished, so the two clocks must diverge. Asserting them equal (as
+        # this test used to) asserts that deferring did nothing.
+        assert decision_ready < result["seconds"], (
+            "deferred indexing did not extend the job clock, so nothing was "
+            "actually deferred"
+        )
+        assert result["decision_ready_seconds"] == decision_ready, (
+            "decision_ready_seconds moved after indexing; it must record when "
+            "the review became available, not when the job ended"
+        )
+    else:
+        assert result["chunks_indexed"] > 0
+        assert result["decision_ready_seconds"] == result["seconds"]
     assert result["extraction_errors"] == []
     assert set(result["node_timings"]) == {
         "header", "eligibility", "documents", "evaluation", "technical", "format_rules",
     }
     assert set(result["timing"]) == {"parse", "extract", "persist", "index"}
     assert result["index_state"] == "ready"
-    assert result["decision_ready_seconds"] == result["seconds"]
 
     performance = client.get("/api/review/performance")
     assert performance.status_code == 200

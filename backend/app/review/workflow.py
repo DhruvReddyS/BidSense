@@ -232,19 +232,71 @@ def choose_shortlist(
     return [entry.candidate for entry in shortlist_with_basis(candidates, target_count, weights)]
 
 
+#: Intent vocabulary for the deterministic router.
+#:
+#: NOT an "agent": this is a lookup table, and calling it anything grander
+#: oversells it. Determinism is the actual argument for it -- an evaluation
+#: committee can be shown exactly why a question was answered from SQL facts
+#: rather than from bid prose, which no LLM router can offer -- and that
+#: argument only holds if the thing is described accurately.
+#:
+#: The vocabulary was widened against the DEV split of data/router_queries.json
+#: only. The original twelve-query set scored 12/12 because every query in it
+#: contained a trigger word; a fifty-query set written to include natural
+#: paraphrases scored 60%, and the gap was almost entirely missing vocabulary:
+#: "disqualification" and "exclusion" never reached the audit route, and
+#: "propose", "plan" and "risks" never reached the qualitative one.
+_AUDIT_TERMS = (
+    "why", "eliminated", "rejected", "reason", "disqualif", "exclusion",
+    "excluded", "audit trail", "grounds", "knocked out", "went wrong",
+    "justify", "did not qualify", "fail",
+)
+_QUALITATIVE_TERMS = (
+    "approach", "methodology", "scalability", "quality", "narrative",
+    "propose", "proposal", "plan", "describe", "summaris", "summariz",
+    "risks", "staffing", "safety", "phase", "explains", "explain how",
+    "reads as", "thought through", "credible", "assurance",
+)
+_STRUCTURED_TERMS = (
+    "turnover", "price", "quoted", "experience", "project value",
+    "shortlisted", "pending", "status", "how many", "count", "list",
+    "lowest", "highest", "average", "blacklisted", "threshold", "name the",
+)
+_COMPARATIVE_TERMS = (
+    "compare", "comparison", "stack up", "rank", "contrast", "versus",
+    " vs ", "side by side", "next to each other", "differences",
+    "better value", "against vendor",
+)
+
+
+def _matches(text: str, terms: tuple[str, ...]) -> bool:
+    return any(term in text for term in terms)
+
+
 def classify_query(question: str) -> str:
+    """Route a pool question to the evidence that can answer it.
+
+    Order is load-bearing. An audit question ("why was Vendor A eliminated?")
+    must reach the recorded elimination reason even though it also names
+    vendors, because answering it from live facts would reconstruct a decision
+    instead of reporting the one actually taken -- and the recorded reason is
+    the only defensible answer on challenge.
+    """
     text = question.casefold()
-    audit = any(word in text for word in ("why", "eliminated", "rejected", "reason"))
-    qualitative = any(word in text for word in ("approach", "methodology", "scalability", "quality", "narrative"))
-    structured = any(word in text for word in ("turnover", "price", "experience", "project value", "shortlisted", "pending", "compare"))
+    audit = _matches(text, _AUDIT_TERMS)
+    qualitative = _matches(text, _QUALITATIVE_TERMS)
+    structured = _matches(text, _STRUCTURED_TERMS)
+    comparative = _matches(text, _COMPARATIVE_TERMS)
+
     if audit:
         return "audit"
-    if qualitative and structured:
+    # Facts AND narrative asked together: neither source alone answers it.
+    if qualitative and (structured or comparative):
         return "hybrid"
+    if comparative:
+        return "comparative"
     if qualitative:
         return "qualitative"
-    if "compare" in text:
-        return "comparative"
     return "structured"
 
 
