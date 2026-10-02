@@ -1,0 +1,56 @@
+{
+  "_README": [
+    "Hand-labelled field truth for the four REAL tender notifications, for",
+    "scope Section 10's 'extraction accuracy' metric.",
+    "",
+    "Every value here was read off the source PDF by a human, NOT copied from",
+    "the system's own output. Copying the output would make the metric",
+    "circular -- it would measure self-consistency and report it as accuracy.",
+    "",
+    "Fields a labeller could not confirm in the source are OMITTED rather than",
+    "guessed. The evaluator counts them as 'unlabelled' and excludes them from",
+    "the denominator, so coverage is reported alongside accuracy and a thin",
+    "label set cannot masquerade as a strong result.",
+    "",
+    "`rule` says how a prediction is compared, because exact string equality is",
+    "the wrong test for several of these fields: an issuing authority written",
+    "in expanded form ('Indian Institute of Technology ... Dhanbad') is a",
+    "correct reading of 'IIT (ISM) Dhanbad', and failing it would understate",
+    "real accuracy as badly as accepting anything would overstate it."
+  ],
+
+  "NOTIF_civilworks_01": {
+    "_source": "data/notifications/NOTIF_civilworks_01.pdf (101 pp, native)",
+    "_note": "Four competing dates on one page: EMD 24 Aug, bid upload 22 Aug, queries 19 Aug, pre-bid meeting 19 Aug. The discriminating case in this set.",
+    "tender_id":              {"value": "CMU-12011/17/2026-CMU", "rule": "id_core"},
+    "issuing_authority":      {"value": "IIT (ISM) Dhanbad", "rule": "authority_tokens", "tokens": ["indian institute of technology", "dhanbad"]},
+    "emd_amount_inr":         {"value": 31500, "rule": "exact_number", "evidence": "p.? 'EMD Rs. 31,500/- (Rupees Thirty One Thousand Five Hundred Only)'"},
+    "contract_value_inr":     {"value": 1256561, "rule": "exact_number", "evidence": "'Total Estimated Cost Rs. 12,56,561/-'"},
+    "submission_deadline":    {"value": "2026-08-22", "rule": "exact_date", "evidence": "'Last Date and Time for uploading of Bids 22 August 2026 (18:30 Hours)'"},
+    "pre_bid_query_deadline": {"value": "2026-08-19", "rule": "exact_date", "evidence": "'Last Date and Time for receipt of Queries 19 August 2026 (11:00 Hours)'"}
+  },
+
+  "NOTIF_supply_01": {
+    "_source": "data/notifications/NOTIF_supply_01.pdf (68 pp, native)",
+    "tender_id":          {"value": "01/SE(Electrical)/GHMC/2024-25", "rule": "id_core"},
+    "issuing_authority":  {"value": "Greater Hyderabad Municipal Corporation", "rule": "authority_tokens", "tokens": ["greater hyderabad municipal corporation"]},
+    "emd_amount_inr":     {"value": 298720, "rule": "exact_number", "evidence": "'11. EMD @ 1% Rs. 2,98,720.00'"},
+    "contract_value_inr": {"value": 29872000, "rule": "exact_number", "evidence": "EMD is stated as 1% of ECV; 2,98,720 x 100"}
+  },
+
+  "NOTIF_civilworks_02": {
+    "_source": "data/notifications/NOTIF_civilworks_02.pdf (382 pp, native) -- largest in the set",
+    "_note": "Tender id is printed across two lines and must be rejoined. EMD is a PERCENTAGE ('1% OF THE ECV'), so the correct absolute value is null -- this is the pinned d6 defect as a live case.",
+    "tender_id":         {"value": "178/CGM(T)/HGCL/DGM(Elec)", "rule": "id_core"},
+    "issuing_authority": {"value": "Hyderabad Growth Corridor Limited", "rule": "authority_tokens", "tokens": ["hyderabad growth corridor"]},
+    "emd_amount_inr":    {"value": null, "rule": "expected_null", "evidence": "'1% OF THE ECV' -- a ratio, not an amount. Normalising it to 1 would make every bidder clear it."}
+  },
+
+  "NOTIF_interiorworks_01": {
+    "_source": "data/notifications/NOTIF_interiorworks_01.pdf (56 pp, native)",
+    "tender_id":           {"value": "DEL/AO-3/RBO-6/AMCC/IN/01", "rule": "id_core"},
+    "issuing_authority":   {"value": "State Bank of India", "rule": "authority_tokens", "tokens": ["state bank of india"]},
+    "emd_amount_inr":      {"value": 23600, "rule": "exact_number", "evidence": "'3. Earnest Money Deposit Rs.23,600/- (Twenty-Three Thousand Six Hundred)'"},
+    "submission_deadline": {"value": "2026-09-22", "rule": "exact_date", "evidence": "'Last Date and Time of submission: 22.09.2026 up to 15:00 Hours'"}
+  }
+}

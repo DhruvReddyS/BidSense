@@ -1,0 +1,249 @@
+{
+  "_README": [
+    "Labelled retrieval set for scope Section 10 'retrieval precision (RAG)'",
+    "and Section 2.1.4, which asks for precision@k as a first-class number.",
+    "",
+    "HOW THE LABELS WERE MADE. Each `answer_contains` phrase was located in the",
+    "source PDF by string search, and `gold_pages` records every page it was",
+    "found on. The labels therefore come from the document, not from the",
+    "system's output and not from memory.",
+    "",
+    "HOW THE QUESTIONS WERE WRITTEN. Deliberately NOT in the document's own",
+    "wording. 'How much do I have to deposit to bid?' rather than 'What is the",
+    "Earnest Money Deposit of Rs. 31,500?'. A question that quotes its own",
+    "answer measures string matching and flatters a dense retriever that may be",
+    "doing nothing useful.",
+    "",
+    "SCORING. A retrieved chunk counts as relevant when it contains the phrase",
+    "(whitespace- and case-normalised). This is strict in a useful direction: a",
+    "chunk that is topically about EMD but omits the figure does not count, so",
+    "the metric tracks 'could a vendor read the answer off this chunk' rather",
+    "than 'is this chunk vaguely on-topic'.",
+    "",
+    "LABEL CORRECTIONS. q11 and q16 were fixed after a first measurement run: q16's phrase list held only one of two wordings the tender uses for the same fact, and q11's question did not describe the clause it was labelled against. Both were harness defects that understated retrieval. Entries carry a _label_fix note. No label was broadened merely because the system missed it -- q06, q12, q13, q14 and q17 remain scored as misses."
+  ],
+  "queries": [
+    {
+      "id": "q01",
+      "tender": "NOTIF_civilworks_01",
+      "question": "How much money do I have to deposit upfront to be allowed to bid?",
+      "answer_contains": [
+        "31,500"
+      ],
+      "gold_pages": [
+        5,
+        88
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q02",
+      "tender": "NOTIF_civilworks_01",
+      "question": "What is this work expected to cost in total?",
+      "answer_contains": [
+        "12,56,561"
+      ],
+      "gold_pages": [
+        5,
+        88,
+        101
+      ],
+      "kind": "value"
+    },
+    {
+      "id": "q03",
+      "tender": "NOTIF_civilworks_01",
+      "question": "By when must I upload my bid?",
+      "answer_contains": [
+        "22 August 2026"
+      ],
+      "gold_pages": [
+        5
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q04",
+      "tender": "NOTIF_civilworks_01",
+      "question": "Is there a meeting before bidding where I can raise questions?",
+      "answer_contains": [
+        "19 August 2026"
+      ],
+      "gold_pages": [
+        5
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q05",
+      "tender": "NOTIF_civilworks_01",
+      "question": "How much security will be withheld from my contract?",
+      "answer_contains": [
+        "2.5% of contract value"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q06",
+      "tender": "NOTIF_civilworks_01",
+      "question": "What performance guarantee will I have to furnish if I win?",
+      "answer_contains": [
+        "5 % of the Tendered Value"
+      ],
+      "gold_pages": [
+        5,
+        88
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q07",
+      "tender": "NOTIF_civilworks_01",
+      "question": "Do I need to show a minimum yearly revenue to qualify?",
+      "answer_contains": [
+        "Annual Turnover"
+      ],
+      "gold_pages": [
+        6,
+        12,
+        67
+      ],
+      "kind": "eligibility"
+    },
+    {
+      "id": "q08",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "What deposit is required along with my tender?",
+      "answer_contains": [
+        "23,600"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q09",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "What is the closing date for submitting the tender?",
+      "answer_contains": [
+        "22.09.2026"
+      ],
+      "gold_pages": [
+        1,
+        3
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q10",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "How much initial security deposit is payable?",
+      "answer_contains": [
+        "2% of total contract value"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q11",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "What is the smallest interim bill amount that will be processed?",
+      "answer_contains": [
+        "Rs.10 Lacs"
+      ],
+      "gold_pages": [
+        4
+      ],
+      "kind": "eligibility",
+      "_label_fix": "Question originally asked about a floor on quoted rates, which is NOT what the labelled clause says. Question corrected to match its evidence."
+    },
+    {
+      "id": "q12",
+      "tender": "NOTIF_supply_01",
+      "question": "What is the earnest money payable for this tender?",
+      "answer_contains": [
+        "2,98,720"
+      ],
+      "gold_pages": [
+        2
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q13",
+      "tender": "NOTIF_supply_01",
+      "question": "Do I owe any further deposit when the agreement is signed?",
+      "answer_contains": [
+        "1.5% ECV"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q14",
+      "tender": "NOTIF_supply_01",
+      "question": "How is the bid security calculated as a proportion of the contract?",
+      "answer_contains": [
+        "1% of the ECV"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q15",
+      "tender": "NOTIF_civilworks_02",
+      "question": "What generating capacity is this solar installation meant to deliver?",
+      "answer_contains": [
+        "13 MW"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        6,
+        7,
+        8,
+        12
+      ],
+      "kind": "scope"
+    },
+    {
+      "id": "q16",
+      "tender": "NOTIF_civilworks_02",
+      "question": "How long am I responsible for operating and maintaining the plant?",
+      "answer_contains": [
+        "5 years Plant O&M",
+        "5 (five) years"
+      ],
+      "gold_pages": [
+        2,
+        6,
+        8,
+        13
+      ],
+      "kind": "scope",
+      "_label_fix": "Original phrase list held only the title-page wording, so a correct retrieval of clause 1.12 scored as a miss. Label was incomplete, not the system."
+    },
+    {
+      "id": "q17",
+      "tender": "NOTIF_civilworks_02",
+      "question": "What bid security does this notice ask for?",
+      "answer_contains": [
+        "1% OF THE ECV"
+      ],
+      "gold_pages": [
+        13
+      ],
+      "kind": "emd"
+    }
+  ]
+}
