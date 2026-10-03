@@ -169,10 +169,18 @@ def _table_chunks(
             prefix = f"[table on page {page.page_number}]"
             text = f"{prefix} {header}\n{rendered}" if header else f"{prefix} {rendered}"
 
-            for piece in (
-                [text] if len(text) <= TABLE_ROW_MAX
-                else _split_to_size(text, chunk_size, overlap)
-            ):
+            if len(text) <= TABLE_ROW_MAX:
+                pieces = [text]
+            else:
+                # Split the ROW, then re-prefix each piece. Splitting the
+                # already-prefixed text left every continuation piece without a
+                # page marker, so a citation landing on one could not say which
+                # page it came from.
+                pieces = [
+                    f"{prefix} {part}"
+                    for part in _split_to_size(rendered, chunk_size - len(prefix) - 1, overlap)
+                ]
+            for piece in pieces:
                 chunks.append(
                     Chunk(
                         text=piece,
