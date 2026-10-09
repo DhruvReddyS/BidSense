@@ -18,6 +18,7 @@ Arms
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
@@ -98,6 +99,9 @@ def score(chunks: list[Chunk], queries: list[dict], k: int) -> dict:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--json", type=Path, help="write the full result set here")
+    args = parser.parse_args()
     k = 5
     spec = json.loads(QUERY_PATH.read_text())
     queries = spec["queries"]
@@ -185,7 +189,10 @@ def main() -> int:
           f"({summary['rows']['chunks']/max(1,summary['legacy']['chunks']):.2f}x)")
     print(f"n = {n} labelled queries over 4 real notifications. Small; the "
           f"paired\ntests above say which differences survive that.")
-    Path("/tmp/ablation_chunking.json").write_text(json.dumps(summary, indent=2))
+    if args.json:
+        args.json.parent.mkdir(parents=True, exist_ok=True)
+        args.json.write_text(json.dumps(summary, indent=2))
+        print(f"\nWrote {args.json}")
     return 0
 
 

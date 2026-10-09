@@ -25,6 +25,59 @@ For a reproducible container deployment, set `.env` secrets and run
 `docker compose --profile app up -d --build`. The ordinary `docker compose up -d`
 continues to start only PostgreSQL and Qdrant for local development.
 
+## Running without a Docker daemon
+
+`docker compose up -d` is the supported path. Where no Docker daemon is
+available -- a managed CI container, a cloud dev box -- both services run
+directly, and the evaluation suite is indifferent to how they got there.
+
+```bash
+# PostgreSQL: use the host's own cluster instead of the published 5433
+pg_ctlcluster 16 main start
+su postgres -c "psql -c \"CREATE ROLE tenderiq LOGIN PASSWORD 'tenderiq' SUPERUSER;\""
+su postgres -c "createdb -O tenderiq tenderiq"
+# then set POSTGRES_PORT=5432 in .env
+
+# Qdrant: run the release binary. Match the server to the pinned client
+# (requirements.txt) -- qdrant-client refuses a major mismatch and warns when
+# the minor versions differ by more than one.
+QDRANT_VERSION=1.19.0
+curl -sSL -o qdrant.tar.gz \
+  "https://github.com/qdrant/qdrant/releases/download/v$QDRANT_VERSION/qdrant-x86_64-unknown-linux-musl.tar.gz"
+mkdir -p qdrant-bin && tar xzf qdrant.tar.gz -C qdrant-bin
+QDRANT__SERVICE__HTTP_PORT=6343 QDRANT__SERVICE__GRPC_PORT=6344 \
+  QDRANT__TELEMETRY_DISABLED=true ./qdrant-bin/qdrant &
+
+cd backend && python -m scripts.bootstrap      # schema + collection, idempotent
+```
+
+Confirm both are up before running the suite:
+
+```bash
+pg_lsclusters                      # 16/main should read "online"
+curl -s localhost:6343/readyz      # "all shards are ready"
+python -m scripts.evaluate_all --list
+```
+
+## Running the whole evaluation
+
+One entry point runs every evaluator, records a manifest (git revision,
+dependency versions, seed, corpus checksums, the n behind each figure) and
+writes a single consolidated `results.json`:
+
+```bash
+cd backend
+python -m scripts.evaluate_all                      # everything that can run
+python -m scripts.evaluate_all --only retrieval,chunking
+python -m scripts.evaluate_all --list               # stages + prerequisites
+```
+
+A stage whose prerequisites are absent is reported **BLOCKED**, with the
+specific reason, and no number is invented for it -- the corpus PDFs are
+gitignored, and the LLM providers have quotas, so on a fresh checkout most
+stages cannot run. Only a stage that had what it needed and still broke is
+reported FAILED, and only that fails the run.
+
 ## One-time setup
 
 ```bash
