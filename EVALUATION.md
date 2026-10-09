@@ -154,6 +154,22 @@ retrieval (q11's question did not describe its own evidence; q16's phrase list
 held one of two wordings the tender uses). Both corrected, five genuine misses
 deliberately left as misses.
 
+A third, found later and worse than either: **regenerating the bids destroyed
+part of the answer key.** `scripts/make_vendor_bids.py` opened
+`tracking_vendors.csv` in `"w"` mode and wrote only its own fifteen specs, so
+every run deleted the four SBI rows (maintained by a different generator) and
+the entire `intended_ground` column. Nothing failed -- a nineteen-row answer key
+silently became a fifteen-row one, and the elimination metrics then measured
+whatever survived. The writer merges by `vendor_id` now, and eight tests in
+`backend/tests/test_answer_key_integrity.py` pin the loss modes.
+
+The same commit found a quieter instance of it: `VENDOR_civilworks_02_03`
+carried a hand-corrected clause `11.II(a)(h)` in the key against an em-dash
+placeholder in the spec. The generator owns that column, so the correction was
+one regeneration away from being reverted to a placeholder. A test now asserts
+spec/key agreement, because a label the code disagrees with is not a
+correction -- it is a pending regression.
+
 ## A real defect still open
 
 Extraction returns `2.8.1 (i)` through `2.8.1 (ix)` for the HGCL tender, whose
@@ -187,6 +203,81 @@ words like "tender" collect spurious credit. That lexical matching contributes
 nothing *here* is itself evidence the dense retriever is doing real semantic
 work.
 
+## Is the difference real? Paired significance
+
+Every figure above was previously a point estimate with a Wilson interval, and
+two arms were compared by eye. Because both arms are scored on the *same*
+labelled queries, the right comparison is paired: a query both arms get right
+carries no information about which is better, so only the queries they disagree
+on are evidence.
+
+- **hit@k**: exact two-sided sign test (McNemar's exact test) over the
+  discordant queries. Exact rather than normal-approximate because n is small
+  enough that the approximation is simply wrong here.
+- **MRR**: percentile bootstrap over the paired per-query deltas, 10,000
+  resamples, seed `20260907` (recorded in the run manifest). Percentile rather
+  than a t-interval because the deltas are a spike at zero with a few large
+  jumps, nowhere near normal.
+
+The distinction is not academic at this n. A clean **6-0 sweep clears 0.05
+(p = 0.0312); a clean 5-0 sweep does not (p = 0.0625)** -- and the second was
+being read as a win. That is the honest argument for enlarging the query set,
+and it is quantified rather than asserted.
+
+`scripts/baseline_retrieval.py --dense` now scores the dense arm in the same
+process as the BM25 arm. Quoting BM25 from one script and the dense figure from
+a separate run of `evaluate_retrieval.py` compares two executions, so any label
+fix or chunker change between them is silently credited to the embeddings --
+precisely the substitution `ablate_chunking.py` exists to prevent.
+
+Reported figures are never a p-value alone: each comes with its n, the raw
+improved/regressed/tied counts, and an explicit "significant / NOT significant
+at 0.05".
+
+## How reliable are the labels?
+
+Every number here is measured against hand-written labels, which makes label
+reliability part of the method. The instrument is Cohen's kappa, and the reason
+it rather than raw agreement is arithmetic: 12 of the 19 bids are eliminated, so
+two annotators who both simply answer "eliminate" agree 63% of the time while
+sharing no judgement whatsoever.
+
+`scripts/double_label.py` prepares a blinded sheet (the recorded label withheld,
+and the `intended_reason` text too -- for a document-ground elimination it reads
+"... not enclosed", which hands over the answer), refuses a returned sheet with
+blanks, unknown labels or missing units, and lists every disagreement for
+adjudication. `data/ANNOTATION_PROTOCOL.md` holds the label definitions and
+decision rules.
+
+**No kappa figure is reported yet, and this is deliberate.** Kappa requires an
+independent second rater. A second pass by whoever wrote the labels reproduces
+their own reading of an ambiguous clause and reports that consistency as
+reliability, and the assistant that generated these labels is not independent of
+its own work either. The harness and the protocol are the deliverable; the
+figure requires about an hour from a second person who has not seen the key.
+
+When it is run, report kappa with its n and the raw agreement. At n = 12 with
+two near-balanced categories the statistic moves roughly 0.17 per unit, so a
+single adjudicated disagreement visibly shifts it.
+
+## Reproducing these numbers
+
+`python -m scripts.evaluate_all` runs every evaluator and writes one
+`results.json` beside a manifest recording the git revision (flagged if the tree
+is dirty), dependency versions, the seed, SHA-256 of every notification and
+label file, and the n behind each figure.
+
+A stage whose prerequisites are absent is reported **BLOCKED** with the specific
+reason, and no number is invented for it. This matters for honest reading of any
+partial run: the notification PDFs are gitignored (they are large public
+downloads, tracked as metadata), the services may be down, and the LLM providers
+have quotas -- so on a fresh checkout most stages cannot run. Only a stage that
+had what it needed and still broke is FAILED.
+
+What that means for the figures above: they were measured on a corpus that must
+be restored before they can be re-derived. **Any claim in this document that
+cannot currently be re-run is a claim about a past run, not a reproduction.**
+
 ## Known limits of this evaluation
 
 1. **n is small.** 17 retrieval queries, 17 extraction fields, 15 vendors. Every
@@ -212,3 +303,12 @@ work.
    note.
 7. **Router vocabulary was fitted on the dev split.** Only the held-out figure is
    evidence; the dev figure (96.4%) measures fitting and is labelled as such.
+8. **No inter-annotator agreement figure exists yet.** The harness and protocol
+   are in place (above); the figure needs an independent second rater. Until
+   then, label reliability is unquantified, which is a real gap and not a
+   formality.
+9. **No procurement-specific prior art is cited.** `RELATED_WORK.md` positions
+   this against legal-contract NLP (CUAD) and retrieval, which is adjacent
+   rather than the same field. Three procurement candidates were found and left
+   uncited because the network policy blocked verification against their
+   publishers, and an unverified citation is worse than an acknowledged gap.

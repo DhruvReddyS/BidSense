@@ -34,6 +34,11 @@ httpx==0.28.1
 # --- api (used from Phase 2 onward; pinned here so the env is stable) ---
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
+# Required by FastAPI to parse multipart form data, which every upload route
+# uses (UploadFile/File/Form). FastAPI raises at import time without it, so
+# omitting it meant `app.api.main` could not be imported at all from a clean
+# install -- the API would not start and two test modules failed to collect.
+python-multipart==0.0.32
 
 # --- dev ---
 pytest==9.1.1
