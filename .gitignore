@@ -18,3 +18,6 @@ output/**/*.pdf
 output/**/*.docx
 output/**/*.log
 .DS_Store
+
+# throwaway diagnostic scripts
+*_tmp.py
