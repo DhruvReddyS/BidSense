@@ -34,6 +34,7 @@ from app.ingest.chunking import (
 )
 from app.ingest.loader import parse_document
 from app.schemas.common import ChunkSection, DocumentKind
+from app.rag.stats import fmt_delta_ci, fmt_sign_test, paired_counts
 from app.vector.embeddings import embed_passages, embed_query
 
 QUERY_PATH = Path(__file__).parents[2] / "data" / "rag_queries.json"
@@ -76,7 +77,15 @@ def score(chunks: list[Chunk], queries: list[dict], k: int) -> dict:
         out["hit3"].append(any(hits[:3]))
         out[f"hit{k}"].append(any(hits[:k]))
         out["rr"].append(1.0 / first if first else 0.0)
-        per_query.append({"id": q["id"], "kind": q["kind"], "first_hit": first})
+        per_query.append({
+            "id": q["id"], "kind": q["kind"], "first_hit": first,
+            # Per-query scores, so the two arms can be paired by query id. The
+            # aggregate means below cannot be paired after the fact.
+            "hit_at_1": float(bool(hits[:1] and hits[0])),
+            "hit_at_3": float(any(hits[:3])),
+            f"hit_at_{k}": float(any(hits[:k])),
+            "rr": 1.0 / first if first else 0.0,
+        })
     return {
         "chunks": len(chunks),
         "precision_at_1": float(np.mean(out["p1"])),
@@ -134,10 +143,48 @@ def main() -> int:
         scale = 1 if key == "mrr" else 100
         print(f"  {label:7} {a*scale:6.3f} -> {b*scale:6.3f}   ({'+' if b>=a else ''}{(b-a)*scale:.3f})")
 
+    # ----------------------------------------------------------------- #
+    # Significance. The deltas above are point estimates on n = 17..39
+    # queries, where a 6-0 sweep clears 0.05 and a 5-0 sweep does not. Both
+    # arms are scored on the SAME queries, so the comparison is paired: only
+    # the queries the arms disagree on carry information.
+    # ----------------------------------------------------------------- #
+    paired = {
+        arm: {row["id"]: row for stem, r in results[arm] for row in r["per_query"]}
+        for arm in ("legacy", "rows")
+    }
+    shared = [q["id"] for q in queries if q["id"] in paired["legacy"]
+              and q["id"] in paired["rows"]]
+    if len(shared) != n:
+        print(f"\n!! paired on {len(shared)} of {n} queries; "
+              f"significance covers only those")
+
+    print("\nSignificance of the same comparison (paired, exact):")
+    for key, label in (("hit_at_1", "hit@1"), ("hit_at_3", "hit@3"),
+                       (f"hit_at_{k}", f"hit@{k}")):
+        before = [paired["legacy"][i][key] for i in shared]
+        after = [paired["rows"][i][key] for i in shared]
+        improved, regressed, tied = paired_counts(before, after)
+        print(f"  {label:7} {fmt_sign_test(improved, regressed, tied)}")
+
+    rr_deltas = [paired["rows"][i]["rr"] - paired["legacy"][i]["rr"] for i in shared]
+    print(f"  {'MRR':7} {fmt_delta_ci(rr_deltas)}")
+
+    summary["significance"] = {
+        "n_paired": len(shared),
+        "method": "exact two-sided sign test (hit@k); "
+                  "percentile bootstrap, 10000 resamples, seed 20260907 (MRR)",
+        "hit_at_1": paired_counts([paired["legacy"][i]["hit_at_1"] for i in shared],
+                                  [paired["rows"][i]["hit_at_1"] for i in shared]),
+        f"hit_at_{k}": paired_counts([paired["legacy"][i][f"hit_at_{k}"] for i in shared],
+                                     [paired["rows"][i][f"hit_at_{k}"] for i in shared]),
+        "mrr_delta": fmt_delta_ci(rr_deltas),
+    }
+
     print(f"\nIndex cost: {summary['legacy']['chunks']} -> {summary['rows']['chunks']} chunks "
           f"({summary['rows']['chunks']/max(1,summary['legacy']['chunks']):.2f}x)")
-    print(f"n = {n} labelled queries over 4 real notifications. Small; treat the"
-          f"\ndirection as the finding and the magnitude as indicative.")
+    print(f"n = {n} labelled queries over 4 real notifications. Small; the "
+          f"paired\ntests above say which differences survive that.")
     Path("/tmp/ablation_chunking.json").write_text(json.dumps(summary, indent=2))
     return 0
 
