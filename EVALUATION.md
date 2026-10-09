@@ -278,6 +278,32 @@ What that means for the figures above: they were measured on a corpus that must
 be restored before they can be re-derived. **Any claim in this document that
 cannot currently be re-run is a claim about a past run, not a reproduction.**
 
+### What blocks a re-run, concretely
+
+Measured in a clean cloud container with the services brought up by hand. Three
+independent prerequisites, in the order they bite:
+
+| Blocker | Blocks | To unblock |
+|---|---|---|
+| `data/notifications/*.pdf` absent — gitignored as large public downloads, tracked as metadata in `data/README.md` | every retrieval, extraction, chunking, citation and elimination figure | re-download the four notifications listed in `data/README.md` |
+| `huggingface.co` denied by the environment's network policy, so `BAAI/bge-base-en-v1.5` (~440MB) cannot be fetched | all embedding, indexing and dense retrieval; `--dense` on the baseline | allow `huggingface.co` in the environment's network settings, or pre-seed `~/.cache/huggingface` |
+| No LLM provider key in the environment | the citation evaluator and the LLM extraction path | set `GEMINI_API_KEY` / `GROQ_API_KEY`, or point `OLLAMA_BASE_URL` at a local model |
+
+What *does* run without any of them: the full unit suite, both chunking arms'
+structural behaviour, the BM25 baseline arm (no model needed), every statistical
+function, the answer-key integrity guards, and the theme-contrast guard.
+
+The test suite already distinguishes these correctly rather than failing:
+`tests/test_pipeline.py` probes for both services and for the model, and skips
+with `"postgres/qdrant not running"` or `"BGE model unavailable"`. Under a denied
+`huggingface.co` that probe retries for a long time, so set
+`HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` for a fast, deterministic offline run.
+
+One environment caveat that is not a product defect: FastAPI's `TestClient`
+addresses `http://testserver`, and httpx honours `HTTPS_PROXY`, so behind an
+HTTP proxy every API test fails with `httpx.ProxyError` — 191 such errors across
+11 files on the first run here. Add `testserver` to `NO_PROXY`.
+
 ## Known limits of this evaluation
 
 1. **n is small.** 17 retrieval queries, 17 extraction fields, 15 vendors. Every
