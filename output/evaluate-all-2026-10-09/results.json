@@ -1,0 +1,108 @@
+{
+  "manifest": {
+    "generated_at": "2026-10-09T21:17:36+0000",
+    "git": {
+      "revision": "116a16a9b55c8357ede527d1e8a9a02db88fcad2",
+      "branch": "claude/blissful-newton-6y89gw",
+      "dirty": true
+    },
+    "python": "3.13.16",
+    "platform": "Linux-6.18.44-fc-v80-x86_64-with-glibc2.39",
+    "seed": 20260907,
+    "bootstrap_iterations": 10000,
+    "dependencies": {
+      "sentence-transformers": "6.0.1",
+      "torch": "2.14.1",
+      "qdrant-client": "1.19.0",
+      "pdfplumber": "0.11.10",
+      "pypdf": "6.16.2",
+      "numpy": "2.5.3",
+      "SQLAlchemy": "2.0.52",
+      "pydantic": "2.13.5",
+      "google-genai": "2.21.0",
+      "langgraph": "1.2.11"
+    },
+    "corpus": {
+      "labels": {
+        "rag_queries.json": {
+          "sha256": "f1e512d5e11901e0f35384729a41ceec0258fc34a99d23ac4d2234e1ab7619e5",
+          "bytes": 6825
+        },
+        "router_queries.json": {
+          "sha256": "947467a332dedbca33d69f6265a36c790d56e3306f13694c1198879956207316",
+          "bytes": 5869
+        },
+        "extraction_truth.json": {
+          "sha256": "45162a11abd64733ec0ec494f073740b5ed5cf9c169247f57d6b08949c214fe4",
+          "bytes": 4184
+        },
+        "tracking_vendors.csv": {
+          "sha256": "2968ba30084fb832bf016c16e701e4dd8f52622ee109687242392aa835522edd",
+          "bytes": 5964
+        }
+      },
+      "notifications": {},
+      "notification_count": 0,
+      "n": {
+        "labelled_queries": 17,
+        "labelled_bids": 19,
+        "bids_eliminated": 12
+      }
+    }
+  },
+  "stages": {
+    "extraction": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)",
+        "no notifications ingested (run: python -m scripts.ingest over data/notifications)"
+      ],
+      "what": "header-field extraction against data/extraction_truth.json"
+    },
+    "retrieval": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)"
+      ],
+      "what": "dense retrieval hit@k and MRR over the labelled queries"
+    },
+    "baseline": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)"
+      ],
+      "what": "BM25 floor, paired against the dense arm"
+    },
+    "chunking": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)"
+      ],
+      "what": "table-row vs size-only chunking, same labels, in memory"
+    },
+    "citations": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)"
+      ],
+      "what": "whether a cited page actually supports the claim"
+    },
+    "router": {
+      "status": "blocked",
+      "reasons": [
+        "no notification PDFs in data/notifications (gitignored; restore the corpus)"
+      ],
+      "what": "query routing accuracy"
+    },
+    "elimination": {
+      "status": "blocked",
+      "reasons": [
+        "no notifications ingested (run: python -m scripts.ingest over data/notifications)"
+      ],
+      "what": "elimination status and reason against the answer key"
+    }
+  },
+  "tally": {
+    "blocked": 7
+  }
+}

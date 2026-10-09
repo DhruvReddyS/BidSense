@@ -56,7 +56,8 @@ class Stage:
     #: Paths that must exist for the stage to be meaningful.
     needs_paths: list[Path] = field(default_factory=list)
     #: Services that must answer before the stage can run. "schema" means
-    #: Postgres is reachable AND scripts.bootstrap has been run against it.
+    #: Postgres is reachable AND scripts.bootstrap has been run against it;
+    #: "ingested" additionally means at least one notification is in it.
     needs_services: list[str] = field(default_factory=list)
     #: True if the stage calls an LLM provider and so depends on quota.
     needs_llm: bool = False
@@ -73,7 +74,7 @@ STAGES = [
     Stage("extraction", "scripts.evaluate_extraction",
           "header-field extraction against data/extraction_truth.json",
           needs_paths=[DATA / "extraction_truth.json"],
-          needs_services=["postgres", "schema"]),
+          needs_services=["postgres", "schema", "ingested"]),
     Stage("retrieval", "scripts.evaluate_retrieval",
           "dense retrieval hit@k and MRR over the labelled queries",
           needs_paths=[DATA / "rag_queries.json"],
@@ -95,7 +96,7 @@ STAGES = [
     Stage("elimination", "scripts.evaluate",
           "elimination status and reason against the answer key",
           needs_paths=[DATA / "tracking_vendors.csv"],
-          needs_services=["postgres", "schema"]),
+          needs_services=["postgres", "schema", "ingested"]),
 ]
 
 
@@ -117,6 +118,22 @@ def service_up(name: str) -> bool:
             port = int(os.environ.get("POSTGRES_PORT", "5432"))
             with socket.create_connection((host, port), timeout=3):
                 return True
+        if name == "ingested":
+            # An empty-but-valid schema is still a prerequisite that has not
+            # been met. Without this the elimination evaluator runs, reports
+            # "notification not ingested" for every bid and exits 1 -- which
+            # the harness then calls FAILED, when the only thing missing is
+            # the corpus the other six stages are already blocked on.
+            from sqlalchemy import create_engine, text
+            from app.config import settings
+            engine = create_engine(settings.database_url, pool_pre_ping=False)
+            try:
+                with engine.connect() as connection:
+                    return bool(connection.execute(text(
+                        "select 1 from tender_notifications limit 1"
+                    )).first())
+            finally:
+                engine.dispose()
         if name == "schema":
             # A reachable Postgres with no tables is a prerequisite that has
             # not been met, not a broken evaluator: without this probe the
@@ -147,10 +164,11 @@ def blockers(stage: Stage, services: dict[str, bool]) -> list[str]:
                        "(gitignored; restore the corpus)")
     for required in stage.needs_services:
         if not services.get(required):
-            reasons.append(
-                "schema not created (run: python -m scripts.bootstrap)"
-                if required == "schema" else f"{required} unreachable"
-            )
+            reasons.append({
+                "schema": "schema not created (run: python -m scripts.bootstrap)",
+                "ingested": "no notifications ingested (run: python -m "
+                            "scripts.ingest over data/notifications)",
+            }.get(required, f"{required} unreachable"))
     if stage.needs_llm and not any(
         os.environ.get(k) for k in
         ("GEMINI_API_KEY", "GROQ_API_KEY", "XAI_API_KEY", "OLLAMA_BASE_URL")
@@ -328,6 +346,7 @@ def main() -> int:
     services = {name: service_up(name) for name in ("qdrant", "postgres")}
     # Only worth probing when the server itself answered.
     services["schema"] = services["postgres"] and service_up("schema")
+    services["ingested"] = services["schema"] and service_up("ingested")
     info = manifest()
 
     print(f"BidSense evaluation suite")
