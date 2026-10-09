@@ -36,6 +36,21 @@ class Settings(BaseSettings):
     job_poll_seconds: float = Field(default=0.5, ge=0.05, le=30)
     defer_vector_indexing: bool = False
     ocr_workers: int = Field(default=3, ge=1, le=16)
+    # Page-range parallelism for PDF parsing, which is where ingestion time
+    # actually goes: measured on a 172-page bid, text extraction plus table
+    # detection is 99.9% of the pipeline (14.9s against 11ms for chunking),
+    # and the text-based table fallback alone is 56% of that. It is CPU-bound
+    # Python, so threads cannot help; across page ranges it measured 2.75x on
+    # four processes with byte-identical output.
+    #
+    # Default 1 (serial) on purpose. The ingest queue already runs
+    # `ingest_workers` documents at once, so raising this multiplies total
+    # processes rather than adding to them -- set the two together against the
+    # cores you actually have. Above 1, parsing uses a "spawn" pool, since
+    # jobs can run on threads and forking a threaded process can deadlock.
+    pdf_parse_workers: int = Field(default=1, ge=1, le=16)
+    # Below this page count, spawning interpreters costs more than it saves.
+    pdf_parse_parallel_min_pages: int = Field(default=24, ge=2, le=10_000)
 
     # Per-process connection budget. Keep this bounded when adding replicas;
     # 8 API replicas at these defaults peak at 160 rather than 1,000 sockets.

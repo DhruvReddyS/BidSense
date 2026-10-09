@@ -54,7 +54,7 @@ def fixture_pdf(into: Path) -> Path:
     """A generated notification, so the profile runs with no corpus present."""
     from tests.doc_factory import make_notification_pdf
 
-    return make_notification_pdf(into)
+    return make_notification_pdf(into / "NOTIF_profile_fixture.pdf")
 
 
 def main() -> int:

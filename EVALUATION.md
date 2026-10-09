@@ -304,6 +304,64 @@ addresses `http://testserver`, and httpx honours `HTTPS_PROXY`, so behind an
 HTTP proxy every API test fails with `httpx.ProxyError` — 191 such errors across
 11 files on the first run here. Add `testserver` to `NO_PROXY`.
 
+## Where the time goes
+
+Measured, because "make it faster" without a profile is guesswork, and this
+pipeline has three plausible-sounding bottlenecks. `scripts/profile_pipeline.py`
+reproduces all of this; it runs on a generated fixture, so it needs neither the
+corpus nor the network.
+
+On a 172-page generated bid (271KB, 43 tables, 242,470 characters, 1,528
+chunks):
+
+| stage | median | share |
+|---|---|---|
+| parse (text + table extraction) | 14,890ms | 99.9% |
+| chunk (rows + prose) | 11ms | 0.1% |
+
+Chunking is free. Parsing is everything, at 86.6ms/page. Splitting parse
+further, over 40 pages of the same document:
+
+| within parse | time | share |
+|---|---|---|
+| `extract_text` | 1,837ms | 44.1% |
+| `extract_tables` (ruled/line strategy) | 5ms | 0.1% |
+| `extract_tables` (text strategy, fallback) | 2,325ms | 55.8% |
+
+So the single most expensive thing the pipeline does is the **text-based table
+fallback**, at ~58ms for every page it runs on — and it runs on nearly every
+page, because the ruled-line strategy found nothing on any of these 40 (this
+generated corpus draws tables without rules). It is not dead weight: it is what
+finds the 43 tables in this document, and table rows are what the chunking
+ablation showed carry the retrieval win. Disabling it would buy speed by losing
+accuracy, so it stays.
+
+What is safe to change is *how* the work is spread. Parsing is CPU-bound Python,
+so threads cannot help, but page ranges are independent:
+
+| `PDF_PARSE_WORKERS` | parse | per page | speedup |
+|---|---|---|---|
+| 1 (default) | 12.66s | 86.6ms | — |
+| 4 | 5.26s | 35.7ms | **2.41x** |
+
+The SHA-256 over every page's text and tables is identical between the two, and
+the document comes out with the same 43 tables and 1,528 chunks. Output identity
+is the whole premise, so `backend/tests/test_parse_parallelism.py` asserts it,
+along with page ordering, the serial path for short documents, and a fallback to
+serial where a sandbox forbids process creation. The speedup itself is not
+asserted — it is hardware-dependent and would make a flaky test.
+
+**Default is 1, deliberately.** The ingest queue already runs `ingest_workers`
+documents concurrently, so raising this multiplies processes rather than adding
+to them; the two want setting together against the cores actually available.
+Above 1, the pool uses the `spawn` start method, because ingest jobs can run on
+threads and forking a threaded process is a documented route to deadlock.
+
+One thing measured and rejected: calling `page.close()` to release pdfplumber's
+per-page cache gained 2.3% — inside noise — and did not reduce peak RSS on this
+document. It is kept anyway inside the span worker, where it bounds the resident
+set on a 380-page tender, but it is not the optimisation it looked like.
+
 ## Known limits of this evaluation
 
 1. **n is small.** 17 retrieval queries, 17 extraction fields, 15 vendors. Every
