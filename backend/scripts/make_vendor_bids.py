@@ -58,9 +58,82 @@ def extracted_requirements(notification_id: str) -> list[str] | None:
 
 TRACKING_HEADER = [
     "vendor_id", "notification_id", "intended_status", "intended_reason",
-    "intended_failed_clause", "is_blacklisted", "technical_writeup_quality",
-    "file_name", "generated_by", "date", "notes",
+    "intended_failed_clause", "intended_ground", "is_blacklisted",
+    "technical_writeup_quality", "file_name", "generated_by", "date", "notes",
 ]
+
+#: What this generator is allowed to rewrite. The answer key is shared: the four
+#: SBI bids come from scripts.make_sbi_vendor_versions, and columns get added to
+#: the sheet by hand as the evaluation grows. Anything outside this set is
+#: somebody else's row or somebody else's column.
+OWNED_BY = "scripts.make_vendor_bids"
+
+
+def merge_tracking(
+    path: Path, rows: list[dict[str, str]], rendered: set[str] | None = None
+) -> tuple[int, int]:
+    """Write `rows` into the answer key without disturbing anyone else's.
+
+    The obvious implementation -- open "w", write the header, write the fifteen
+    specs -- silently destroys data, and did: it drops every row produced by
+    another generator and every column this script does not know about. Since
+    the sheet *is* the ground truth, that is not a cosmetic loss; the evaluation
+    then measures whatever survived.
+
+    So: read what is there, replace only the rows this generator owns, keep the
+    rest where they were, and union the columns so a hand-added one survives a
+    regeneration. Returns (updated, preserved).
+
+    `rendered` names the vendors whose PDF this run actually wrote. The `date`
+    column records when a bid was generated, so for anything outside that set --
+    every other tender under `--tender` -- the stored date is kept rather than
+    stamped with today's, which would claim a regeneration that never happened.
+    """
+    rendered = rendered if rendered is not None else {row["vendor_id"] for row in rows}
+    incoming = {row["vendor_id"]: row for row in rows}
+
+    existing: list[dict[str, str]] = []
+    fieldnames: list[str] = []
+    if path.exists():
+        with path.open(newline="") as handle:
+            reader = csv.DictReader(handle)
+            fieldnames = list(reader.fieldnames or [])
+            existing = [dict(row) for row in reader]
+
+    # Existing column order wins, so a regeneration produces a minimal diff;
+    # genuinely new columns are appended rather than silently dropped.
+    for column in TRACKING_HEADER:
+        if column not in fieldnames:
+            fieldnames.append(column)
+
+    merged: list[dict[str, str]] = []
+    seen: set[str] = set()
+    preserved = 0
+    for row in existing:
+        vendor_id = row.get("vendor_id", "")
+        replacement = incoming.get(vendor_id)
+        if replacement is None:
+            merged.append(row)          # another generator's row, or a stray
+            preserved += 1
+        else:
+            # Keep any extra columns this script does not manage.
+            fresh = dict(replacement)
+            if vendor_id not in rendered and row.get("date"):
+                fresh["date"] = row["date"]
+            merged.append({**row, **fresh})
+        seen.add(vendor_id)
+
+    for row in rows:                    # specs not yet in the sheet
+        if row["vendor_id"] not in seen:
+            merged.append(row)
+
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for row in merged:
+            writer.writerow({column: row.get(column, "") for column in fieldnames})
+
+    return len(rows), preserved
 
 
 def main() -> int:
@@ -82,6 +155,7 @@ def main() -> int:
         return 1
 
     requirement_cache: dict[str, list[str] | None] = {}
+    rendered: set[str] = set()
     current = ""
     for spec in selected:
         tender = PROFILES[spec.notification_id]
@@ -92,6 +166,7 @@ def main() -> int:
             spec.notification_id, extracted_requirements(spec.notification_id)
         )
         path = render_pdf(spec, tender, out_dir, required_documents=required)
+        rendered.add(spec.vendor_id)
         size = path.stat().st_size / 1024
         flag = "PASS     " if spec.intended_status == "pass" else "ELIMINATE"
         source = f"{len(required)} extracted" if required else "profile list"
@@ -101,21 +176,31 @@ def main() -> int:
         )
 
     tracking = Path(args.tracking)
-    with tracking.open("w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(TRACKING_HEADER)
-        for spec in ALL_VENDORS:      # always write the full key, not the subset
-            writer.writerow([
-                spec.vendor_id, spec.notification_id, spec.intended_status,
-                spec.intended_reason, spec.intended_failed_clause,
-                str(spec.is_blacklisted).lower(), spec.writeup_quality,
-                f"{spec.vendor_id}.pdf", "scripts.make_vendor_bids",
-                date.today().isoformat(), spec.notes,
-            ])
+    today = date.today().isoformat()
+    rows = [                          # always the full key, not the subset
+        {
+            "vendor_id": spec.vendor_id,
+            "notification_id": spec.notification_id,
+            "intended_status": spec.intended_status,
+            "intended_reason": spec.intended_reason,
+            "intended_failed_clause": spec.intended_failed_clause,
+            "intended_ground": spec.intended_ground,
+            "is_blacklisted": str(spec.is_blacklisted).lower(),
+            "technical_writeup_quality": spec.writeup_quality,
+            "file_name": f"{spec.vendor_id}.pdf",
+            "generated_by": OWNED_BY,
+            "date": today,
+            "notes": spec.notes,
+        }
+        for spec in ALL_VENDORS
+    ]
+    updated, preserved = merge_tracking(tracking, rows, rendered)
 
     passes = sum(1 for v in ALL_VENDORS if v.intended_status == "pass")
-    print(f"\nAnswer key: {tracking} — {len(ALL_VENDORS)} vendors "
-          f"({passes} pass, {len(ALL_VENDORS) - passes} eliminate)")
+    print(f"\nAnswer key: {tracking} — {updated} vendors "
+          f"({passes} pass, {updated - passes} eliminate)"
+          + (f", {preserved} row(s) from other generators preserved"
+             if preserved else ""))
     return 0
 
 

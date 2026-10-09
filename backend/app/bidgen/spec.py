@@ -66,6 +66,14 @@ class VendorSpec:
     certifications: list[tuple[str, str]]
     quoted_price: str
     quoted_words: str
+    # Which kind of rule eliminated this bid: 'criteria' for a qualification
+    # condition it fails on the numbers, 'document' for a mandatory enclosure it
+    # never provided. Section 10 reports the two separately because they are
+    # different failures -- the first needs a value read correctly, the second
+    # needs a name matched -- and a single blended accuracy hides which half is
+    # weak. Defaulted because a passing bid has no ground, so requiring it on
+    # every spec would mean writing a meaningless value eight times.
+    intended_ground: str = ""       # '' (pass) | 'criteria' | 'document'
     omitted_documents: tuple[str, ...] = ()
     is_blacklisted: bool = False
     # Sits exactly on a threshold (Section 9.2.2). An off-by-one comparison --
