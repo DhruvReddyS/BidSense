@@ -29,7 +29,12 @@ from app.compliance.matching import (
     normalise,
     prewarm,
 )
-from app.compliance.requirements import Applicability, Requirement, deduplicate
+from app.compliance.requirements import (
+    Applicability,
+    Requirement,
+    Verifiability,
+    deduplicate,
+)
 from app.compliance.models import (
     ActionGroup,
     ActionItem,
@@ -347,6 +352,41 @@ def _document_item(
             severity=Severity.REVIEW,
             found_value=None,
             explanation=_conditional_explanation(requirement.applicability, doc_name),
+            match_score=result.score,
+            **base,
+        )
+
+    # A requirement that does not NAME an artefact cannot be concluded absent.
+    #
+    # On the 19-bid evaluation set this single branch is the difference between
+    # 75% and 100% elimination precision. Four bids that should pass were
+    # disqualified, every one of them on a "mandatory document" no bid could
+    # ever match: a catch-all ("relevant documents ... etc."), an instruction
+    # ("Produce documentary evidence to prove past experience"), an eligibility
+    # condition already checked on the numeric path ("Annual Turnover ... from
+    # Chartered Accountant"), or a portal credential ("Pass-Phrase").
+    #
+    # Reporting those as missing mandatory documents manufactured a
+    # disqualification out of the tender's own prose. The product's rule
+    # elsewhere is explicit -- "We could not read this value. That is not the
+    # same as failing it." -- and the document path now obeys it too.
+    #
+    # `explicitly_absent` still wins: if the bid's own checklist says NOT
+    # ENCLOSED, the bidder has told us it is absent and we believe them.
+    if (
+        requirement.verifiability is Verifiability.UNVERIFIABLE
+        and not explicitly_absent
+    ):
+        return GapItem(
+            status=CheckStatus.NOT_ASSESSABLE,
+            severity=Severity.REVIEW,
+            found_value=None,
+            explanation=(
+                "This clause states a condition or asks for \u201cany relevant "
+                "documents\u201d rather than naming a document to enclose, so not "
+                "finding it in your bid proves nothing. Check this clause "
+                "yourself against your submission."
+            ),
             match_score=result.score,
             **base,
         )

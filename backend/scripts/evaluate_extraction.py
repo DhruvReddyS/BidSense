@@ -38,6 +38,7 @@ from sqlalchemy import select
 
 from app.db.models import TenderNotificationRow
 from app.db.session import session_scope
+from app.rag.stats import fmt_pct_ci
 
 TRUTH_PATH = Path(__file__).parents[2] / "data" / "extraction_truth.json"
 
@@ -211,10 +212,11 @@ def main() -> int:
         )
 
     print("\n" + "=" * 104)
-    acc = summary.accuracy
     print(f"Fields labelled and scored : {summary.scored}")
     print(f"Correct                    : {summary.correct}")
-    print(f"Field accuracy             : {'n/a' if acc is None else f'{acc * 100:.1f}%'}")
+    # With n=17 a bare "100%" asserts more than the evidence supports; the
+    # Wilson lower bound is near 82%, and that is the honest claim.
+    print(f"Field accuracy             : {fmt_pct_ci(summary.correct, summary.scored)}")
     if summary.missing_rows:
         print(f"Notifications not ingested : {', '.join(summary.missing_rows)}"
               "  <- not scored; ingest them before quoting this number")

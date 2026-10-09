@@ -129,6 +129,20 @@ DEFECTS: dict[str, str] = {
         "precision@1 was 5.9%, with misses clustered on EMD, deadlines and "
         "conditions -- the fields that live in tables."
     ),
+    "d14_a_condition_is_not_a_missing_document": (
+        "Catch-alls, instructions and eligibility conditions were extracted as "
+        "mandatory DOCUMENTS, so a bid was disqualified for not enclosing "
+        "'relevant documents ... etc.', 'Produce documentary evidence to prove "
+        "past experience' and 'Annual Turnover ... from Chartered Accountant'. "
+        "None names an artefact; no bid could ever match them. Four of 19 bids "
+        "that should pass were eliminated this way."
+    ),
+    "d16_clause_reference_whitespace_is_not_a_difference": (
+        "The evaluation compared clause references literally, so the key's "
+        "'1.1(4)' did not match the cited '1.1 (4)'. Five correct citations "
+        "scored as wrong and reason accuracy was reported at 58% when the "
+        "engine was citing exactly the clause the key named."
+    ),
     "d9_slashed_tender_ids_route_correctly": (
         "Real tender ids contain slashes ('TENDER No.01/SE(Electrical)/GHMC/"
         "2024-25'). The greedy {tender_id:path} route, declared first, swallowed "
@@ -313,6 +327,53 @@ def test_table_header_is_only_treated_as_a_header_when_it_is_one() -> None:
     assert _looks_like_header(["Criterion", "Threshold", "Unit"])
     # A single cell cannot label columns.
     assert not _looks_like_header(["Eligibility"])
+
+
+def test_d14_a_condition_is_not_a_missing_document() -> None:
+    """A requirement that names no artefact cannot be concluded absent.
+
+    The product says elsewhere that "we could not read this" is not the same as
+    failing. This is the document path obeying it: a catch-all or a condition
+    becomes the vendor's own check, never an elimination.
+    """
+    from app.compliance.requirements import Verifiability, classify_verifiability
+
+    unverifiable = [
+        "relevant documents (copy of Work order, Completion certificate etc.)",
+        "Produce documentary evidence to prove past experience, capabilities",
+        "Annual Turnover on works of the individual/firm/company from Chartered Accountant",
+        "Legal Entity: The Bidder could be sole proprietorship /OEM/",
+        "Pass-Phrase",
+        "Possess Class-I (Electrical) with A- Grade CEIG license not less than 5 years",
+    ]
+    for name in unverifiable:
+        assert classify_verifiability(name) is Verifiability.UNVERIFIABLE, name
+
+    # Conservative in the direction that matters: a wrong UNVERIFIABLE costs one
+    # human check, a wrong ENCLOSURE tells a compliant bidder they do not
+    # qualify. Real documents must stay checkable -- including ones that name an
+    # artefact and then trail off with "etc.".
+    enclosures = [
+        "Copy of GST Registration", "Power of Attorney", "PAN Card",
+        "Audited Balance Sheets (last 3 financial years)", "EMD Demand Draft",
+        "Covering Letter", "BOQ file", "Manufacturers authorization form",
+        "Bidder's Declaration regarding Banning, Liquidation etc.",
+        "Solvency certificate certificates from banks etc.",
+    ]
+    for name in enclosures:
+        assert classify_verifiability(name) is Verifiability.ENCLOSURE, name
+
+
+def test_d16_clause_reference_whitespace_is_not_a_difference() -> None:
+    """The METRIC was wrong, not the engine -- and the fix raises the number."""
+    from scripts.evaluate import _clause_matches
+
+    assert _clause_matches("1.1(4)", ["2.5(d)", "1.1 (4)"]) is True
+    assert _clause_matches("2.6(b)", ["2.5(d)", "2.6 (b)"]) is True
+    # Guards: a parent clause must not be credited for one of its children, and
+    # genuinely different references must still fail.
+    assert _clause_matches("1", ["1.1(4)"]) is False
+    assert _clause_matches("28.1 vi)", ["2.8.1 (vi)"]) is False
 
 
 def test_every_known_defect_is_pinned() -> None:

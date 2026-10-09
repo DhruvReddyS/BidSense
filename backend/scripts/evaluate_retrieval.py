@@ -39,6 +39,7 @@ from sqlalchemy import select
 from app.db.models import TenderNotificationRow
 from app.db.session import session_scope
 from app.rag.retrieve import retrieve
+from app.rag.stats import fmt_pct_ci
 from app.schemas.common import DocumentKind
 
 QUERY_PATH = Path(__file__).parents[2] / "data" / "rag_queries.json"
@@ -163,11 +164,19 @@ def main() -> int:
     print(f"  precision@1     : {mean(lambda r: r.precision_at(1)) * 100:5.1f}%")
     print(f"  precision@3     : {mean(lambda r: r.precision_at(3)) * 100:5.1f}%")
     print(f"  precision@{args.k}     : {mean(lambda r: r.precision_at(args.k)) * 100:5.1f}%")
-    print(f"  hit@1           : {mean(lambda r: r.hit_at(1)) * 100:5.1f}%   <- answer was the TOP chunk")
-    print(f"  hit@3           : {mean(lambda r: r.hit_at(3)) * 100:5.1f}%")
-    print(f"  hit@{args.k}           : {mean(lambda r: r.hit_at(args.k)) * 100:5.1f}%   <- answer was retrieved at all")
+    # Hit rates are proportions over a small n, so each carries its interval.
+    # "64.7%" and "64.7% [41.3-82.7%, n=17]" are different claims.
+    h1 = sum(1 for r in results if r.hit_at(1))
+    h3 = sum(1 for r in results if r.hit_at(3))
+    hk = sum(1 for r in results if r.hit_at(args.k))
+    print(f"  hit@1           : {fmt_pct_ci(h1, n)}   <- answer was the TOP chunk")
+    print(f"  hit@3           : {fmt_pct_ci(h3, n)}")
+    print(f"  hit@{args.k}           : {fmt_pct_ci(hk, n)}   <- answer was retrieved at all")
     print(f"  MRR             : {mean(lambda r: r.rr):5.3f}")
-    print(f"  page hit@{args.k}      : {mean(lambda r: r.page_hit_at(args.k)) * 100:5.1f}%   <- right page, phrase possibly split across chunks")
+    ph = sum(1 for r in results if r.page_hit_at(args.k))
+    print(f"  page hit@{args.k}      : {fmt_pct_ci(ph, n)}   <- right page, phrase possibly split across chunks")
+    print("\n  BM25 keyword baseline for the same questions: "
+          "python -m scripts.baseline_retrieval")
 
     misses = [r for r in results if not r.hit_at(args.k)]
     if misses:

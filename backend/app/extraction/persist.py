@@ -32,6 +32,7 @@ from app.ingest.models import ParsedDocument
 from app.schemas.common import ChunkSection, DocumentKind, Provenance
 from app.schemas.notification import TenderNotification
 from app.schemas.submission import VendorSubmission
+from app.rag.expand import expand_passage
 from app.vector.embeddings import embed_passages
 from app.vector.qdrant import build_filter, get_client
 from app.vector.schema import ChunkPayload, chunk_point_id
@@ -427,7 +428,18 @@ def _index(
     # vector; cosine retrieval is mathematically identical, while large bid
     # packs avoid redundant transformer work.
     unique_texts = list(dict.fromkeys(c.text for c in chunks))
-    unique_vectors = embed_passages(unique_texts)
+    # Embed an abbreviation-expanded form, STORE the original. A tender writes
+    # "EMD @ 1%" and a vendor asks about "earnest money"; a terse table row has
+    # too little semantic surface to bridge that on its own, and on the GHMC
+    # notice it ranked below generic boilerplate until its own vocabulary was
+    # widened. Measured on the labelled set: hit@1 41.2% -> 47.1%, hit@5
+    # 64.7% -> 70.6%, MRR 0.518 -> 0.580.
+    #
+    # The expansion never reaches the payload. Citation snippets, highlight
+    # matching and the exported report all read `text` below, so provenance
+    # stays exactly what the source page says -- which is the only reason
+    # rewriting the embedded form is acceptable at all.
+    unique_vectors = embed_passages([expand_passage(t) for t in unique_texts])
     vector_by_text = dict(zip(unique_texts, unique_vectors))
     vectors = [vector_by_text[c.text] for c in chunks]
     points = [

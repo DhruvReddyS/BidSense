@@ -32,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.compliance.gap import build_gap_report  # noqa: E402
+from app.compliance.elimination import decide  # noqa: E402
 from app.compliance.models import GapReport  # noqa: E402
 from app.db.repository import (  # noqa: E402
     get_notification_row,
@@ -58,6 +59,12 @@ class VendorResult:
     outcome: str = ""          # TP | TN | FP | FN
     clause_matched: bool | None = None
     note: str = ""
+    #: Which kind of mandatory failure the key says should fire, and which one
+    #: actually did. Section 5.2 makes both criteria and documents
+    #: disqualifying, but a turnover shortfall cannot be cured and a missing
+    #: form usually can, so a single blended precision conflates two decisions.
+    intended_ground: str = ""
+    predicted_ground: str = ""
 
 
 def load_ground_truth(path: Path) -> dict[str, dict]:
@@ -114,7 +121,30 @@ def _clause_matches(expected: str, actual: list[str]) -> bool | None:
     if clause_list:
         references = re.findall(reference, clause_list.group(1))
         return all(_clause_matches(ref, actual) is True for ref in references)
-    pattern = re.compile(r"(?<![\w.])" + re.escape(expected) + r"(?![\w.(])")
+    # Whitespace INSIDE a reference is typography, not identity: a tender
+    # prints "1.1 (4)" and the answer key writes "1.1(4)". Comparing them
+    # literally scored five correct citations as wrong and reported reason
+    # accuracy at 58% when the engine was citing exactly the clause the key
+    # named. This fixes the comparator, not the system, and it RAISES the
+    # measured number -- which is why it is spelled out rather than quietly
+    # applied.
+    #
+    # Tolerance is built into the PATTERN, not by stripping whitespace from the
+    # text. Stripping broke the capability this function was written for: a
+    # reference may be followed by its heading ("7 Manufacturer authorization"),
+    # and with the spaces gone the trailing-boundary guard saw a letter and
+    # rejected the match. So only the gaps AROUND punctuation become flexible,
+    # which is where the typographic variation actually lives.
+    #
+    # The guards all survive: "1" still fails against "1.1(4)" because a digit
+    # cannot be followed by ".", and "1.1(4)" still fails against "1.1(4)(a)"
+    # because it cannot be followed by "(".
+    flexible = re.sub(
+        r"\\([.()])",            # an escaped . ( or ) produced by re.escape
+        r"\\s*\\\1\\s*",
+        re.escape(expected),
+    )
+    pattern = re.compile(r"(?<![\w.])" + flexible + r"(?![\w.(])")
     return any(pattern.search(" ".join((a or "").casefold().split())) for a in actual)
 
 
@@ -203,6 +233,10 @@ def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
         if report.verdict == "not_checked":
             outcome = "UNASSESSED"
 
+        # Ask the real decision engine which ground fired, rather than
+        # re-deriving it here -- the metric must measure what the product does.
+        decision = decide(report)
+
         clauses = [
             (item.notification_provenance.clause_ref if item.notification_provenance else "")
             for item in blocking
@@ -213,6 +247,8 @@ def evaluate(truth: dict[str, dict], only: str | None) -> list[VendorResult]:
                 notification_id=notification_id,
                 intended_status=row["intended_status"],
                 intended_clause=row["intended_failed_clause"],
+                intended_ground=row.get("intended_ground", "") or "",
+                predicted_ground=(decision.ground.value if decision.ground else ""),
                 predicted_verdict=report.verdict,
                 predicted_eliminated=eliminated,
                 blocking_clauses=[c for c in clauses if c],
@@ -247,7 +283,38 @@ def summarise(results: list[VendorResult]) -> dict:
         else 0.0 if precision == 0 and recall == 0 else None
     )
     correct_clause = [r for r in scored if r.outcome == "TP" and r.clause_matched]
+
+    def by_ground(ground: str) -> dict:
+        """Precision and recall for one elimination ground, in isolation.
+
+        A vendor counts as a positive for this ground only when the ground
+        itself matches: eliminating a turnover-short bidder for a missing form
+        is not a success on the criteria ground, even though the status is
+        right. Without that condition the split would flatter both halves.
+        """
+        g_tp = sum(
+            1 for r in scored
+            if r.outcome == "TP" and r.intended_ground == ground
+            and r.predicted_ground == ground
+        )
+        g_fp = sum(
+            1 for r in scored
+            if r.outcome == "FP" and r.predicted_ground == ground
+        )
+        g_fn = sum(
+            1 for r in scored
+            if r.intended_ground == ground
+            and not (r.outcome == "TP" and r.predicted_ground == ground)
+            and r.intended_status == "eliminate"
+        )
+        return {
+            "tp": g_tp, "fp": g_fp, "fn": g_fn,
+            "precision": g_tp / (g_tp + g_fp) if g_tp + g_fp else None,
+            "recall": g_tp / (g_tp + g_fn) if g_tp + g_fn else None,
+        }
+
     return {
+        "grounds": {g: by_ground(g) for g in ("criteria", "document")},
         "evaluated": len(scored),
         "skipped": len(results) - len(scored),
         "tp": tp, "tn": tn, "fp": fp, "fn": fn,
@@ -306,6 +373,15 @@ def main() -> int:
           "   (of those that should be eliminated, how many were)")
     print(f"  F1                    : {_pct(summary['f1'])}")
     print(f"  Accuracy              : {_pct(summary['accuracy'])}")
+    print()
+    print("  By elimination ground (Section 5.2 makes both disqualifying, but a")
+    print("  criteria failure cannot be cured and a missing document usually can):")
+    for ground, label in (("criteria", "criteria (threshold/status)"),
+                          ("document", "document (missing enclosure)")):
+        g = summary["grounds"][ground]
+        print(f"    {label:30} precision {_pct(g['precision']):>5}  "
+              f"recall {_pct(g['recall']):>5}   TP {g['tp']} FP {g['fp']} FN {g['fn']}")
+    print()
     print(f"  Reason accuracy       : {_pct(summary['reason_accuracy'])}"
           "   (eliminated for the clause the key names)")
 

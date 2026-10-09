@@ -63,6 +63,7 @@ from app.db.models import TenderNotificationRow
 from app.db.session import session_scope
 from app.ingest.loader import parse_document
 from app.rag.answer import answer_question
+from app.rag.stats import fmt_pct_ci
 from app.rag.retrieve import retrieve
 from app.schemas.common import DocumentKind
 
@@ -211,21 +212,21 @@ def main() -> int:
     print(f"Answered (not declined)  : {len(answered)}/{len(results)}")
     if answered:
         grounded = sum(1 for r in answered if r.grounded)
-        print(f"Grounded answers         : {grounded}/{len(answered)} "
-              f"({grounded / len(answered) * 100:.1f}%)  <- has a citation, invented none")
+        print(f"Grounded answers         : {fmt_pct_ci(grounded, len(answered))}"
+              "  <- has a citation, invented none")
     print(f"Invented citations       : {invented_total}"
           "   <- stripped before display; non-zero is still a finding")
     if all_page_checks:
         ok = sum(all_page_checks)
-        print(f"Citation page truthful   : {ok}/{len(all_page_checks)} "
-              f"({ok / len(all_page_checks) * 100:.1f}%)  <- cited page really holds the text")
+        print(f"Citation page truthful   : {fmt_pct_ci(ok, len(all_page_checks))}"
+              "  <- cited page really holds the text")
     unver = sum(r.page_unverifiable for r in results)
     if unver:
         print(f"  (unverifiable pages    : {unver} -- citation carried no page)")
     if judged:
         supported = sum(1 for r in judged if r.claim_supported)
-        print(f"Labelled claim supported : {supported}/{len(judged)} "
-              f"({supported / len(judged) * 100:.1f}%)  <- fact is in a CITED chunk")
+        print(f"Labelled claim supported : {fmt_pct_ci(supported, len(judged))}"
+              "  <- fact is in a CITED chunk")
 
     bad = [r for r in results if r.answered and not r.grounded]
     if bad:

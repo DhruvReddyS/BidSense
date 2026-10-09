@@ -61,6 +61,130 @@ _JV_BUT_STILL_UNIVERSAL = re.compile(
     r"\b(?:each|every|the)\s+bidder\b|\bbidder\s*/\s*jv\b|\bbidder\s*/", re.IGNORECASE
 )
 
+class Verifiability(StrEnum):
+    """Whether the ABSENCE of this requirement can be concluded mechanically.
+
+    A separate axis from `Applicability`, which says when a requirement binds.
+    This says whether "we did not find it" is a finding at all.
+
+    Earned by measurement. On the 19-bid evaluation set four bids that should
+    pass were disqualified, and every one of them failed on a "mandatory
+    document" that no bid could ever match:
+
+        "relevant documents (copy of Work order, Completion certificate etc.)"
+        "Produce documentary evidence to prove past experience, capabilities"
+        "Experience of having successfully completed ... (i) One Work Order
+         value not less than 80% of Estimated Cost (ii) Two Work Orders ..."
+        "Legal Entity: The Bidder could be sole proprietorship /OEM/ ..."
+        "Pass-Phrase"
+
+    None of those names an artefact. They are catch-alls, instructions, the
+    eligibility conditions already checked on the numeric path, and a portal
+    credential. Matching them against a bid's enclosure list cannot succeed, so
+    treating a non-match as a missing mandatory document manufactured a
+    disqualification out of the tender's own prose.
+
+    The product already draws this distinction everywhere else -- "We could not
+    read this value. That is not the same as failing it." -- and this makes the
+    document path obey it too: an unverifiable requirement becomes the vendor's
+    own check, never an elimination.
+    """
+
+    #: Names an artefact a bidder can enclose. Absence is a real gap.
+    ENCLOSURE = "enclosure"
+    #: A condition, instruction or catch-all. Absence proves nothing.
+    UNVERIFIABLE = "unverifiable"
+
+
+#: Phrases that stand in for a category rather than a thing. A bidder cannot
+#: enclose a category, so absence of a category is not absence of a document.
+_CATCHALL_MARKERS = (
+    "any other", "all other", "relevant documents",
+    "as may be required", "as required in", "and other documents",
+    "other relevant", "among others",
+)
+
+#: "etc." alone is NOT decisive. "Bidder's Declaration regarding Banning,
+#: Liquidation etc." and "Solvency certificate from banks etc." both name a
+#: real artefact and then trail off; demoting those to a human check would
+#: discard two genuine document checks to no purpose. So a trailing "etc."
+#: makes a requirement a catch-all only when nothing concrete is named -- and
+#: the concrete noun is what name matching works on anyway.
+#: Word-boundary match, because the token appears as "etc.", "etc,", "etc "
+#: and bare "etc" at end of string -- a list of string variants missed the last.
+_TRAILING_ETC = re.compile(r"\betc\b\.?")
+
+#: Nouns that name a thing a bidder can attach.
+_DOCUMENT_NOUNS = (
+    "certificate", "declaration", "letter", "form", "affidavit", "undertaking",
+    "statement", "copy", "card", "deed", "receipt", "challan", "bill",
+    "sheet", "report", "licence", "license", "order", "agreement",
+    "resolution", "attorney", "return", "invoice", "voucher", "draft",
+    "balance sheet", "profit and loss", "registration", "authorisation",
+    "authorization", "annexure", "proforma", "schedule", "bond", "guarantee",
+)
+
+
+def _names_an_artefact(text: str) -> bool:
+    return any(noun in text for noun in _DOCUMENT_NOUNS)
+
+#: Instructions to demonstrate something, rather than names of what to attach.
+_INSTRUCTION_MARKERS = (
+    "documentary evidence to prove", "evidence to prove", "produce documentary",
+    "establishing the qualification", "to the satisfaction of",
+    "to establish that", "in support of the claim",
+)
+
+#: Threshold and status language. A requirement phrased as a test is an
+#: eligibility criterion; those are evaluated on the numeric and boolean paths,
+#: and re-checking them as paperwork puts a bidder in double jeopardy -- failing
+#: once on the figure and again on "the certificate stating the figure".
+_CONDITION_MARKERS = (
+    "not less than", "at least", "minimum of", "shall not be less",
+    "experience of having", "legal entity:", "the bidder could be",
+    "should be either of", "must have", "shall have a", "shall be a ",
+    "turnover on works", "annual turnover for", "annual turnover on",
+)
+
+#: Things that are not documents at all.
+_NON_DOCUMENT_MARKERS = (
+    "pass-phrase", "passphrase", "password", "user id", "login credential",
+    "digital signature certificate class",
+)
+
+#: An enumeration of alternatives ("(i) ... (ii) ...") is how a tender writes a
+#: criterion with options, never how it names a single enclosure.
+_OPTION_ENUMERATION = re.compile(r"\((?:i|1)\)[^)]{0,400}?\((?:ii|2)\)", re.IGNORECASE)
+
+
+def classify_verifiability(doc_name: str) -> Verifiability:
+    """Can we conclude anything from not finding this in a bid?
+
+    Deliberately conservative: everything not positively recognised as a
+    condition, instruction, catch-all or non-document stays an ENCLOSURE, so a
+    genuine missing document is still a genuine failure. The cost of a wrong
+    UNVERIFIABLE is one requirement demoted to a human check; the cost of a
+    wrong ENCLOSURE is a compliant bidder told they do not qualify.
+    """
+    text = (doc_name or "").casefold()
+    if not text.strip():
+        return Verifiability.UNVERIFIABLE
+
+    if any(marker in text for marker in _NON_DOCUMENT_MARKERS):
+        return Verifiability.UNVERIFIABLE
+    if any(marker in text for marker in _CATCHALL_MARKERS):
+        return Verifiability.UNVERIFIABLE
+    if _TRAILING_ETC.search(text) and not _names_an_artefact(text):
+        return Verifiability.UNVERIFIABLE
+    if any(marker in text for marker in _INSTRUCTION_MARKERS):
+        return Verifiability.UNVERIFIABLE
+    if any(marker in text for marker in _CONDITION_MARKERS):
+        return Verifiability.UNVERIFIABLE
+    if _OPTION_ENUMERATION.search(text):
+        return Verifiability.UNVERIFIABLE
+    return Verifiability.ENCLOSURE
+
+
 _WORD = re.compile(r"[a-z0-9]+")
 
 
@@ -179,6 +303,24 @@ class Requirement:
         names = {s.doc_name for s in self.sources}
         extra = {a for s in self.sources for a in s.aliases}
         return sorted(names | extra)
+
+    @property
+    def verifiability(self) -> "Verifiability":
+        """ENCLOSURE only if SOME clause names it as an attachable artefact.
+
+        Judged across every phrasing, taking the most favourable. A tender that
+        states a requirement loosely in a covering paragraph and precisely in
+        its checklist has still named a document, and the precise statement is
+        the one a bidder can act on -- so one ENCLOSURE phrasing makes the
+        requirement checkable, exactly as one unconditional phrasing makes it
+        binding in `deduplicate`.
+        """
+        if any(
+            classify_verifiability(source.doc_name) is Verifiability.ENCLOSURE
+            for source in self.sources
+        ):
+            return Verifiability.ENCLOSURE
+        return Verifiability.UNVERIFIABLE
 
 
 def deduplicate(documents: list[MandatoryDocument]) -> list[Requirement]:

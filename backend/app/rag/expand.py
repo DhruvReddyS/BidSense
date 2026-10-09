@@ -102,3 +102,24 @@ def expand_query(question: str, *, max_additions: int = 4) -> str:
     if not kept:
         return question
     return f"{question} {' '.join(kept)}"
+
+
+def expand_passage(text: str, *, max_additions: int = 6) -> str:
+    """The same glossary, applied to an indexed passage instead of a question.
+
+    Returned for EMBEDDING ONLY. The caller stores the original text, so
+    citations, snippets and highlight matching are untouched -- which is what
+    made this safe to do at all.
+
+    Terse table rows are why this exists. Row chunking gave each fact its own
+    vector, but a row whose label is three abbreviated tokens
+    (`11. | emd @ 1% | rs. 2,98,720.00`) has almost no semantic surface: on the
+    GHMC notice it scored 0.555 against "What is the earnest money payable",
+    below generic tender boilerplate at 0.596-0.620. Expanding the row's own
+    abbreviations lifted the same pairing to 0.631 in isolation.
+
+    Query-side expansion alone could not fix this. It widens the question
+    toward "emd", but every other chunk mentioning EMD widens with it, so the
+    terse row stayed buried; the row needed vocabulary of its own.
+    """
+    return expand_query(text, max_additions=max_additions)
