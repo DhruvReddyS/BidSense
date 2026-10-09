@@ -341,16 +341,23 @@ dialog::backdrop { background:rgba(22,21,18,.42); }
 @media(max-width:980px){.performance-pulse{grid-template-columns:1fr}.performance-pulse dl{grid-template-columns:1fr 1fr}.performance-pulse dl>div:nth-child(2){border-right:0}.performance-pulse dl>div:nth-child(-n+2){border-bottom:1px solid hsl(var(--hairline))}}
 @media(max-width:560px){.performance-pulse{padding:22px}.performance-pulse dl{grid-template-columns:1fr}.performance-pulse dl>div{border-right:0;border-bottom:1px solid hsl(var(--hairline))}}
 
-/* 2026 premium workspace — luminous depth without sacrificing dense review. */
+/* 2026 premium workspace — luminous depth without sacrificing dense review.
+   This block is UNLAYERED and last, so it wins over the @layer base palette
+   above for every token it declares; the status colours (--ok/--warn/--bad/
+   --pending/--info) are NOT declared here and still come from that earlier
+   block. Edit the effective value here, not there.
+   fg-subtle 46%/53% and accent 27% are the WCAG AA floors for this palette:
+   measured against --bg, --surface and --surface-2, the lightest values that
+   still clear 4.5:1 for text. Lightening them fails AA. */
 :root{
   --bg:220 42% 97%;--bg-alt:218 40% 94%;--surface:0 0% 100%;--surface-2:218 35% 96%;--surface-3:218 28% 91%;
-  --fg:225 42% 10%;--fg-muted:222 15% 39%;--fg-subtle:220 12% 53%;--border:220 24% 86%;--hairline:220 26% 90%;--border-strong:220 20% 68%;
-  --accent:164 82% 29%;--accent-hover:164 88% 23%;--accent-soft:162 62% 94%;--accent-border:163 42% 73%;--accent-fg:0 0% 100%;--radius:14px;
+  --fg:225 42% 10%;--fg-muted:222 15% 39%;--fg-subtle:220 12% 46%;--border:220 24% 86%;--hairline:220 26% 90%;--border-strong:220 20% 68%;
+  --accent:164 82% 27%;--accent-hover:164 88% 21%;--accent-soft:162 62% 94%;--accent-border:163 42% 73%;--accent-fg:0 0% 100%;--radius:14px;
   --luxury:42 86% 55%;--electric:228 92% 61%;--shadow-color:226 52% 13%;
 }
 [data-theme=dark]{
   --bg:228 46% 6%;--bg-alt:228 40% 8%;--surface:225 35% 10%;--surface-2:225 31% 13%;--surface-3:224 25% 19%;
-  --fg:216 42% 96%;--fg-muted:219 17% 68%;--fg-subtle:220 13% 51%;--border:223 23% 21%;--hairline:223 24% 17%;--border-strong:220 20% 34%;
+  --fg:216 42% 96%;--fg-muted:219 17% 68%;--fg-subtle:220 13% 53%;--border:223 23% 21%;--hairline:223 24% 17%;--border-strong:220 20% 34%;
   --accent:160 77% 55%;--accent-hover:160 83% 65%;--accent-soft:163 48% 14%;--accent-border:161 37% 30%;--accent-fg:228 55% 6%;--luxury:43 92% 62%;--electric:226 100% 72%;
 }
 body{background:radial-gradient(circle at 80% -10%,hsl(var(--electric)/.08),transparent 32%),radial-gradient(circle at 35% 110%,hsl(var(--accent)/.07),transparent 28%),hsl(var(--bg));}
