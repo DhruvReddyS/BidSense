@@ -35,10 +35,13 @@ score; the band only changes what a failure to match is allowed to claim.
 
 from __future__ import annotations
 
+import logging
 import re
 import threading
 from dataclasses import dataclass
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 # Cosine similarity above which two document names are treated as the same
 # document. Deliberately high: a false positive marks a missing document as
@@ -534,9 +537,27 @@ def prewarm(names: list[str]) -> None:
 
     Exposed for the gap report, which knows the whole working set before it
     starts and can therefore pay for one forward pass instead of dozens.
+
+    Failure here is deliberately swallowed. This function buys speed and
+    nothing else: every name it would cache is re-requested by
+    `match_document`, whose embedding tier is already wrapped so that an
+    unavailable model degrades to the alias and lexical tiers. Letting the
+    model's absence propagate from *here* meant the optimisation destroyed
+    the resilience of the code it was optimising -- with the BGE weights
+    unreachable, `build_gap_report` raised OSError from inside a prewarm
+    instead of producing a report from the earlier tiers, which is the whole
+    point of having them. So: no model, no speedup, same report.
     """
-    if names:
+    if not names:
+        return
+    try:
         _embed_many(tuple(names))
+    except Exception:
+        logger.warning(
+            "Could not prewarm %d document-name embedding(s); the embedding "
+            "tier will be skipped and matching falls back to the exact, alias "
+            "and lexical tiers.", len(names), exc_info=True,
+        )
 
 
 def _clear_vector_cache() -> None:

@@ -348,7 +348,16 @@ dialog::backdrop { background:rgba(22,21,18,.42); }
    block. Edit the effective value here, not there.
    fg-subtle 46%/53% and accent 27% are the WCAG AA floors for this palette:
    measured against --bg, --surface and --surface-2, the lightest values that
-   still clear 4.5:1 for text. Lightening them fails AA. */
+   still clear 4.5:1 for text. Lightening them fails AA.
+
+   Known dead code this block creates, left in place rather than removed
+   without visual verification of every page:
+   - --radius here (14px) overrides the 4px that tailwind.config.ts documents
+     as the single radius for the whole system.
+   - the @media (max-width:640px) override of --radius to 4px higher up is
+     therefore inert: this block is later and unlayered, and declares --radius
+     unconditionally with no mobile override of its own. Mobile renders 14px.
+   Consolidating the three palettes into one is the real fix. */
 :root{
   --bg:220 42% 97%;--bg-alt:218 40% 94%;--surface:0 0% 100%;--surface-2:218 35% 96%;--surface-3:218 28% 91%;
   --fg:225 42% 10%;--fg-muted:222 15% 39%;--fg-subtle:220 12% 46%;--border:220 24% 86%;--hairline:220 26% 90%;--border-strong:220 20% 68%;

@@ -126,6 +126,7 @@ def test_the_lexical_tier_runs_before_the_model() -> None:
 # --------------------------------------------------------------------------- #
 # The review band
 # --------------------------------------------------------------------------- #
+@pytest.mark.needs_embeddings   # the review band IS the embedding tier
 def test_a_near_miss_is_offered_for_review_not_reported_missing() -> None:
     result = match_document(
         "Authorization to represent the firm",
@@ -164,6 +165,7 @@ def _prov() -> Provenance:
     return Provenance(clause_ref="7", source_page=3, source_snippet="x")
 
 
+@pytest.mark.needs_embeddings   # the review band IS the embedding tier
 def test_the_gap_report_renders_a_near_miss_as_partial_not_missing() -> None:
     report = build_gap_report(
         TenderNotification(
@@ -368,3 +370,41 @@ def test_an_explicitly_unenclosed_document_beats_a_near_miss_candidate() -> None
     assert item.status is CheckStatus.MISSING
     assert item.severity is Severity.DISQUALIFYING
     assert "not enclosed" in item.explanation.lower()
+
+
+def test_a_gap_report_still_builds_when_the_embedding_model_is_unavailable(
+    monkeypatch,
+):
+    """prewarm() buys speed; its failure must not cost a report.
+
+    match_document's embedding tier is already wrapped so an unloadable model
+    degrades to the exact, alias and lexical tiers. The prewarm optimisation
+    added later was not wrapped, and gap.py calls it unguarded -- so with the
+    BGE weights unreachable, build_gap_report raised OSError from inside an
+    optimisation instead of producing the report the earlier tiers can still
+    produce. Offline runs and any environment that blocks huggingface.co hit
+    exactly this.
+    """
+    from app.compliance import matching
+
+    calls = {"n": 0}
+
+    def unavailable(*_args, **_kwargs):
+        calls["n"] += 1
+        raise OSError(
+            "We couldn't connect to 'https://huggingface.co' to load the files"
+        )
+
+    monkeypatch.setattr(matching, "_embed_many", unavailable)
+
+    # The optimisation must absorb it ...
+    matching.prewarm(["Power of Attorney", "GST Registration Certificate"])
+    assert calls["n"] == 1, "prewarm should have attempted the batch"
+
+    # ... and the matcher must still resolve what the earlier tiers can.
+    result = matching.match_document(
+        "GST Registration Certificate",
+        ["GST Registration Certificate", "PAN Card"],
+    )
+    assert result.matched, "an exact name must still match with no model"
+    assert result.method == "exact"
