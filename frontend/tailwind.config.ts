@@ -32,8 +32,11 @@ const config: Config = {
         ],
         display: ["var(--font-display)", "Georgia", "Times New Roman", "serif"],
       },
-      // One radius. Every scale step resolves to the same near-sharp value, so
-      // an accidental rounded-lg somewhere cannot reintroduce a second radius.
+      // One radius. Every scale step resolves to --radius, so an accidental
+      // rounded-lg somewhere cannot reintroduce a second one. The value lives
+      // in globals.css and is currently 14px: this comment used to describe a
+      // "near-sharp" 4px that a second, unlayered palette had been overriding
+      // since before the invariant was written down.
       borderRadius: {
         DEFAULT: "var(--radius)",
         sm: "var(--radius)",

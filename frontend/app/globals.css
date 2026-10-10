@@ -3,41 +3,159 @@
 @tailwind utilities;
 
 @layer base {
+  /* THE palette. One :root, one dark block, and both inside @layer base.
+     They were previously three of each: two sat outside the layer, unlayered
+     CSS beats layered CSS, and the last one won -- so the documented palette
+     was dead for every token a later block redeclared, the "one radius"
+     invariant below was silently 14px rather than 4px, and a contrast fix
+     applied to the obvious place had no effect at all.
+     Consolidated by computing the effective value of all 44 tokens under the
+     real cascade and asserting the merged result is identical, so the rendered
+     output did not change. The layer placement is load-bearing:
+     [data-density="compact"] also sets tokens and is layered, so an unlayered
+     :root here would outrank it and break compact mode. */
   :root {
     color-scheme: light;
-    --bg: 42 24% 97%; --bg-alt: 40 18% 94%; --surface: 40 33% 99.5%;
-    --surface-2: 40 18% 95%; --surface-3: 38 13% 89%; --border: 38 12% 84%;
-    --border-strong: 35 10% 67%; --hairline: 38 12% 86%;
-    --fg: 224 37% 12%; --fg-muted: 222 10% 39%; --fg-subtle: 220 8% 55%;
-    --accent: 225 84% 49%; --accent-hover: 224 82% 42%; --accent-fg: 0 0% 100%;
-    --accent-soft: 225 58% 96%; --accent-border: 224 39% 78%;
-    --ok: 158 70% 28%; --ok-soft: 156 57% 94%; --ok-border: 156 42% 77%;
-    --warn: 32 92% 39%; --warn-soft: 38 100% 94%; --warn-border: 36 77% 76%;
-    --pending: 202 87% 37%; --pending-soft: 201 100% 94%; --pending-border: 201 71% 77%;
-    --bad: 349 72% 43%; --bad-soft: 350 100% 96%; --bad-border: 350 66% 82%;
-    --info: 226 80% 48%; --info-soft: 226 100% 96%; --info-border: 226 78% 82%;
-    --neutral-soft: 222 30% 95%; --neutral-border: 222 20% 83%;
-    --shadow-color: 224 30% 14%; --radius: 4px;
-    --tight: .375rem; --group: 1rem; --section: 3rem;
-    --row-y: .9rem; --row-x: 1.15rem; --stack: 1.15rem; --card-p: 1.25rem;
+
+    /* Surfaces, back to front */
+    --bg: 220 42% 97%;
+    --bg-alt: 218 40% 94%;
+    --surface: 0 0% 100%;
+    --surface-2: 218 35% 96%;
+    --surface-3: 218 28% 91%;
+
+    /* Lines */
+    --border: 220 24% 86%;
+    --border-strong: 220 20% 68%;
+    --hairline: 220 26% 90%;
+
+    /* Text */
+    --fg: 225 42% 10%;
+    --fg-muted: 222 15% 39%;
+    --fg-subtle: 220 12% 46%;
+
+    /* Accent */
+    --accent: 164 82% 27%;
+    --accent-hover: 164 88% 21%;
+    --accent-fg: 0 0% 100%;
+    --accent-soft: 162 62% 94%;
+    --accent-border: 163 42% 73%;
+
+    /* Status: pass */
+    --ok: 145 7% 42%;
+    --ok-soft: 156 57% 94%;
+    --ok-border: 156 42% 77%;
+
+    /* Status: warning */
+    --warn: 34 57% 35%;
+    --warn-soft: 38 40% 94%;
+    --warn-border: 36 77% 76%;
+
+    /* Status: outstanding */
+    --pending: 202 24% 38%;
+    --pending-soft: 200 20% 94%;
+    --pending-border: 200 20% 76%;
+
+    /* Status: does not qualify */
+    --bad: 6 59% 40%;
+    --bad-soft: 350 100% 96%;
+    --bad-border: 350 66% 82%;
+
+    /* Status: informational */
+    --info: 226 80% 48%;
+    --info-soft: 226 100% 96%;
+    --info-border: 226 78% 82%;
+
+    /* Neutral chip */
+    --neutral-soft: 222 30% 95%;
+    --neutral-border: 222 20% 83%;
+
+    /* Decorative accents */
+    --luxury: 42 86% 55%;
+    --electric: 228 92% 61%;
+
+    /* Depth */
+    --shadow-color: 226 52% 13%;
+
+    /* Geometry */
+    --radius: 14px;
+
+    /* Spacing scale */
+    --tight: .375rem;
+    --group: 1rem;
+    --section: 3rem;
+
+    /* Row and card rhythm (overridden by [data-density]) */
+    --row-y: .9rem;
+    --row-x: 1.15rem;
+    --stack: 1.15rem;
+    --card-p: 1.25rem;
   }
 
   [data-density="compact"] { --row-y:.55rem; --row-x:.85rem; --stack:.75rem; --card-p:.9rem; }
 
   [data-theme="dark"] {
     color-scheme: dark;
-    --bg: 228 48% 6%; --bg-alt: 227 43% 8%; --surface: 226 37% 11%;
-    --surface-2: 226 32% 14%; --surface-3: 224 26% 20%; --border: 224 26% 20%;
-    --border-strong: 222 22% 32%; --hairline: 224 27% 18%;
-    --fg: 218 45% 96%; --fg-muted: 220 16% 67%; --fg-subtle: 221 13% 48%;
-    --accent: 222 100% 66%; --accent-hover: 218 100% 72%; --accent-fg: 228 55% 8%;
-    --accent-soft: 225 58% 18%; --accent-border: 223 45% 35%;
-    --ok: 157 63% 57%; --ok-soft: 158 42% 13%; --ok-border: 158 33% 27%;
-    --warn: 39 95% 64%; --warn-soft: 37 44% 14%; --warn-border: 38 40% 30%;
-    --pending: 197 94% 66%; --pending-soft: 201 47% 15%; --pending-border: 200 37% 30%;
-    --bad: 351 88% 69%; --bad-soft: 351 42% 15%; --bad-border: 351 38% 31%;
-    --info: 220 100% 72%; --info-soft: 225 58% 18%; --info-border: 223 45% 35%;
-    --neutral-soft: 225 25% 15%; --neutral-border: 224 21% 26%; --shadow-color: 232 70% 2%;
+
+    /* Surfaces, back to front */
+    --bg: 228 46% 6%;
+    --bg-alt: 228 40% 8%;
+    --surface: 225 35% 10%;
+    --surface-2: 225 31% 13%;
+    --surface-3: 224 25% 19%;
+
+    /* Lines */
+    --border: 223 23% 21%;
+    --border-strong: 220 20% 34%;
+    --hairline: 223 24% 17%;
+
+    /* Text */
+    --fg: 216 42% 96%;
+    --fg-muted: 219 17% 68%;
+    --fg-subtle: 220 13% 53%;
+
+    /* Accent */
+    --accent: 160 77% 55%;
+    --accent-hover: 160 83% 65%;
+    --accent-fg: 228 55% 6%;
+    --accent-soft: 163 48% 14%;
+    --accent-border: 161 37% 30%;
+
+    /* Status: pass */
+    --ok: 142 7% 60%;
+    --ok-soft: 158 42% 13%;
+    --ok-border: 158 33% 27%;
+
+    /* Status: warning */
+    --warn: 38 47% 68%;
+    --warn-soft: 38 15% 16%;
+    --warn-border: 38 40% 30%;
+
+    /* Status: outstanding */
+    --pending: 201 24% 69%;
+    --pending-soft: 201 13% 16%;
+    --pending-border: 201 13% 32%;
+
+    /* Status: does not qualify */
+    --bad: 7 65% 70%;
+    --bad-soft: 7 20% 16%;
+    --bad-border: 351 38% 31%;
+
+    /* Status: informational */
+    --info: 220 100% 72%;
+    --info-soft: 225 58% 18%;
+    --info-border: 223 45% 35%;
+
+    /* Neutral chip */
+    --neutral-soft: 225 25% 15%;
+    --neutral-border: 224 21% 26%;
+
+    /* Decorative accents */
+    --luxury: 43 92% 62%;
+    --electric: 226 100% 72%;
+
+    /* Depth */
+    --shadow-color: 40 10% 3%;
   }
 
   * { border-color: hsl(var(--border)); }
@@ -123,25 +241,12 @@
   .stagger>*:nth-child(1){animation-delay:.03s}.stagger>*:nth-child(2){animation-delay:.09s}.stagger>*:nth-child(3){animation-delay:.15s}.stagger>*:nth-child(4){animation-delay:.21s}.stagger>*:nth-child(5){animation-delay:.27s}.stagger>*:nth-child(6){animation-delay:.33s}
 }
 
-@media (max-width:640px){:root{--radius:4px}.brand-logo-window{width:142px;height:28px}.brand-logo-window img{width:178px;left:-18px;top:-31px}}
+@media (max-width:640px){.brand-logo-window{width:142px;height:28px}.brand-logo-window img{width:178px;left:-18px;top:-31px}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 
 /* BidSense workspace: paper, ink and precise source references. */
-:root {
-  --bg: 42 27% 97%; --surface: 40 33% 99%; --surface-2: 40 18% 94%; --surface-3: 38 14% 89%;
-  --fg: 45 10% 16%; --fg-muted: 40 7% 40%; --fg-subtle: 40 5% 47%;
-  --border: 40 13% 84%; --hairline: 40 15% 88%; --accent: 151 18% 28%; --accent-hover: 151 20% 23%;
-  --accent-soft: 145 12% 92%; --accent-border: 148 13% 72%; --accent-fg: 40 33% 98%;
-  --ok: 145 7% 42%; --pending: 202 24% 38%; --pending-soft: 200 20% 94%; --pending-border: 200 20% 76%;
-  --warn: 34 57% 35%; --warn-soft: 38 40% 94%; --bad: 6 59% 40%; --radius: 4px;
-}
-[data-theme="dark"] {
-  --bg: 40 6% 10%; --bg-alt: 40 6% 9%; --surface: 40 6% 13%; --surface-2: 40 5% 16%; --surface-3: 40 5% 22%;
-  --fg: 40 18% 91%; --fg-muted: 40 8% 66%; --fg-subtle: 40 6% 57%; --border: 40 5% 25%; --hairline: 40 5% 21%;
-  --border-strong: 40 7% 40%; --accent: 146 19% 69%; --accent-hover: 146 22% 78%; --accent-soft: 146 9% 18%; --accent-border: 146 12% 35%; --accent-fg: 40 8% 11%;
-  --ok: 142 7% 60%; --pending: 201 24% 69%; --pending-soft: 201 13% 16%; --pending-border: 201 13% 32%;
-  --warn: 38 47% 68%; --warn-soft: 38 15% 16%; --bad: 7 65% 70%; --bad-soft: 7 20% 16%; --shadow-color: 40 10% 3%;
-}
+
+
 .skip-link { position:fixed; top:-100px; left:16px; z-index:100; padding:12px; background:hsl(var(--surface)); }
 .skip-link:focus { top:10px; }
 .workspace-rail { position:fixed; inset:0 auto 0 0; width:216px; background:hsl(var(--surface-2)); border-right:1px solid hsl(var(--border)); padding:30px 17px 18px; z-index:35; display:flex; flex-direction:column; }
@@ -342,33 +447,11 @@ dialog::backdrop { background:rgba(22,21,18,.42); }
 @media(max-width:560px){.performance-pulse{padding:22px}.performance-pulse dl{grid-template-columns:1fr}.performance-pulse dl>div{border-right:0;border-bottom:1px solid hsl(var(--hairline))}}
 
 /* 2026 premium workspace — luminous depth without sacrificing dense review.
-   This block is UNLAYERED and last, so it wins over the @layer base palette
-   above for every token it declares; the status colours (--ok/--warn/--bad/
-   --pending/--info) are NOT declared here and still come from that earlier
-   block. Edit the effective value here, not there.
-   fg-subtle 46%/53% and accent 27% are the WCAG AA floors for this palette:
-   measured against --bg, --surface and --surface-2, the lightest values that
-   still clear 4.5:1 for text. Lightening them fails AA.
+   Component styles only. The palette this depended on used to be redeclared
+   here, in a second unlayered :root that beat the documented one in @layer
+   base; there is now exactly one palette, at the top of this file. */
 
-   Known dead code this block creates, left in place rather than removed
-   without visual verification of every page:
-   - --radius here (14px) overrides the 4px that tailwind.config.ts documents
-     as the single radius for the whole system.
-   - the @media (max-width:640px) override of --radius to 4px higher up is
-     therefore inert: this block is later and unlayered, and declares --radius
-     unconditionally with no mobile override of its own. Mobile renders 14px.
-   Consolidating the three palettes into one is the real fix. */
-:root{
-  --bg:220 42% 97%;--bg-alt:218 40% 94%;--surface:0 0% 100%;--surface-2:218 35% 96%;--surface-3:218 28% 91%;
-  --fg:225 42% 10%;--fg-muted:222 15% 39%;--fg-subtle:220 12% 46%;--border:220 24% 86%;--hairline:220 26% 90%;--border-strong:220 20% 68%;
-  --accent:164 82% 27%;--accent-hover:164 88% 21%;--accent-soft:162 62% 94%;--accent-border:163 42% 73%;--accent-fg:0 0% 100%;--radius:14px;
-  --luxury:42 86% 55%;--electric:228 92% 61%;--shadow-color:226 52% 13%;
-}
-[data-theme=dark]{
-  --bg:228 46% 6%;--bg-alt:228 40% 8%;--surface:225 35% 10%;--surface-2:225 31% 13%;--surface-3:224 25% 19%;
-  --fg:216 42% 96%;--fg-muted:219 17% 68%;--fg-subtle:220 13% 53%;--border:223 23% 21%;--hairline:223 24% 17%;--border-strong:220 20% 34%;
-  --accent:160 77% 55%;--accent-hover:160 83% 65%;--accent-soft:163 48% 14%;--accent-border:161 37% 30%;--accent-fg:228 55% 6%;--luxury:43 92% 62%;--electric:226 100% 72%;
-}
+
 body{background:radial-gradient(circle at 80% -10%,hsl(var(--electric)/.08),transparent 32%),radial-gradient(circle at 35% 110%,hsl(var(--accent)/.07),transparent 28%),hsl(var(--bg));}
 .workspace-aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}.workspace-aurora i{position:absolute;border-radius:999px;filter:blur(80px);opacity:.09;animation:aurora-drift 18s ease-in-out infinite alternate}.workspace-aurora i:nth-child(1){width:38vw;height:38vw;right:-12vw;top:-18vw;background:hsl(var(--electric))}.workspace-aurora i:nth-child(2){width:30vw;height:30vw;left:16vw;bottom:-20vw;background:hsl(var(--accent));animation-delay:-7s}.workspace-aurora i:nth-child(3){width:14vw;height:14vw;right:24vw;top:38vh;background:hsl(var(--luxury));opacity:.035;animation-delay:-12s}@keyframes aurora-drift{to{transform:translate3d(2vw,3vh,0) scale(1.08)}}
 .workspace-rail{width:236px;padding:28px 19px 20px;background:linear-gradient(180deg,hsl(var(--surface)/.88),hsl(var(--surface-2)/.82));border-right:1px solid hsl(var(--border)/.8);box-shadow:18px 0 50px -44px hsl(var(--shadow-color)/.5);backdrop-filter:blur(28px) saturate(1.25)}.workspace-content{margin-left:236px}.workspace-brand{font-size:24px}.workspace-brand svg{filter:drop-shadow(0 7px 12px hsl(var(--accent)/.24))}.brand-period{color:hsl(var(--accent));text-shadow:0 0 18px hsl(var(--accent)/.55)}

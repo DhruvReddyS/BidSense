@@ -3,12 +3,13 @@
 This lives in the backend suite because that is the suite that runs; it reads
 the frontend stylesheet as data and never imports anything from it.
 
-It exists because the stylesheet carries three `:root` blocks. Two sit outside
-`@layer base`, unlayered CSS beats layered CSS, and the last unlayered block
-wins -- so the carefully documented first palette is NOT what renders, and a
-contrast fix applied there would have no effect at all. The merge below
-reproduces that cascade, which is the only way to check the colours a user
-actually sees.
+It exists because the stylesheet used to carry three `:root` blocks. Two sat
+outside `@layer base`, unlayered CSS beats layered CSS, and the last unlayered
+block won -- so the documented palette was not what rendered, and a contrast fix
+applied there had no effect at all. They have since been consolidated into one,
+but the merge below still reproduces the cascade rather than reading a single
+block: it is what would catch a second palette being reintroduced, which is the
+failure this file was written for.
 
 WCAG 2.1 AA: 4.5:1 for normal text. Decorative separators are deliberately not
 checked -- the 3:1 rule covers UI components that convey state or bounds, not
