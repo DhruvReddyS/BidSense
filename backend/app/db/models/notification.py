@@ -87,11 +87,25 @@ class TenderNotificationRow(Base, UUIDPrimaryKey, Timestamps):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
 
+    # Ordered explicitly. Section 6 documents a corrigendum's field_path as a
+    # dotted path with an index ("eligibility_criteria[0].threshold_amount"),
+    # and without order_by the database returns these rows in whatever order it
+    # likes -- so index 0 was not a stable identity and a positional amendment
+    # could edit a different criterion on a later run. app.review.impact
+    # resolves amendments by clause and value rather than position for that
+    # reason, but an undefined order is a latent bug regardless: it also makes
+    # gap reports and exports non-deterministic between runs.
     eligibility_criteria: Mapped[list["EligibilityCriterionRow"]] = relationship(
-        back_populates="notification", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="notification", cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="(EligibilityCriterionRow.source_page, "
+                 "EligibilityCriterionRow.clause_ref, EligibilityCriterionRow.id)",
     )
     mandatory_documents: Mapped[list["MandatoryDocumentRow"]] = relationship(
-        back_populates="notification", cascade="all, delete-orphan", lazy="selectin"
+        back_populates="notification", cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="(MandatoryDocumentRow.source_page, "
+                 "MandatoryDocumentRow.doc_name, MandatoryDocumentRow.id)",
     )
     corrigenda: Mapped[list["CorrigendumRow"]] = relationship(
         back_populates="notification", cascade="all, delete-orphan", lazy="selectin"

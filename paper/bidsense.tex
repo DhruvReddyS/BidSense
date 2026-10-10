@@ -121,6 +121,13 @@ it.
   baseline --- together with an explicit statement of the sample size at which
   that claim becomes provable, which our present corpus does not reach
   (Sections~\ref{sec:results} and \ref{sec:threats}).
+  \item \textbf{Amendment impact propagation with a retroactivity rule.} A
+  corrigendum that tightens eligibility after the submission deadline cannot be
+  answered by any bidder, so re-deciding against it is a decision about
+  fairness and not only about arithmetic. We model that asymmetry explicitly:
+  retroactive relaxations are applied, retroactive exclusions are surfaced for
+  human authorisation and never written automatically
+  (Section~\ref{sec:corrigendum}).
 \end{enumerate}
 
 \section{Related Work}
@@ -326,6 +333,52 @@ document.
 \textit{Measurement.} The two grounds have very different accuracy, and
 Section~\ref{sec:results} shows that blending them misattributed every error in
 the system to the wrong component.
+
+\subsection{Amendment impact propagation}
+\label{sec:corrigendum}
+
+A corrigendum is the most consequential event in a live tender. An amendment
+raising a turnover floor from Rs~3~Cr to Rs~5~Cr does not merely edit a
+document: bidders who qualified no longer do, and a committee that opens bids
+without propagating the change is evaluating against rules the bidders never
+saw. Three properties of this problem are not obvious.
+
+\textbf{Positional paths are not identities.} An amendment is recorded as a
+dotted path such as \texttt{eligibility\_criteria[0].threshold\_amount}. The
+stored requirement rows had no declared ordering, so index~0 denoted whichever
+row the database happened to return first, and a positional amendment could
+edit a different criterion on a later run. We resolve amendments by identity
+instead --- the clause the amendment cites, then the value it states it is
+replacing --- and treat the index as a hint of last resort. An amendment whose
+stated old value matches nothing stored is reported as a \emph{conflict} rather
+than guessed at, because that normally means the tender has already been
+amended once and this corrigendum was drafted against the original.
+
+\textbf{Relaxation and tightening are not symmetric.} Reinstating a bidder
+excluded in error is always safe. Excluding one who previously qualified is not.
+We additionally treat a change of \emph{clause} under an unchanged verdict as
+reportable: the clause is what a bidder would contest, so substituting it
+silently removes their grounds for challenge.
+
+\textbf{Timing decides whether recomputation is legitimate at all.} An
+amendment issued \emph{before} the submission deadline forms part of the
+tender; bidders can read it and respond, and re-deciding is simply correct. One
+issued \emph{after} the deadline cannot be answered by anyone. A bid prepared
+against the published rules is being judged against a requirement that did not
+exist when it was prepared, and whether that is permissible is a question for a
+procurement committee, not a pipeline. Our implementation therefore partitions
+on the conjunction of \emph{retroactive} and \emph{adverse}: a retroactive
+relaxation is applied without ceremony, while a retroactive exclusion is
+assessed, reported, and left unwritten, with the corrigendum remaining visibly
+outstanding rather than quietly absorbed.
+
+Assessment is separated from application. The system applies a proposed
+amendment inside a database savepoint, re-runs the rule engine over every
+affected bid, records the resulting flips, and rolls back --- so ``what would
+this amendment do?'' is answerable without changing a verdict. The same
+assessment is exposed as a read-only endpoint, since the practical question a
+reviewer asks on receiving a corrigendum is precisely which bidders it moves
+and who must be notified.
 
 \section{Evaluation Methodology}
 \label{sec:method-eval}

@@ -254,6 +254,50 @@ class CorrigendumOut(BaseModel):
     applied: bool = False
 
 
+class BidImpactOut(BaseModel):
+    """One bidder's standing before and after a proposed amendment."""
+
+    vendor_id: str
+    before_status: str
+    after_status: str
+    before_clause: str | None = None
+    after_clause: str | None = None
+    direction: str
+    needs_notice: bool
+    description: str
+
+
+class ChangeOutcomeOut(BaseModel):
+    field_path: str
+    label: str
+    outcome: str
+    detail: str = ""
+
+
+class CorrigendumImpactOut(BaseModel):
+    """What an amendment would do, computed without applying it (5.6).
+
+    `requires_human_review` is the field that matters. It is set when the
+    amendment was issued after the submission deadline AND would newly
+    eliminate a bidder: a bid prepared against the rules as published cannot
+    answer a requirement that did not exist at submission time, so excluding it
+    is a committee's decision rather than a pipeline's. A retroactive
+    relaxation is not flagged, because it can only help the bidder.
+    """
+
+    corrigendum_id: str
+    issued_date: date | None = None
+    submission_deadline: date | None = None
+    is_retroactive: bool
+    requires_human_review: bool
+    applied: bool
+    summary: str
+    changes: list[ChangeOutcomeOut] = Field(default_factory=list)
+    impacts: list[BidImpactOut] = Field(default_factory=list)
+    notify: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class StalenessOut(BaseModel):
     """Section 5.6, Part 1 slice: the tender moved, the report has not.
 

@@ -37,6 +37,9 @@ from app.api.schemas import (
     AskResponse,
     ChangedFieldOut,
     CompletionOut,
+    BidImpactOut,
+    ChangeOutcomeOut,
+    CorrigendumImpactOut,
     CorrigendumOut,
     DataQualityOut,
     ValidationFindingOut,
@@ -69,6 +72,7 @@ from app.db.models import IngestJob, JobKind, JobStatus
 from app.compliance.gap import build_gap_report
 from app.compliance.elimination import decide
 from app.corrigendum.diff import FIELD_LABELS
+from app.review.impact import assess as assess_corrigendum
 from app.corrigendum.staleness import mark_report_generated, staleness_for
 from app.extraction.validate import (
     Finding,
@@ -808,6 +812,70 @@ def get_corrigenda(tender_id: str, session: Session = Depends(get_db)):
         )
         for c in sorted(row.corrigenda, key=lambda c: c.created_at, reverse=True)
     ]
+
+
+@router.get(
+    "/notifications/{tender_id:path}/corrigenda/{corrigendum_id}/impact",
+    response_model=CorrigendumImpactOut,
+)
+def get_corrigendum_impact(
+    tender_id: str,
+    corrigendum_id: str,
+    session: Session = Depends(get_db),
+    reviewer=Depends(reviewer_user),
+):
+    """What would this amendment do to the bids already evaluated? (5.6)
+
+    Read-only: the assessment applies the amendment inside a savepoint, reads
+    the consequence and rolls back, so this endpoint answers "what if" without
+    changing a single verdict. Reviewer-only, because the answer names every
+    bidder's standing.
+
+    The field to read first is `requires_human_review`. An amendment issued
+    after the submission deadline that would newly eliminate a bidder is not
+    applied automatically, and this is where that shows up.
+    """
+    row = require_notification(session, tender_id)
+    corrigendum = next(
+        (c for c in row.corrigenda if c.corrigendum_id == corrigendum_id), None
+    )
+    if corrigendum is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"No corrigendum {corrigendum_id!r} on tender {tender_id!r}",
+        )
+
+    impact = assess_corrigendum(session, row, corrigendum)
+    return CorrigendumImpactOut(
+        corrigendum_id=impact.corrigendum_id,
+        issued_date=impact.issued_date,
+        submission_deadline=impact.submission_deadline,
+        is_retroactive=impact.is_retroactive,
+        requires_human_review=impact.requires_human_review,
+        applied=corrigendum.applied,
+        summary=impact.summary(),
+        changes=[
+            ChangeOutcomeOut(
+                field_path=c.field_path,
+                label=_field_label(c.field_path),
+                outcome=c.outcome.value,
+                detail=c.detail,
+            )
+            for c in impact.changes
+        ],
+        impacts=[
+            BidImpactOut(
+                vendor_id=i.vendor_id,
+                before_status=i.before_status, after_status=i.after_status,
+                before_clause=i.before_clause, after_clause=i.after_clause,
+                direction=i.direction.value, needs_notice=i.needs_notice,
+                description=i.describe(),
+            )
+            for i in impact.impacts
+        ],
+        notify=[i.vendor_id for i in impact.notify],
+        warnings=impact.warnings,
+    )
 
 
 def _field_label(field_path: str) -> str:
