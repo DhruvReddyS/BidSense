@@ -152,6 +152,54 @@ export interface Corrigendum {
   source_file: string | null;
   uploaded_at: string;
   changed_fields: ChangedField[];
+  /** Whether the diff has been propagated to the affected evaluations. False
+   *  also covers "assessed and deliberately withheld": an amendment issued
+   *  after the deadline that would newly exclude a bidder is left outstanding
+   *  for a committee rather than applied. */
+  applied: boolean;
+}
+
+/** One bidder's standing before and after a proposed amendment. */
+export interface BidImpact {
+  vendor_id: string;
+  before_status: string;
+  after_status: string;
+  before_clause: string | null;
+  after_clause: string | null;
+  /** newly_eliminated | reinstated | reason_changed | unchanged */
+  direction: string;
+  needs_notice: boolean;
+  description: string;
+}
+
+export interface ChangeOutcome {
+  field_path: string;
+  label: string;
+  /** applied | conflict | ambiguous | unsupported */
+  outcome: string;
+  detail: string;
+}
+
+/** What an amendment would do, computed without applying it.
+ *
+ *  `requires_human_review` is the field that matters. It is set when the
+ *  amendment was issued AFTER the submission deadline and would newly eliminate
+ *  a bidder: a bid prepared against the published rules cannot answer a
+ *  requirement that did not exist when it was written, so excluding it is a
+ *  committee's decision rather than the system's. A retroactive relaxation is
+ *  not flagged, because it can only help the bidder. */
+export interface CorrigendumImpact {
+  corrigendum_id: string;
+  issued_date: string | null;
+  submission_deadline: string | null;
+  is_retroactive: boolean;
+  requires_human_review: boolean;
+  applied: boolean;
+  summary: string;
+  changes: ChangeOutcome[];
+  impacts: BidImpact[];
+  notify: string[];
+  warnings: string[];
 }
 
 export interface Citation {

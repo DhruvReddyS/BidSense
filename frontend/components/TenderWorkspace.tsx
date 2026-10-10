@@ -3,15 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { TenderDetail } from "@/lib/types";
+import { Amendments } from "./Amendments";
 import { AskPanel } from "./AskPanel";
 import { BidChecker } from "./BidChecker";
 import { RequirementsView } from "./RequirementsView";
 
-type Tab = "check" | "requirements" | "ask";
+type Tab = "check" | "requirements" | "amendments" | "ask";
 
 const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: "check", label: "Check my bid", hint: "Upload a bid and see the gaps" },
   { key: "requirements", label: "Requirements", hint: "What this tender asks for" },
+  {
+    key: "amendments",
+    label: "Amendments",
+    hint: "Corrigenda filed, and which bidders each one moves",
+  },
   { key: "ask", label: "Ask", hint: "Questions answered from the document" },
 ];
 
@@ -57,6 +63,7 @@ export function TenderWorkspace({
           <BidChecker tenderId={tender.tender_id} bids={bids} />
         )}
         {tab === "requirements" && <RequirementsView tender={tender} />}
+        {tab === "amendments" && <Amendments tenderId={tender.tender_id} />}
         {tab === "ask" && <AskPanel tenderId={tender.tender_id} />}
       </div>
     </div>

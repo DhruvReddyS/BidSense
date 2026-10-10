@@ -1,6 +1,7 @@
 import type {
   AskResponse,
   Corrigendum,
+  CorrigendumImpact,
   GapReportResponse,
   Health,
   JobAccepted,
@@ -92,6 +93,15 @@ export const api = {
         acknowledge_amendments: acknowledgeAmendments,
       }),
     }),
+
+  /** What an amendment would do to bids already evaluated. Read-only: the
+   *  backend applies it inside a savepoint and rolls back, so asking never
+   *  changes a verdict. */
+  corrigendumImpact: (tenderId: string, corrigendumId: string) =>
+    request<CorrigendumImpact>(
+      `/api/notifications/${encodeURIComponent(tenderId)}/corrigenda/` +
+        `${encodeURIComponent(corrigendumId)}/impact`,
+    ),
 
   corrigenda: (tenderId: string) =>
     request<Corrigendum[]>(
