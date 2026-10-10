@@ -467,3 +467,123 @@ body{background:radial-gradient(circle at 80% -10%,hsl(var(--electric)/.08),tran
 @media(max-width:1100px){.workspace-rail{width:198px}.workspace-content{margin-left:198px}.workspace-main{padding:32px}.workspace-topbar{padding:0 30px}}
 @media(max-width:760px){.workspace-rail{width:100%;border-radius:0}.workspace-content{margin-left:0}.workspace-main{padding:24px 18px}.workspace-topbar{padding:0 18px}.topbar-actions .chip{display:none}.lux-hero{padding:34px 25px;border-radius:19px}.lux-hero-actions{justify-items:start}.lux-stats{border-radius:15px}.lux-upload-card{padding:24px}.workspace-aurora i{opacity:.055}}
 @media(prefers-reduced-motion:reduce){.workspace-aurora i,.document-process::after{animation:none}.btn-primary::after{display:none}}
+
+/* --------------------------------------------------------------------------
+   Press feedback, translucency and contrast preferences, and the animations
+   that were still running under reduced motion.
+
+   Audited against Apple's fluid-interface guidance. Three findings applied:
+
+   1. RESPOND ON POINTER-DOWN, NOT ON RELEASE. Every interactive surface here
+      had a :hover state and only .btn had an :active one, so a press showed
+      nothing until the click resolved -- which reads as a dead control. The
+      transforms are deliberately tiny (1px / 0.5%): on a dense review table a
+      visible squash would be noise, but zero feedback is worse.
+
+   2. TRANSLUCENCY AND CONTRAST ARE USER PREFERENCES. This design carries six
+      backdrop-filter surfaces, and a reader who asks for reduced transparency
+      was getting 28px of blur regardless. Reduced transparency makes the
+      material frosty-to-solid; increased contrast goes further and gives every
+      floating layer a defined edge.
+
+   3. REDUCED MOTION WAS INCOMPLETE. Four animations escaped it. Two mattered:
+      `rise` drives .stagger > *, so every page entry still moved, and
+      `shimmer` is a looping skeleton oscillation, which is exactly the slow
+      repeating motion that guidance names. Reduced motion does not mean no
+      feedback, so the skeleton keeps a static tint rather than losing its
+      "loading" meaning.
+   -------------------------------------------------------------------------- */
+
+/* 1. Press feedback ------------------------------------------------------- */
+.rail-link:active,
+.command-option:active,
+.query-suggestions button:active,
+.register-filters button:active,
+.density-control button:active {
+  transform: translateY(1px);
+  transition: transform 90ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.card-hover:active,
+.lux-table > a:active,
+.requirement-row:active,
+.reviewer-row:active {
+  transform: scale(.995);
+  transition: transform 90ms cubic-bezier(.2, .8, .2, 1);
+}
+
+/* A citation is a navigation affordance; it should feel pressed too. */
+.cited:active { opacity: .82; }
+
+/* Tabs and the expand toggles are rendered with utility classes, so they are
+   reached by role rather than by a class of their own. */
+[role="tab"]:active,
+.expand-button:active,
+.topbar-command:active {
+  transform: translateY(1px);
+  transition: transform 90ms cubic-bezier(.2, .8, .2, 1);
+}
+
+/* 2. Translucency and contrast preferences -------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+  .workspace-rail,
+  .workspace-topbar,
+  .workspace-footer,
+  .lux-stats,
+  .lux-table,
+  .btn-ghost,
+  .input,
+  .workspace-search,
+  .citation-peek,
+  .command-dialog,
+  .help-dialog {
+    backdrop-filter: none;
+    background: hsl(var(--surface));
+  }
+  /* The aurora is decoration over content; without blur it is just haze. */
+  .workspace-aurora { display: none; }
+  body { background: hsl(var(--bg)); }
+}
+
+@media (prefers-contrast: more) {
+  .workspace-rail,
+  .workspace-topbar,
+  .lux-stats,
+  .lux-table,
+  .citation-peek,
+  .command-dialog,
+  .help-dialog,
+  .card {
+    backdrop-filter: none;
+    background: hsl(var(--surface));
+    border-color: hsl(var(--border-strong));
+  }
+  .workspace-aurora { display: none; }
+  /* Gradient text loses contrast control; render it as plain foreground. */
+  .lux-stats dd {
+    background: none;
+    background-clip: unset;
+    color: hsl(var(--fg));
+  }
+  :focus-visible { outline-width: 3px; }
+}
+
+/* 3. Complete the reduced-motion coverage --------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .animate-draw,
+  .animate-orbit,
+  .animate-rise,
+  .stagger > * {
+    animation: none;
+    /* `rise` and `draw` animate in from a displaced/undrawn state, so simply
+       removing the animation would leave them stuck there. */
+    opacity: 1;
+    transform: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+
+  /* Keep the loading affordance, lose the travelling highlight. */
+  .skeleton::after { animation: none; content: none; }
+  .skeleton { background: hsl(var(--surface-2)); }
+}
