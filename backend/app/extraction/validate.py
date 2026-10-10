@@ -41,6 +41,7 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 
+from app.extraction.clause_check import unverifiable_citations
 from app.extraction.patterns import find_header_candidates
 from app.ingest.models import ParsedDocument
 from app.schemas.notification import TenderNotification
@@ -347,8 +348,58 @@ def validate_notification(
         [(str(i), d.provenance) for i, d in enumerate(notification.mandatory_documents)],
         document,
     )
-    return findings
 
+    # --- citations that cannot be looked up -------------------------------- #
+    # Wired in now that compositional presence exists. It was deliberately left
+    # out while the check demanded a concatenated reference appear verbatim:
+    # that reported every legitimate "section plus sub-item" citation as a
+    # finding -- twenty per tender on the real corpus -- and a flag that fires
+    # twenty times teaches everyone to ignore it. See app.extraction.clause_check.
+    if document is not None:
+        text = "\n".join((page.text or "") for page in (document.pages or []))
+        if text.strip():
+            cited: list[str] = []
+            for criterion in notification.eligibility_criteria or []:
+                reference = getattr(
+                    getattr(criterion, "provenance", None), "clause_ref", None
+                )
+                if reference:
+                    cited.append(reference)
+            for required in notification.mandatory_documents or []:
+                reference = getattr(
+                    getattr(required, "provenance", None), "clause_ref", None
+                )
+                if reference:
+                    cited.append(reference)
+
+            for clause_ref, suggestion in unverifiable_citations(
+                list(dict.fromkeys(cited)), text
+            ):
+                if suggestion:
+                    findings.append(Finding(
+                        field="clause_ref",
+                        severity=Severity.ERROR,
+                        message=(
+                            f"Cited clause {clause_ref!r} is not in the document, "
+                            f"but {suggestion!r} is -- the same digits with "
+                            f"different separators. A reviewer looking up "
+                            f"{clause_ref!r} finds nothing."
+                        ),
+                        value=clause_ref,
+                    ))
+                else:
+                    findings.append(Finding(
+                        field="clause_ref",
+                        severity=Severity.WARNING,
+                        message=(
+                            f"Cited clause {clause_ref!r} could not be located in "
+                            f"the document, either verbatim or as a section with "
+                            f"that sub-item."
+                        ),
+                        value=clause_ref,
+                    ))
+
+    return findings
 
 def validate_submission(
     submission: VendorSubmission, document: ParsedDocument | None = None

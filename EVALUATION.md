@@ -170,21 +170,52 @@ one regeneration away from being reverted to a placeholder. A test now asserts
 spec/key agreement, because a label the code disagrees with is not a
 correction -- it is a pending regression.
 
-## A real defect still open
+## A defect that was open, and the fix that closed it
 
-Extraction returns `2.8.1 (i)` through `2.8.1 (ix)` for the HGCL tender, whose
-source prints **`28.1`**. The dot is spurious and consistent, so nothing
+Extraction returned `2.8.1 (i)` through `2.8.1 (ix)` for the HGCL tender, whose
+source prints **`28.1`**. The dot was spurious and consistent, so nothing
 downstream looked anomalous: the elimination it supported was correct and its
-citation was not. A reviewer looking up 2.8.1 in that tender finds nothing.
+citation was not, and a reviewer looking up 2.8.1 in that tender found nothing.
 
-Reproduced in `backend/tests/test_clause_check.py`.
-`backend/app/extraction/clause_check.py` can detect this class of error, and is
-deliberately NOT wired into the ingest validation pass: pointed at the real
-corpus it flags 20 of civilworks_01's citations and 19 of civilworks_02's,
-because its reference pattern matches every number in a 236,000-character
-document. A correct version needs a structure-aware extractor that reads
-line-leading numbering. Shipping it as-is would have added twenty warnings per
-tender and taught everyone to ignore the flag.
+`backend/app/extraction/clause_check.py` could detect the class and was
+deliberately **not** wired into the ingest validation pass, because pointed at
+the real corpus it flagged 20 of civilworks_01's citations and 19 of
+civilworks_02's. A flag that fires twenty times per document teaches everyone
+to ignore it.
+
+The obvious fix — narrow the reference set so amounts and dates stop being read
+as clause references — **was measured and did nothing.** On a representative
+tender page, flat and structural extraction produce *identical* findings even
+though the reference set shrinks from 13 tokens to 4. Worth recording, because
+it was the plausible fix and it was wrong.
+
+The real flaw was stricter: `is_present` demanded a concatenated reference
+appear verbatim, while a legitimate citation **composes** a section heading with
+a sub-item printed beneath it. civilworks_01 prints `1.1` as a heading and `(4)`
+as a list item under it, so `1.1 (4)` is a correct, checkable citation that
+appears nowhere as a single token. Those compositions were most of the twenty
+findings, and none of them were defects.
+
+`is_present_compositional` accepts a citation when the section exists as
+line-leading numbering **and** carries that sub-item. A misplaced dot does not
+compose — for `2.8.1` to be legitimate the document would need a section 2.8
+with a sub-item 1, and it prints 28.1 — which is exactly the discrimination the
+check previously lacked.
+
+| | findings on a representative tender page |
+|---|---|
+| verbatim-only (previous) | 6, of which 4 were legitimate compositions |
+| compositional (now) | **2, both real** |
+
+The two survivors are the misplaced dot, with `28.1` named as the near-miss, and
+a clause genuinely absent in any form. The check is now wired into
+`validate_notification`, raising an `ERROR` when a near-miss is identifiable and
+a `WARNING` when the citation cannot be located at all.
+
+It still does not auto-correct. Rewriting a stored citation to whatever it
+resembles would improve the measured number without the extraction getting
+better, and provenance is the last thing here that should be quietly fitted to
+expectations.
 
 ## Things measured and deliberately NOT shipped
 

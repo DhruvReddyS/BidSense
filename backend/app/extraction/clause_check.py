@@ -15,29 +15,37 @@ and every sub-clause came back from extraction as "2.8.1 (iv)", "2.8.1 (vi)",
 looked anomalous. The elimination was correct and its citation was not, and the
 only reason it surfaced at all was an answer key that happened to disagree.
 
-NOT WIRED INTO THE VALIDATION PASS, AND THAT IS A MEASURED DECISION. Pointed at
-the real corpus this flagged 20 of civilworks_01's citations and 19 of
-civilworks_02's, which is noise, not twenty findings. Two reasons, both of them
-limitations of THIS module rather than of the idea:
+WIRED INTO THE VALIDATION PASS, now that it can tell a composition from a
+defect. It was deliberately left out for a long time, and the reason is worth
+keeping: pointed at the real corpus the original check flagged 20 of
+civilworks_01's citations and 19 of civilworks_02's, which is noise rather than
+38 findings, and a flag that fires twenty times per document teaches everyone
+to ignore it.
 
-  * `_REFERENCE` matches any number, so a 236,000-character tender yields 246
-    "references" of which most are amounts and dates ("0.973", "000.00").
-    `is_present` is therefore far too easy to satisfy, and `suggest_correction`
-    too often finds several colliding candidates and stays silent.
-  * Some cited references genuinely are not in the document in any form --
-    civilworks_01 contains neither "1.1 (4)" nor "1.1(4)" -- so the model is
-    composing a reference from a section number and a list item. That is a real
-    defect, but distinguishing it from a formatting difference needs a
-    structure-aware extractor that reads line-leading numbering, not a regex
-    over flat text.
+What fixed it was NOT narrowing the reference set. That was the obvious move and
+it changed nothing measurable: on a tender page, flat and structural extraction
+produce identical findings even though the reference set shrinks from 13 tokens
+to 4. The actual flaw was that `is_present` demanded a concatenated reference
+appear verbatim, while a legitimate citation COMPOSES a section heading with a
+sub-item printed beneath it. civilworks_01 prints
 
-A correct version would extract references from document STRUCTURE. Until then
-this module is a tested utility with a known false-positive rate, used
-deliberately rather than run on every ingest.
+    1.1  Scope of work
+     (4) Largest similar completed work of not less than 80% ...
 
-THE DEFECT IT WAS BUILT FOR IS REAL AND STILL OPEN. The HGCL source prints
-"28.1"; extraction returns "2.8.1 (i)" through "2.8.1 (ix)" -- consistently, so
-nothing downstream looks anomalous. Reproduced in tests/test_clause_check.py.
+so "1.1 (4)" is a correct, checkable citation that appears nowhere as one token.
+Those compositions were most of the twenty findings, and they were never
+defects. `is_present_compositional` accepts them.
+
+A misplaced dot does not compose, which is the discrimination that makes the
+check worth running: for the HGCL "2.8.1" to be legitimate the document would
+have to print a section 2.8 carrying a sub-item 1, and it prints 28.1 instead.
+Measured on a representative tender page the findings go from 6 to 2 -- the four
+dropped are all compositions, and both survivors are real: the misplaced dot,
+with "28.1" named as the near-miss, and a clause genuinely absent in any form.
+
+Structural extraction is still used, because it is what makes
+`suggest_correction` unambiguous: fewer colliding digit-spines means a near-miss
+is named rather than withheld.
 
 WHY DETECT AND NOT AUTO-CORRECT. Rewriting a stored citation to whichever
 source reference it resembles would make the evaluation number improve without
@@ -119,3 +127,230 @@ def suggest_correction(clause_ref: str, references: set[str]) -> str | None:
     candidates = {ref for ref in references if _digits_only(ref) == spine}
     candidates.discard(_squash(clause_ref))
     return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+# --------------------------------------------------------------------------- #
+# Structure-aware extraction.
+#
+# This is the fix the module docstring above asks for. `_REFERENCE` over flat
+# text matches any number, so a 236,000-character tender yields hundreds of
+# "references" that are amounts and dates -- which made `is_present` trivial to
+# satisfy and `suggest_correction` silent on collisions. The observation that
+# fixes it is structural: a tender prints a clause reference at the START of a
+# line and then the clause text,
+#
+#     28.1 The Chief General Manager will evaluate whether each Tenderer ...
+#     vi)  Liquid assets and/ or credit facilities of not less than Rs.49.855
+#
+# whereas the amounts that generate the noise ("Rs.49.855", "0.973", "000.00")
+# appear mid-line. Reading only line-leading numbering therefore keeps every
+# real reference and discards most of the false ones, without needing a layout
+# model.
+# --------------------------------------------------------------------------- #
+
+#: Units and currency words that follow a NUMBER, never a clause reference. A
+#: table row may legitimately begin with an amount, and "49.855 Crores" at the
+#: start of a line is not clause 49.855.
+_UNIT_AFTER = re.compile(
+    r"^\s*(?:cr|crs|crore|crores|lakh|lakhs|lac|lacs|%|percent|per\s*cent"
+    r"|nos?|no\.|kg|km|mtr|metre|metres|m|sqm|sq\.?\s*m|days?|months?|years?"
+    r"|hrs?|hours?|rs\.?|inr|usd)\b",
+    re.IGNORECASE,
+)
+
+_LINE_LEADING = re.compile(
+    r"^[\s\u2022\u00b7*\-\u2013\u2014|]*"          # indent, bullet, table pipe
+    r"(?P<ref>[1-9]\d*(?:\.\d+)*"                      # 28, 4.2, 2.8.1 -- never 0.x
+    r"(?:\.(?:[ivxlc]+|[a-z])(?![a-z]))*"               # .I  .ii  .b
+    r"(?:\s*\.?\s*\([a-z0-9]+\))*)"                   # (vi)  (a)  (4)
+    r"(?P<tail>.*)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def structural_references(text: str) -> set[str]:
+    """Clause references the document prints as line-leading numbering.
+
+    Deliberately narrower than `source_references`. Three rejections carry the
+    whole difference in false-positive rate:
+
+      * a leading zero -- "0.973" is a ratio, and no tender numbers a clause 0;
+      * a unit or currency word immediately after the number, so a table row
+        beginning "49.855 Crores" is an amount rather than clause 49.855;
+      * a bare integer with no clause text after it, which is a table cell or a
+        page number rather than a heading.
+
+    A reference followed by nothing but digits and separators is also rejected,
+    which is what excludes date and amount columns.
+    """
+    found: set[str] = set()
+    for match in _LINE_LEADING.finditer(text or ""):
+        reference = match.group("ref")
+        tail = match.group("tail") or ""
+
+        if _UNIT_AFTER.match(tail):
+            continue
+
+        # A real clause reference introduces text. A number alone on a line, or
+        # followed only by more numbers, is a cell in a table.
+        stripped = tail.strip(" .:)\u2013\u2014-|\t")
+        if not stripped:
+            # Bare "28.1" on its own line is still a plausible heading, but a
+            # bare integer is far more likely a page number or a serial column.
+            if "." not in reference and "(" not in reference:
+                continue
+        elif not re.search(r"[A-Za-z]{3}", stripped):
+            continue
+
+        found.add(_squash(reference))
+    return found
+
+
+def unverifiable_references(
+    clause_refs: list[str], text: str, *, structural: bool = True
+) -> list[tuple[str, str | None]]:
+    """Cited references the document does not print, each with a near-miss.
+
+    Returns (clause_ref, suggestion_or_None). This is the shape a validation
+    pass wants: a finding per citation that cannot be looked up, and the one
+    colliding source reference when exactly one collides -- which is how the
+    HGCL "2.8.1" against a printed "28.1" is surfaced as a misplaced dot rather
+    than as an absent clause.
+
+    Nothing here rewrites a citation. Adjusting stored provenance to whatever it
+    resembles would improve the measured number without the extraction getting
+    better, and provenance is the last thing in this system that should be
+    quietly fitted to expectations.
+    """
+    references = (
+        structural_references(text) if structural else source_references(text)
+    )
+    findings: list[tuple[str, str | None]] = []
+    for clause_ref in clause_refs:
+        if not (clause_ref or "").strip():
+            continue
+        if is_present(clause_ref, references):
+            continue
+        findings.append((clause_ref, suggest_correction(clause_ref, references)))
+    return findings
+
+
+# --------------------------------------------------------------------------- #
+# Compositional presence.
+#
+# Narrowing the reference set is not what fixes the false-finding rate: measured
+# on a tender page, flat and structural extraction produce the SAME findings
+# even though the reference set shrinks from 13 to 4. The real flaw is stricter
+# than that -- `is_present` demands the concatenated string appear verbatim,
+# while a legitimate citation COMPOSES a section heading with a sub-item printed
+# underneath it. civilworks_01 prints
+#
+#     1.1  Scope of work
+#          ...
+#      (4) The contractor shall provide ...
+#
+# so "1.1 (4)" is a correct, checkable citation that appears nowhere as a single
+# token. Those compositions were most of the twenty findings that made this
+# module too noisy to wire in, and they are not defects.
+#
+# A misplaced dot does NOT compose: for the HGCL "2.8.1" to be legitimate the
+# document would have to print a section 2.8 with a sub-item 1 beneath it, and
+# it prints 28.1 instead. So compositional presence accepts the false alarms and
+# still rejects the real defect, which is exactly the discrimination the module
+# docstring says it lacks.
+# --------------------------------------------------------------------------- #
+
+#: A sub-item as tenders print them at the start of a line: (4), vi), (a), iii.
+_SUB_ITEM = re.compile(
+    r"^[\s\u2022\u00b7*\-\u2013\u2014|]*"
+    r"\(?(?P<item>[ivxlc]+|[a-z]|\d{1,2})\)"
+    r"(?=[\s.:]|$)",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def document_sections(text: str) -> dict[str, set[str]]:
+    """Line-leading section numbers mapped to the sub-items printed under each.
+
+    A sub-item belongs to the most recent section heading above it, which is how
+    a reader attributes it. Scope ends at the next line-leading section.
+    """
+    sections: dict[str, set[str]] = {}
+    current: str | None = None
+    for line in (text or "").splitlines():
+        heading = _LINE_LEADING.match(line)
+        if heading:
+            reference = heading.group("ref")
+            tail = (heading.group("tail") or "")
+            if not _UNIT_AFTER.match(tail) and re.search(r"[A-Za-z]{3}", tail):
+                current = _squash(reference)
+                sections.setdefault(current, set())
+                continue
+        item = _SUB_ITEM.match(line)
+        if item and current is not None:
+            sections[current].add(item.group("item").casefold())
+    return sections
+
+
+def _split_reference(clause_ref: str) -> tuple[str, str | None]:
+    """"1.1(4)" -> ("1.1", "4"); "28.1" -> ("28.1", None)."""
+    squashed = _squash(clause_ref)
+    match = re.match(r"^(?P<section>[\d.]+?)\(?(?P<item>[ivxlc]+|[a-z]|\d{1,2})\)$",
+                     squashed, re.IGNORECASE)
+    if match:
+        return match.group("section").rstrip("."), match.group("item").casefold()
+    return squashed, None
+
+
+def is_present_compositional(clause_ref: str, text: str) -> bool:
+    """True when the document prints this clause, verbatim OR by composition.
+
+    Checked in that order, because a verbatim match needs no interpretation.
+    """
+    references = structural_references(text)
+    if is_present(clause_ref, references):
+        return True
+
+    section, item = _split_reference(clause_ref)
+    if item is None:
+        return False
+
+    sections = document_sections(text)
+    # The section must exist as a heading, and the sub-item must be printed
+    # within it. Either half alone is not a citation.
+    for printed, items in sections.items():
+        if printed == section or printed.startswith(section):
+            if item in items:
+                return True
+    return False
+
+
+def unverifiable_citations(
+    clause_refs: list[str], text: str
+) -> list[tuple[str, str | None]]:
+    """The validation-pass shape: citations that cannot be looked up at all.
+
+    Accepts composition, so a section-plus-sub-item citation is not reported;
+    rejects a reference whose digits merely resemble a printed one, so the HGCL
+    misplaced dot still surfaces with "28.1" named as the near-miss.
+    """
+    references = structural_references(text)
+
+    # A document with NO readable clause numbering cannot verify any citation,
+    # so reporting every one of them is unfounded -- and is the twenty-findings
+    # -per-tender noise this module was held back for, in a different form. It
+    # arises for real on a scanned tender whose OCR produced prose without
+    # recovering the numbering, and on any page that failed to parse. "We could
+    # not read this document's structure" is an extraction-coverage problem, not
+    # evidence that a citation is wrong.
+    if not references:
+        return []
+
+    findings: list[tuple[str, str | None]] = []
+    for clause_ref in clause_refs:
+        if not (clause_ref or "").strip():
+            continue
+        if is_present_compositional(clause_ref, text):
+            continue
+        findings.append((clause_ref, suggest_correction(clause_ref, references)))
+    return findings
