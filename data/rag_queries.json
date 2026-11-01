@@ -20,7 +20,10 @@
     "the metric tracks 'could a vendor read the answer off this chunk' rather",
     "than 'is this chunk vaguely on-topic'.",
     "",
-    "LABEL CORRECTIONS. q11 and q16 were fixed after a first measurement run: q16's phrase list held only one of two wordings the tender uses for the same fact, and q11's question did not describe the clause it was labelled against. Both were harness defects that understated retrieval. Entries carry a _label_fix note. No label was broadened merely because the system missed it -- q06, q12, q13, q14 and q17 remain scored as misses."
+    "LABEL CORRECTIONS. q11 and q16 were fixed after a first measurement run: q16's phrase list held only one of two wordings the tender uses for the same fact, and q11's question did not describe the clause it was labelled against. Both were harness defects that understated retrieval. Entries carry a _label_fix note. No label was broadened merely because the system missed it -- q06, q12, q13, q14 and q17 remain scored as misses.",
+    "",
+    "EXPANDED from 17 to 39 queries. The paired McNemar test on the chunking ablation put hit@5 at p=0.0625 -- a real improvement that n=17 could not establish at 0.05 -- so the set was grown for statistical power, not for a better-looking number. Every added phrase was located in the source PDF by string search and its gold_pages recorded from that search; every question is written in wording the document does not use.",
+    "gold_pages lists EVERY page the phrase was located on, not a subset. Declaring fewer would understate the page-hit measure for no reason."
   ],
   "queries": [
     {
@@ -212,7 +215,18 @@
         6,
         7,
         8,
-        12
+        10,
+        12,
+        15,
+        154,
+        165,
+        179,
+        180,
+        187,
+        188,
+        189,
+        190,
+        381
       ],
       "kind": "scope"
     },
@@ -225,10 +239,32 @@
         "5 (five) years"
       ],
       "gold_pages": [
+        1,
         2,
         6,
         8,
-        13
+        10,
+        12,
+        13,
+        15,
+        125,
+        154,
+        165,
+        179,
+        180,
+        187,
+        188,
+        189,
+        190,
+        240,
+        248,
+        254,
+        281,
+        284,
+        289,
+        311,
+        335,
+        381
       ],
       "kind": "scope",
       "_label_fix": "Original phrase list held only the title-page wording, so a correct retrieval of clause 1.12 scored as a miss. Label was incomplete, not the system."
@@ -244,6 +280,292 @@
         13
       ],
       "kind": "emd"
+    },
+    {
+      "id": "q18",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "How often will I be paid as the work progresses?",
+      "answer_contains": [
+        "Minimum 20 days"
+      ],
+      "gold_pages": [
+        4
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q19",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "How quickly must the work be finished?",
+      "answer_contains": [
+        "45 DAYS"
+      ],
+      "gold_pages": [
+        3,
+        9
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q20",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "What happens if I quote well under the estimate?",
+      "answer_contains": [
+        "10% or more below"
+      ],
+      "gold_pages": [
+        4
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q21",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "How soon must I sign the agreement after award?",
+      "answer_contains": [
+        "3 days"
+      ],
+      "gold_pages": [
+        10
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q22",
+      "tender": "NOTIF_interiorworks_01",
+      "question": "How much of my security is released early?",
+      "answer_contains": [
+        "50% of the Total Security Deposit"
+      ],
+      "gold_pages": [
+        4,
+        23
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q23",
+      "tender": "NOTIF_supply_01",
+      "question": "What value has the department budgeted for this work?",
+      "answer_contains": [
+        "298.72 Lakhs"
+      ],
+      "gold_pages": [
+        2,
+        7
+      ],
+      "kind": "value"
+    },
+    {
+      "id": "q24",
+      "tender": "NOTIF_supply_01",
+      "question": "Is there a fee for using the procurement portal?",
+      "answer_contains": [
+        "8962"
+      ],
+      "gold_pages": [
+        2,
+        11,
+        18
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q25",
+      "tender": "NOTIF_supply_01",
+      "question": "From when can I download and start bidding?",
+      "answer_contains": [
+        "16-09-2024"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q26",
+      "tender": "NOTIF_supply_01",
+      "question": "What is the latest time I can submit?",
+      "answer_contains": [
+        "25-09-2024 up to 4.00 PM"
+      ],
+      "gold_pages": [
+        3
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q27",
+      "tender": "NOTIF_supply_01",
+      "question": "How many units are being procured?",
+      "answer_contains": [
+        "15500"
+      ],
+      "gold_pages": [
+        1,
+        2,
+        4,
+        6,
+        7,
+        34,
+        42,
+        54,
+        67,
+        68
+      ],
+      "kind": "scope"
+    },
+    {
+      "id": "q28",
+      "tender": "NOTIF_supply_01",
+      "question": "How long must my offer remain open?",
+      "answer_contains": [
+        "120 days"
+      ],
+      "gold_pages": [
+        17
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q29",
+      "tender": "NOTIF_supply_01",
+      "question": "When do I receive the bulk of the payment?",
+      "answer_contains": [
+        "30 days"
+      ],
+      "gold_pages": [
+        14,
+        38
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q30",
+      "tender": "NOTIF_supply_01",
+      "question": "How long is part of my payment withheld against defects?",
+      "answer_contains": [
+        "2 years of warranty period"
+      ],
+      "gold_pages": [
+        14
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q31",
+      "tender": "NOTIF_supply_01",
+      "question": "What if my price exceeds the department's own estimate?",
+      "answer_contains": [
+        "5% over the internal"
+      ],
+      "gold_pages": [
+        11
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q32",
+      "tender": "NOTIF_supply_01",
+      "question": "Can I be suspended from the bidding platform?",
+      "answer_contains": [
+        "12 months"
+      ],
+      "gold_pages": [
+        10,
+        19
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q33",
+      "tender": "NOTIF_supply_01",
+      "question": "What size of past supply must I be able to show?",
+      "answer_contains": [
+        "2.39 Crore"
+      ],
+      "gold_pages": [
+        16,
+        22
+      ],
+      "kind": "eligibility"
+    },
+    {
+      "id": "q34",
+      "tender": "NOTIF_civilworks_02",
+      "question": "Is the installation split across more than one site?",
+      "answer_contains": [
+        "02 DIFFERENT STRETCHES"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "scope"
+    },
+    {
+      "id": "q35",
+      "tender": "NOTIF_civilworks_02",
+      "question": "What is the larger of the two stretches rated at?",
+      "answer_contains": [
+        "10MW"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "scope"
+    },
+    {
+      "id": "q36",
+      "tender": "NOTIF_civilworks_02",
+      "question": "What security is retained until the work is complete?",
+      "answer_contains": [
+        "10% of ECV"
+      ],
+      "gold_pages": [
+        13
+      ],
+      "kind": "condition"
+    },
+    {
+      "id": "q37",
+      "tender": "NOTIF_civilworks_02",
+      "question": "Is any portal charge payable to the state agency?",
+      "answer_contains": [
+        "0.04% of ECV"
+      ],
+      "gold_pages": [
+        13,
+        22
+      ],
+      "kind": "emd"
+    },
+    {
+      "id": "q38",
+      "tender": "NOTIF_civilworks_02",
+      "question": "What date does this notice carry?",
+      "answer_contains": [
+        "24/04/2023",
+        "24.04.2023"
+      ],
+      "gold_pages": [
+        2,
+        4,
+        13,
+        33
+      ],
+      "kind": "deadline"
+    },
+    {
+      "id": "q39",
+      "tender": "NOTIF_civilworks_02",
+      "question": "How much of the first stretch is for captive use?",
+      "answer_contains": [
+        "2MW Captive"
+      ],
+      "gold_pages": [
+        6
+      ],
+      "kind": "scope"
     }
   ]
 }

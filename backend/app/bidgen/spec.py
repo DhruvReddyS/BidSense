@@ -66,6 +66,12 @@ class VendorSpec:
     certifications: list[tuple[str, str]]
     quoted_price: str
     quoted_words: str
+    #: Which KIND of mandatory failure this bid is built to trip: 'criteria'
+    #: (a threshold or status rule) or 'document' (a named enclosure absent).
+    #: Empty for a bid intended to pass, which has no ground. Declared here
+    #: rather than inferred from `intended_reason`, so rewording a reason
+    #: cannot silently move the answer key -- see Section 5.2.
+    intended_ground: str = ""
     omitted_documents: tuple[str, ...] = ()
     is_blacklisted: bool = False
     # Sits exactly on a threshold (Section 9.2.2). An off-by-one comparison --

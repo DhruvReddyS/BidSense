@@ -34,6 +34,7 @@ from app.ingest.chunking import (
 )
 from app.ingest.loader import parse_document
 from app.schemas.common import ChunkSection, DocumentKind
+from app.rag.stats import bootstrap_diff, fmt_test, mcnemar
 from app.vector.embeddings import embed_passages, embed_query
 
 QUERY_PATH = Path(__file__).parents[2] / "data" / "rag_queries.json"
@@ -76,7 +77,15 @@ def score(chunks: list[Chunk], queries: list[dict], k: int) -> dict:
         out["hit3"].append(any(hits[:3]))
         out[f"hit{k}"].append(any(hits[:k]))
         out["rr"].append(1.0 / first if first else 0.0)
-        per_query.append({"id": q["id"], "kind": q["kind"], "first_hit": first})
+        per_query.append({
+            "id": q["id"], "kind": q["kind"], "first_hit": first,
+            # Kept per query so the two arms can be compared PAIRED. Comparing
+            # aggregate percentages would discard the pairing that makes a
+            # seventeen-query set informative.
+            "hit_at_1": bool(hits[:1] and hits[0]),
+            "hit_at_k": any(hits[:k]),
+            "rr": 1.0 / first if first else 0.0,
+        })
     return {
         "chunks": len(chunks),
         "precision_at_1": float(np.mean(out["p1"])),
@@ -133,6 +142,31 @@ def main() -> int:
         a, b = summary["legacy"][key], summary["rows"][key]
         scale = 1 if key == "mrr" else 100
         print(f"  {label:7} {a*scale:6.3f} -> {b*scale:6.3f}   ({'+' if b>=a else ''}{(b-a)*scale:.3f})")
+
+    # Paired significance, not two intervals the reader is invited to eyeball.
+    paired: dict[str, dict[str, list]] = {
+        arm: {"hit_at_1": [], "hit_at_k": [], "rr": []} for arm in ("legacy", "rows")
+    }
+    for arm in ("legacy", "rows"):
+        for _stem, r in results[arm]:
+            for row in r["per_query"]:
+                paired[arm]["hit_at_1"].append(row["hit_at_1"])
+                paired[arm]["hit_at_k"].append(row["hit_at_k"])
+                paired[arm]["rr"].append(row["rr"])
+
+    print("\nIs the difference real? Paired tests over the same queries:")
+    print("  " + fmt_test(
+        "hit@1  (exact McNemar)",
+        mcnemar(paired["legacy"]["hit_at_1"], paired["rows"]["hit_at_1"]),
+    ))
+    print("  " + fmt_test(
+        f"hit@{k}  (exact McNemar)",
+        mcnemar(paired["legacy"]["hit_at_k"], paired["rows"]["hit_at_k"]),
+    ))
+    print("  " + fmt_test(
+        "MRR    (paired bootstrap)",
+        bootstrap_diff(paired["legacy"]["rr"], paired["rows"]["rr"]),
+    ))
 
     print(f"\nIndex cost: {summary['legacy']['chunks']} -> {summary['rows']['chunks']} chunks "
           f"({summary['rows']['chunks']/max(1,summary['legacy']['chunks']):.2f}x)")
