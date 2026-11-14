@@ -146,9 +146,13 @@ export const api = {
   documentUrl: (contentHash: string) => `${BASE}/api/documents/${contentHash}`,
 
   exportGapReport: async (tenderId: string, vendorId: string, fmt: "pdf" | "docx") => {
+    const token = window.localStorage.getItem("bidsense_token");
     const response = await fetch(`${BASE}/api/gap-report/export?fmt=${fmt}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ tender_id: tenderId, vendor_id: vendorId }),
     });
     if (!response.ok) throw new ApiError(`Export failed (${response.status}).`, response.status);

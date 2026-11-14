@@ -285,7 +285,7 @@ Section                                                          Page
 
     covering = f"""SECTION 1 — COVERING LETTER
 
-Ref: {spec.vendor_id}/BID/2024                          Date: {tender.bid_due}
+Ref: {spec.vendor_id}/BID/{tender.bid_due[-4:]}                          Date: {tender.bid_due}
 
 To
 The Superintending Engineer

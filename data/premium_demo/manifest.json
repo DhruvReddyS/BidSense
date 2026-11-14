@@ -13,10 +13,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 96,
-    "bytes": 149521,
-    "sha256": "b0ced1bc26decf2a3a390a572975bae78349e223817f7adba529790ff4cf21e5",
+    "bytes": 149457,
+    "sha256": "f4482ebde6aabaa961fe12c9c1db5ef63262445af278966f0aca6e11677373ff",
     "file": "DEMO_NOTIF_supply_01_01.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_02",
@@ -32,10 +32,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 143132,
-    "sha256": "25a89ef8deb7693229a84f6b400e1dff3907e02ffc6407279177de452a196ea2",
+    "bytes": 143061,
+    "sha256": "a4fcf62da7666e6f9672df5b034df11260bc043c29283c3d49a634ef7616f286",
     "file": "DEMO_NOTIF_supply_01_02.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_03",
@@ -51,10 +51,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 94,
-    "bytes": 146609,
-    "sha256": "42a759663676bb9c4079e7c2f7e777a9bfa5b8afb67d3acdee9d61bf81b4f915",
+    "bytes": 146542,
+    "sha256": "f6293394909feeef9f85bb241af8685b1eaed04b669ecfd8899173e6de2b0b8f",
     "file": "DEMO_NOTIF_supply_01_03.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_04",
@@ -70,10 +70,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 143280,
-    "sha256": "235b0eb600e67dd50963673d555f42ae61a66d4ae9e4b5b2accb40dde9a79265",
+    "bytes": 143213,
+    "sha256": "edbc43423d31829c22f28ba794444a80e09e2c727fd7985d735c1aabd152b51c",
     "file": "DEMO_NOTIF_supply_01_04.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_05",
@@ -89,10 +89,10 @@
     "borderline": true,
     "writeup_quality": "strong",
     "pages": 92,
-    "bytes": 143209,
-    "sha256": "a75220851d5fdc28bb0955077cf17e5f1f0232b95f99a5c9ceecd7358c718d50",
+    "bytes": 143177,
+    "sha256": "c1dfff7e41fb413b38578a2bb2447b2fe78a42b332be3bcb09aa9b32f353427e",
     "file": "DEMO_NOTIF_supply_01_05.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_06",
@@ -108,10 +108,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 96,
-    "bytes": 149050,
-    "sha256": "1f3825a42283782dfe51b8a75f876c6831234aa5f80e478f598c74aca1db430b",
+    "bytes": 148990,
+    "sha256": "e04e34b3468e7c9db657d23c2269473f7291f5073d2a8f1ffe3c8cda975dd5a7",
     "file": "DEMO_NOTIF_supply_01_06.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_07",
@@ -127,10 +127,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 142643,
-    "sha256": "1163890156b54c9c4d311aeb861d28e031c90c7c29d133d8b9c4afe1a2c50d08",
+    "bytes": 142586,
+    "sha256": "614762f2962cf1694b7d22c8e5dfc0f33bbf02bc0689593c9632cc78ca64ff6a",
     "file": "DEMO_NOTIF_supply_01_07.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_08",
@@ -146,10 +146,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 94,
-    "bytes": 146116,
-    "sha256": "8cbde73b92ce66f9f4d787255daefcea6e5115f53e92b2de6ac804d2da23fea7",
+    "bytes": 146072,
+    "sha256": "39c11d5300c394cfb674911f505af73874f398f4c79e4a5e86bdc264de38243b",
     "file": "DEMO_NOTIF_supply_01_08.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_09",
@@ -165,10 +165,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 142775,
-    "sha256": "a0a73a880e98a834620af42b794ae04f6cfcc085130fb11755bd2a45481fc902",
+    "bytes": 142709,
+    "sha256": "9693894cd35669ed40029b99162d650c6ecaa0d55af88eb06fb931d6d4d15b72",
     "file": "DEMO_NOTIF_supply_01_09.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_10",
@@ -184,10 +184,10 @@
     "borderline": true,
     "writeup_quality": "strong",
     "pages": 92,
-    "bytes": 142733,
-    "sha256": "91872b7c218fc2a7ecc3b9880cb803f250724e3ebc1208ec56e67620f85d9b1d",
+    "bytes": 142676,
+    "sha256": "4386c79376e2c1661dbcd9b2e15992f8bc719b303145ac79c8f74f738874c70d",
     "file": "DEMO_NOTIF_supply_01_10.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_11",
@@ -203,10 +203,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 96,
-    "bytes": 149754,
-    "sha256": "c2786c2b8d4b697ff78c3314895718ec28f9479e36c0b5fbaaa08986b5eb4247",
+    "bytes": 149696,
+    "sha256": "c3368fa1848597d2d0af4819ad705740761924ef864d50d4bd79c4c2b4bce466",
     "file": "DEMO_NOTIF_supply_01_11.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_12",
@@ -222,10 +222,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 143363,
-    "sha256": "52378cff0196fc739ef774399a32dd3618307ef12a510838464d9fcbd5df9af2",
+    "bytes": 143311,
+    "sha256": "a8a0b56cae8ceccda02afae6f3a227214acca9dcba091438611b74a8c7b710b0",
     "file": "DEMO_NOTIF_supply_01_12.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_13",
@@ -241,10 +241,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 94,
-    "bytes": 146812,
-    "sha256": "6c6647e2beea32c338ff94aefc6360b86e93f95eb63fae2157699b8f4fb4a665",
+    "bytes": 146757,
+    "sha256": "a6802ac70c787ba7a9b12ac32df141af585b3e5b15b6f88bb8f615fcfc8f306b",
     "file": "DEMO_NOTIF_supply_01_13.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_14",
@@ -260,10 +260,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 92,
-    "bytes": 143458,
-    "sha256": "33160c404b9366dd707515d9099f7a521fe8f864965ab6e7a0036cdb4e305271",
+    "bytes": 143394,
+    "sha256": "dbebed81e90d2480fd47a5b7de89a4e33bc6abf0d05954718e23488bb9354a09",
     "file": "DEMO_NOTIF_supply_01_14.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_supply_01_15",
@@ -279,10 +279,10 @@
     "borderline": true,
     "writeup_quality": "strong",
     "pages": 92,
-    "bytes": 143461,
-    "sha256": "df9583ada5e730e46cdb14a9ad237c2888bd0038cd8a8514b50ae1c62113afb3",
+    "bytes": 143402,
+    "sha256": "a7cb76f5da545c58aef93ec2573afece4e7c5880ecfd11b76fc18bfb9bf0ee45",
     "file": "DEMO_NOTIF_supply_01_15.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_01",
@@ -298,10 +298,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 95990,
-    "sha256": "f099839bb368a1a358a193f9edd9f7a3d03346256c3bfbdce1c7c3bcd8c14033",
+    "bytes": 96009,
+    "sha256": "34df63479d8f6343c0b8812b6ebfb6ad7b85046a61a811b2d8ddf825b82a3dca",
     "file": "DEMO_NOTIF_civilworks_01_01.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_02",
@@ -317,10 +317,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 93037,
-    "sha256": "b0f44e1fe996e0ad14f5734f7d18d46554b1db24f1a24bcc7075909a1ff8cea6",
+    "bytes": 93043,
+    "sha256": "9fe20ec9a4278e7b6f0357583b22bab676b835ee321a36c93e51ebb9b49d139f",
     "file": "DEMO_NOTIF_civilworks_01_02.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_03",
@@ -336,10 +336,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 96097,
-    "sha256": "1921576ca655cfc9883d864b457cc834462183f9b9473b1246c091e2576695c0",
+    "bytes": 96107,
+    "sha256": "15d545ae81ae007b534ca9c22ee5d24488f8c519678dbb7ece3d945e0e8325a2",
     "file": "DEMO_NOTIF_civilworks_01_03.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_04",
@@ -355,10 +355,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92771,
-    "sha256": "aeb345227004cb0c398b783cc782f989a4b501ce05be59462bdc8f1d9f2afd4a",
+    "bytes": 92786,
+    "sha256": "005d60937d02b69641163b09e964d9a9e18d4f3482da17c1ec7dcf3033a642ba",
     "file": "DEMO_NOTIF_civilworks_01_04.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_05",
@@ -374,10 +374,10 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92973,
-    "sha256": "a44cf3f44888c1ddd774b24cc5e2ad811d22bb3ee7a7d51faaedb1639274e04f",
+    "bytes": 92983,
+    "sha256": "1e1001a28ab80b2de4ae2ac5600b496d5f7e37bb739d47b9fda805cf2cfda7be",
     "file": "DEMO_NOTIF_civilworks_01_05.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_06",
@@ -393,10 +393,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 95728,
-    "sha256": "f3d739086bcd2acd8b9c5c94818d7a0d565765c3ccd23d3492b888ce0dc4a9ad",
+    "bytes": 95744,
+    "sha256": "0e4ebaf5733c24dd8159f4ef340f3aab6bb305c070a05344a8cd63db8685212d",
     "file": "DEMO_NOTIF_civilworks_01_06.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_07",
@@ -412,10 +412,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92760,
-    "sha256": "952580f75bb8da11d31ceb8f558d6acf7306ad84ab470e621abeb0181a938c73",
+    "bytes": 92764,
+    "sha256": "b8ecdfdda2755ee0301c19e4728c64b6aa6b97c971bd6b647724edc88d18776b",
     "file": "DEMO_NOTIF_civilworks_01_07.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_08",
@@ -431,10 +431,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 95820,
-    "sha256": "b9ee31612980bf11559e187a63fb934f11cd517339aa71f74a32e1c9e69e7379",
+    "bytes": 95836,
+    "sha256": "91992a5831a2b44a17fa8581025d53d04c4929402abe79f6764852af0c86ff11",
     "file": "DEMO_NOTIF_civilworks_01_08.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_09",
@@ -450,10 +450,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92464,
-    "sha256": "f06b98e1bdcbf027057b525af484815f797c2f581405b09b38140ca0ea72694d",
+    "bytes": 92474,
+    "sha256": "0ee7e29c6546c544b45bdebe67e488dd507117a48ee2d9307823932e46df17cd",
     "file": "DEMO_NOTIF_civilworks_01_09.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_10",
@@ -469,10 +469,10 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92696,
-    "sha256": "d09143652a3007e65b510d0d63945e138529e3a3f31f7914de658af25463e95f",
+    "bytes": 92712,
+    "sha256": "247a838a3f7c2e8edd180e01ce530e6570ea97edb55605ef9ba1ba6c12028c89",
     "file": "DEMO_NOTIF_civilworks_01_10.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_11",
@@ -488,10 +488,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 96010,
-    "sha256": "f6a14ec99a32e817dbf41337274d10046c44f5055dc6f9ab82832abc33cd079b",
+    "bytes": 96034,
+    "sha256": "cca12c36ffdd737f3110f1f2476d9f945ca252fe45d28a7914d1495fb54ec152",
     "file": "DEMO_NOTIF_civilworks_01_11.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_12",
@@ -507,10 +507,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 93199,
-    "sha256": "434695dd4d65c3072161a5f904cefc6b28c2b76d5c56bf33b17acdf6fa79bf6e",
+    "bytes": 93211,
+    "sha256": "cb81edcb3e7ce0315ff5f795d3694be595572819d4cf50721330c47f2f696288",
     "file": "DEMO_NOTIF_civilworks_01_12.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_13",
@@ -526,10 +526,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 63,
-    "bytes": 96259,
-    "sha256": "27e16e4763d0a3e9bfcfec9824fab9fab96e789b68f064767f5f90d4d55bfe61",
+    "bytes": 96272,
+    "sha256": "00ec6ed1973684c76ffecbd4cabaebaeda0d9828e81483ca8e15adbcc171b5c9",
     "file": "DEMO_NOTIF_civilworks_01_13.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_14",
@@ -545,10 +545,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 92917,
-    "sha256": "cd3f5a66353886f2cf6496337f5bb45bb97d8ec7f2476dbba6c9e04a303fb8d0",
+    "bytes": 92937,
+    "sha256": "4fd7ed53322b6e4936290eed0b1209faa9cd73cd584a56d31619d72cc64006b3",
     "file": "DEMO_NOTIF_civilworks_01_14.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_01_15",
@@ -564,10 +564,10 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 61,
-    "bytes": 93142,
-    "sha256": "b76d7f00d91a55da31a2d5685f40a055d4fcaea460eadf0da29309fb13ca5343",
+    "bytes": 93156,
+    "sha256": "519a9cfd0c6d46b09c2b89822ca761f10ff61eb72ee6c54eaf4422e630206291",
     "file": "DEMO_NOTIF_civilworks_01_15.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_01",
@@ -583,10 +583,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 277203,
-    "sha256": "ec56bea979cd0e749c5d3913734b537d2e6877d75fbfc149852adfc9fcf13ca6",
+    "bytes": 277058,
+    "sha256": "b1a3eb2b6c67a18f5bcd0ee3739bed1eeb59f7f69463e0e6c18a42f90af6d82f",
     "file": "DEMO_NOTIF_civilworks_02_01.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_02",
@@ -602,10 +602,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 274714,
-    "sha256": "1a2d939de20a4ca26e12692ed8fcc99f83c567f498765516996d91b90ec5e76d",
+    "bytes": 274549,
+    "sha256": "8a57cecbbf81443246fe551b99c95951d944871a767d9a6018b6a0f6b5454921",
     "file": "DEMO_NOTIF_civilworks_02_02.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_03",
@@ -621,10 +621,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 277595,
-    "sha256": "b7a5a482b4bee552d70d1b29485f0e7a11647e70c9b032a896ad24d638316b70",
+    "bytes": 277459,
+    "sha256": "f3f08011d2f92b9add9b7ed8b005fb49892a0b660886dc83ef8f796e182fbc94",
     "file": "DEMO_NOTIF_civilworks_02_03.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_04",
@@ -640,10 +640,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 274769,
-    "sha256": "74d3c6a9d618b30f4c63202102ea6454a4aaa68582c28f11070f5e175fa453ee",
+    "bytes": 274626,
+    "sha256": "78989ad53c7518a193b5e935956e6c2663b55354d593402ec27ac4df21f16fe2",
     "file": "DEMO_NOTIF_civilworks_02_04.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_05",
@@ -659,10 +659,10 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 274706,
-    "sha256": "caad3dc77278f424d82d52cc5f68f5cd064324f43a29527754e7642c055573c2",
+    "bytes": 274554,
+    "sha256": "6932d15c18d0e9327898f7d08ed68777f3bd007fc6f3b7fdf401a46c21c0449b",
     "file": "DEMO_NOTIF_civilworks_02_05.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_06",
@@ -678,10 +678,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 276173,
-    "sha256": "deeab12b342076165d73e933eb5f373d5442996a3cf3e79c441e300593f0a73c",
+    "bytes": 276058,
+    "sha256": "b631cee56614bc921650887d46a01da145650127d8db1d367b90ae225b7166d8",
     "file": "DEMO_NOTIF_civilworks_02_06.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_07",
@@ -697,10 +697,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 273686,
-    "sha256": "d619793d9597c63582606d3aecb153763e11a5609cfac944c40ae988b4bee439",
+    "bytes": 273532,
+    "sha256": "5961a8f0e404d87d57b3a0fde13650788aab8b9fae24dbf458c18aa51c56d1a6",
     "file": "DEMO_NOTIF_civilworks_02_07.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_08",
@@ -716,10 +716,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 276583,
-    "sha256": "11e4784ff5cb27a9ea73b1ff22592936e75b330115eaf1e12f986e78739f901f",
+    "bytes": 276452,
+    "sha256": "1a808b0b4b13d9d3cbe4330722fffc4be179272b26723e558eaffb39bdc9bbd4",
     "file": "DEMO_NOTIF_civilworks_02_08.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_09",
@@ -735,10 +735,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 273765,
-    "sha256": "faebb808b7b48923d1df103f20c7f6b2a402e4ffe60faac90b438b30bc31badc",
+    "bytes": 273623,
+    "sha256": "3bccb0674ff887a349ccd973696ac8a52ddb9d6eb3fd7471ad901a2afbb733ee",
     "file": "DEMO_NOTIF_civilworks_02_09.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_10",
@@ -754,10 +754,10 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 273669,
-    "sha256": "6f73827249d227a1ac2287ae965bf02f676a260fbfe6a1a53aef9da2be9ddf1a",
+    "bytes": 273542,
+    "sha256": "6c9a5c12b9429ad7c701337e810cf319ab6c5016cd922b16c83eb03bc695d2fe",
     "file": "DEMO_NOTIF_civilworks_02_10.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_11",
@@ -773,10 +773,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 277782,
-    "sha256": "945d50b8b3490d29a6fd1971704231dc8ed7d7222bb6381efbf18eccaceedcf8",
+    "bytes": 277626,
+    "sha256": "6070770e16fae51049c227b450b158cc1526d40216d0e61a70ed3e2f036408e3",
     "file": "DEMO_NOTIF_civilworks_02_11.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_12",
@@ -792,10 +792,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 275404,
-    "sha256": "3f4d2a27e636a3fb5eaaf13b4e4b7458c7c4162c4fe4dfc7839f64da85a0b4bb",
+    "bytes": 275213,
+    "sha256": "16652a68dc235d3988f3115fd87e64acca9bf8c338a6f8fb699aae51171bf54c",
     "file": "DEMO_NOTIF_civilworks_02_12.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_13",
@@ -811,10 +811,10 @@
     "borderline": false,
     "writeup_quality": "strong",
     "pages": 172,
-    "bytes": 277673,
-    "sha256": "54edb50922c397d255b36ca825e3f8176d7a0901fab94ed5bb7a9763a83982a4",
+    "bytes": 277535,
+    "sha256": "f03f921c4af37795017c09fa7bf329eb45a97c265131eabafbcbde69232d3af4",
     "file": "DEMO_NOTIF_civilworks_02_13.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_14",
@@ -830,10 +830,10 @@
     "borderline": false,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 275246,
-    "sha256": "4620664fc5f64a2c397c6b9367041b3657a59f23a0466c7b1902ce70eb1dd31b",
+    "bytes": 275105,
+    "sha256": "e04097f87e44a5baaec9a4bc57bb8a24f67e892b9563045a4892683936185985",
     "file": "DEMO_NOTIF_civilworks_02_14.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   },
   {
     "vendor_id": "DEMO_NOTIF_civilworks_02_15",
@@ -849,9 +849,9 @@
     "borderline": true,
     "writeup_quality": "weak",
     "pages": 170,
-    "bytes": 275336,
-    "sha256": "5886eb697fe4d64bc9b059d65be3adb63d1c028046b64099db5f9548cd3f7be6",
+    "bytes": 275156,
+    "sha256": "22d1960da3b579a1e35b2920e2f55e1d5b7d720ea2b13185f7e870c373414140",
     "file": "DEMO_NOTIF_civilworks_02_15.pdf",
-    "generated": "2026-09-08"
+    "generated": "2026-11-13"
   }
 ]

@@ -11,7 +11,7 @@ from app.bidgen.spec import TenderProfile
 
 GHMC = TenderProfile(
     notification_id="NOTIF_supply_01",
-    tender_ref="TENDER No.01/SE(Electrical)/GHMC/2024-25, Dated: 13.09.2024",
+    tender_ref="TENDER No.01/SE(Electrical)/GHMC/2024-25, Dated: 01.12.2027",
     authority="Greater Hyderabad Municipal Corporation",
     authority_address="Office of the Superintending Engineer (Electrical),\nGHMC Head Office, Tank Bund Road, Hyderabad - 500 063",
     work_title=(
@@ -21,7 +21,7 @@ GHMC = TenderProfile(
     sector="supply",
     estimated_cost="Rs. 29,87,20,000/-",
     emd="Rs. 2,98,720/- (1% of ECV)",
-    bid_due="04.10.2024",
+    bid_due="15.12.2027",
     turnover_requirement="Rs. 3,00,00,000/- (Rupees Three Crore only)",
     experience_requirement=(
         "One order of similar supply for Rs. 2.39 Crore or two orders of "
@@ -61,7 +61,7 @@ IITISM = TenderProfile(
     sector="civil works",
     estimated_cost="Rs. 12,56,561/-",
     emd="Rs. 31,500/-",
-    bid_due="22.08.2026",
+    bid_due="15.12.2027",
     # 30% of the estimated cost -- the tender states the requirement as a share,
     # which the pipeline resolves to Rs. 3,76,968.
     turnover_requirement=(
@@ -97,7 +97,7 @@ HGCL = TenderProfile(
     notification_id="NOTIF_civilworks_02",
     tender_ref=(
         "BID NOTICE No.178/CGM(T)/HGCL/DGM(Elec)/Cycle Track/2022-23/"
-        "second call/Dated: 24.04.2023"
+        "second call/Dated: 01.12.2027"
     ),
     authority="Hyderabad Growth Corridor Limited",
     authority_address="HGCL Office Building, 2nd Floor, Khajaguda Road,\nAdjacent to ORR, Nanakramguda, Hyderabad - 500 104",
@@ -109,7 +109,7 @@ HGCL = TenderProfile(
     sector="civil works",
     estimated_cost="Rs. 99,71,00,000/-",
     emd="1% of the ECV",
-    bid_due="03.05.2023",
+    bid_due="15.12.2027",
     turnover_requirement=(
         "Liquid assets and/or credit facilities of not less than "
         "Rs. 49.855 Crores"

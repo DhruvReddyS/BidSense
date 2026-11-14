@@ -6,7 +6,7 @@ This corpus is isolated from the certified benchmark. Outcomes were fixed before
 {
   "documents": 45,
   "pages": 4887,
-  "bytes": 7722083,
+  "bytes": 7719199,
   "tenders": 3,
   "pass": 18,
   "eliminate": 27,

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Newsreader } from "next/font/google";
-import { AppChrome } from "@/components/AppChrome";
+import { AuthShell } from "@/components/AuthShell";
 import { ThemeScript } from "@/components/Theme";
 import "./globals.css";
 
@@ -51,7 +51,7 @@ export default function RootLayout({
       <head><ThemeScript /></head>
       <body className="app-shell min-h-screen">
         <a href="#main" className="skip-link">Skip to content</a>
-        <AppChrome>{children}</AppChrome>
+        <AuthShell>{children}</AuthShell>
       </body>
     </html>
   );

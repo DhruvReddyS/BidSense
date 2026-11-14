@@ -1,5 +1,6 @@
 import uuid
 from types import SimpleNamespace
+from unittest.mock import patch
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -29,6 +30,27 @@ def test_anonymous_and_vendor_cannot_use_reviewer_endpoint():
     registered=client.post("/api/auth/register",json={"email":email,"password":"long-enough-password","role":"vendor"})
     token=registered.json()["access_token"]
     assert client.post("/api/review/level1",json={"tender_id":"T"},headers={"Authorization":f"Bearer {token}"}).status_code == 403
+
+
+def test_vendor_can_create_a_tender_workspace():
+    client = TestClient(app)
+    registered = client.post("/api/auth/register", json={
+        "email": f"vendor-{uuid.uuid4()}@example.com",
+        "password": "long-enough-password",
+        "role": "vendor",
+    })
+    token = registered.json()["access_token"]
+    job_id = uuid.uuid4()
+    with patch("app.api.routes.store_document", return_value="a" * 64), patch(
+        "app.api.routes.job_runner.create_job", return_value=job_id
+    ), patch("app.api.routes.job_runner.submit"):
+        response = client.post(
+            "/api/notifications",
+            files={"file": ("tender.pdf", b"%PDF-1.4\n", "application/pdf")},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert response.status_code == 202, response.text
+    assert response.json()["job_id"] == str(job_id)
 
 def test_vendor_ownership_is_independent_of_role_check():
     owner=uuid.uuid4();vendor=SimpleNamespace(id=owner,role=UserRole.VENDOR)

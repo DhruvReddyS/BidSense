@@ -249,16 +249,18 @@ def _accept(job_id, file_name: str) -> JobAccepted:
 
 
 @router.post("/notifications", response_model=JobAccepted, status_code=202)
-def upload_notification(file: UploadFile = File(...), reviewer=Depends(reviewer_user)) -> JobAccepted:
-    """Section 4.1 -- ingest the official tender notification.
+def upload_notification(file: UploadFile = File(...), user=Depends(current_user)) -> JobAccepted:
+    """Section 4.1 -- ingest an official tender notification.
 
+    Both vendors and company reviewers may create a tender workspace. Company
+    evaluation routes remain protected separately by ``reviewer_user``.
     Returns 202 immediately; poll `poll_url` for progress.
     """
     path = _save_upload(file)
     try:
         digest = store_document(path)
-        job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name, owner_user_id=reviewer.id, source_hash=digest)
-        job_runner.submit(job_id, JobKind.NOTIFICATION, path, owner_user_id=reviewer.id)
+        job_id = job_runner.create_job(JobKind.NOTIFICATION, path.name, owner_user_id=user.id, source_hash=digest)
+        job_runner.submit(job_id, JobKind.NOTIFICATION, path, owner_user_id=user.id)
     except Exception:
         # The worker deletes the upload when it finishes. If queueing itself
         # fails there is no worker, so the temp directory would be orphaned --
