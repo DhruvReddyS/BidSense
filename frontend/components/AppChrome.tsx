@@ -15,7 +15,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   const [help, setHelp] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(false);
   const [role, setRole] = useState<"vendor" | "reviewer">("vendor");
-  const [recent, setRecent] = useState<{ href: string; label: string; meta: string; timestamp: string }[]>([]);
+  const [projects, setProjects] = useState<{ id: string; title: string; href: string; bids: { href: string; label: string; meta: string; timestamp: string }[] }[]>([]);
   const helpDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -31,11 +31,20 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   useEffect(() => { try { setRailCollapsed(localStorage.getItem("bidsense-rail") === "collapsed"); setRole(localStorage.getItem("bidsense_role") === "reviewer" ? "reviewer" : "vendor"); } catch {} }, []);
   useEffect(() => {
     let active = true;
-    api.listNotifications().then(async data => {
-      if (role === "reviewer") return data.items.map(tender => ({ href: `/tenders/${encodeURIComponent(tender.tender_id)}/review`, label: tender.title, meta: `${tender.submission_count} submissions`, timestamp: tender.created_at }));
-      const groups = await Promise.all(data.items.map(async tender => ({ tender, bids: await api.submissions(tender.tender_id).catch(() => []) })));
-      return groups.flatMap(({ tender, bids }) => bids.map(bid => ({ href: `/tenders/${encodeURIComponent(tender.tender_id)}/bids/${encodeURIComponent(bid.vendor_id)}`, label: bid.vendor_name || bid.vendor_id, meta: tender.title, timestamp: bid.last_checked_at || bid.uploaded_at })));
-    }).then(items => { if (active) setRecent(items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 14)); }).catch(() => { if (active) setRecent([]); });
+    api.listNotifications().then(data => Promise.all(data.items.map(async tender => {
+      const bids = await api.submissions(tender.tender_id).catch(() => []);
+      return {
+        id: tender.tender_id,
+        title: tender.title,
+        href: role === "reviewer" ? `/tenders/${encodeURIComponent(tender.tender_id)}/review` : `/tenders/${encodeURIComponent(tender.tender_id)}`,
+        bids: bids.map(bid => ({
+          href: `/tenders/${encodeURIComponent(tender.tender_id)}/bids/${encodeURIComponent(bid.vendor_id)}`,
+          label: bid.vendor_name || bid.vendor_id,
+          meta: role === "reviewer" ? (bid.status === "eliminated" ? "Eliminated" : bid.status === "shortlisted" ? "Shortlisted" : "Cleared") : `${bid.completion_satisfied ?? 0}/${bid.completion_total ?? 0} checks`,
+          timestamp: bid.last_checked_at || bid.uploaded_at,
+        })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+      };
+    }))).then(items => { if (active) setProjects(items); }).catch(() => { if (active) setProjects([]); });
     return () => { active = false; };
   }, [role, pathname]);
   function toggleRail() { setRailCollapsed(value => { const next = !value; try { localStorage.setItem("bidsense-rail", next ? "collapsed" : "open"); } catch {} return next; }); }
@@ -50,7 +59,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         <Link title="Add tender" className={`rail-link ${pathname === "/upload" ? "active" : ""}`} href="/upload"><svg viewBox="0 0 20 20" aria-hidden><path d="M10 3v14M3 10h14"/></svg><span>Add tender</span></Link>
         <Link title="Profile" className={`rail-link ${pathname === "/profile" ? "active" : ""}`} href="/profile"><svg viewBox="0 0 20 20" aria-hidden><circle cx="10" cy="7" r="3"/><path d="M4 17c.8-3.2 2.8-5 6-5s5.2 1.8 6 5"/></svg><span>{role === "reviewer" ? "Company profile" : "My profile"}</span></Link>
       </nav>
-      <section className="rail-recent" aria-label="Recent work"><p className="rail-label">Recent work</p><div className="rail-recent-list">{recent.length ? recent.map(item => <Link key={item.href} href={item.href} className="rail-recent-item" title={item.label}><span>{item.label}</span><small>{item.meta}</small></Link>) : <p className="rail-recent-empty">No saved work yet</p>}</div></section>
+      <section className="rail-recent" aria-label="Tender projects"><p className="rail-label">Tender projects</p><div className="rail-recent-list">{projects.length ? projects.map(project => <details key={project.id} className="rail-project" open><summary title={project.title}><span>⌄</span><b>{project.title}</b><small>{project.bids.length}</small></summary><Link href={project.href} className="rail-project-open">Open tender →</Link><div className="rail-project-bids">{project.bids.map(bid => <Link key={bid.href} href={bid.href} className="rail-recent-item" title={bid.label}><span>{bid.label}</span><small>{bid.meta}</small></Link>)}</div></details>) : <p className="rail-recent-empty">No tenders yet</p>}</div></section>
       <div className="rail-note"><span className="rail-note-rule"/><p>A clearer path<br/>from clause to confidence.</p><span className="ref">BIDSENSE / WORKSPACE</span></div>
       <div className="rail-bottom"><button className="rail-link" onClick={() => setHelp(true)}><span className="keycap">?</span> Keyboard shortcuts</button><button className="rail-link" onClick={() => { localStorage.removeItem("bidsense_token"); localStorage.removeItem("bidsense_role"); document.cookie = "bidsense_token=; Path=/; Max-Age=0; SameSite=Lax"; window.location.href = "/login"; }}><span aria-hidden>↪</span> Sign out</button><div className="theme-row"><span>Appearance</span><ThemeToggle /></div><p>Every claim, connected to its source.</p></div>
     </aside>
