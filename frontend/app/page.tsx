@@ -2,13 +2,15 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import type { NotificationList, NotificationSummary } from "@/lib/types";
 import { Chip, EmptyState, ErrorNote, formatDate, formatInr } from "@/components/ui";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  const token = cookies().get("bidsense_token")?.value;
   let data: NotificationList | null = null;
   let error: string | null = null;
-  try { data = await api.listNotifications(); }
+  try { data = await api.listNotifications(50, 0, token); }
   catch (e) { error = e instanceof ApiError ? e.message : "Could not load tenders."; }
 
   const tenders = data?.items ?? [];

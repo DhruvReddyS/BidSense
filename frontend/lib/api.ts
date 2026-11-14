@@ -55,16 +55,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function bearer(token?: string): HeadersInit | undefined {
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
 export const api = {
   register: (payload: { email: string; password: string; full_name?: string; organisation?: string; role: "vendor" | "reviewer"; reviewer_code?: string }) => request<{ access_token: string; user: { email: string; role: string } }>("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }),
   login: (email: string, password: string) => request<{ access_token: string; user: { email: string; role: string } }>("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) }),
+  me: (token?: string) => request<{ id: string; email: string; full_name: string | null; organisation: string | null; role: "vendor" | "reviewer" }>("/api/auth/me", { headers: bearer(token) }),
   health: () => request<Health>("/api/health"),
 
-  listNotifications: (limit = 50, offset = 0) =>
-    request<NotificationList>(`/api/notifications?limit=${limit}&offset=${offset}`),
+  listNotifications: (limit = 50, offset = 0, token?: string) =>
+    request<NotificationList>(`/api/notifications?limit=${limit}&offset=${offset}`, { headers: bearer(token) }),
 
-  notification: (tenderId: string) =>
-    request<TenderDetail>(`/api/notifications/${encodeURIComponent(tenderId)}`),
+  notification: (tenderId: string, token?: string) =>
+    request<TenderDetail>(`/api/notifications/${encodeURIComponent(tenderId)}`, { headers: bearer(token) }),
 
   uploadNotification: (file: File) => {
     const body = new FormData();
@@ -178,8 +183,8 @@ export const api = {
       }),
     }),
 
-  submissions: (tenderId: string) =>
-    request<VendorSubmissionSummary[]>(`/api/notifications/${encodeURIComponent(tenderId)}/submissions`),
+  submissions: (tenderId: string, token?: string) =>
+    request<VendorSubmissionSummary[]>(`/api/notifications/${encodeURIComponent(tenderId)}/submissions`, { headers: bearer(token) }),
 
   reviewPerformance: () => request<PerformanceSummary>("/api/review/performance"),
 

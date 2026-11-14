@@ -15,10 +15,16 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!window.localStorage.getItem("bidsense_token")) {
+    const token = window.localStorage.getItem("bidsense_token");
+    if (!token) {
       setAuthorised(false);
       router.replace("/login");
       return;
+    }
+
+    if (!document.cookie.includes("bidsense_token=")) {
+      document.cookie = `bidsense_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax`;
+      router.refresh();
     }
 
     setAuthorised(true);

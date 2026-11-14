@@ -3,6 +3,7 @@ import { api, ApiError } from "@/lib/api";
 import { TenderWorkspace } from "@/components/TenderWorkspace";
 import { ErrorNote, formatDate, formatInr } from "@/components/ui";
 import type { TenderDetail } from "@/lib/types";
+import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
@@ -12,14 +13,15 @@ export default async function TenderPage({
   params: { tenderId: string };
 }) {
   const tenderId = decodeURIComponent(params.tenderId);
+  const token = cookies().get("bidsense_token")?.value;
 
   let tender: TenderDetail | null = null;
   let bids: Awaited<ReturnType<typeof api.submissions>> = [];
   let error: string | null = null;
 
   try {
-    tender = await api.notification(tenderId);
-    bids = await api.submissions(tenderId).catch(() => []);
+    tender = await api.notification(tenderId, token);
+    bids = await api.submissions(tenderId, token).catch(() => []);
   } catch (e) {
     error = e instanceof ApiError ? e.message : "Could not load this tender.";
   }
@@ -104,7 +106,7 @@ export default async function TenderPage({
         />
       </div>
 
-      <TenderWorkspace tender={tender} bids={bids} />
+      <TenderWorkspace tender={tender} bids={bids} role={(await api.me(token)).role} />
     </div>
   );
 }

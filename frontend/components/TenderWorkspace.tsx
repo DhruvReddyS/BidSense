@@ -18,9 +18,11 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
 export function TenderWorkspace({
   tender,
   bids,
+  role,
 }: {
   tender: TenderDetail;
   bids: Parameters<typeof BidChecker>[0]["bids"];
+  role: "vendor" | "reviewer";
 }) {
   const [tab, setTab] = useState<Tab>("check");
 
@@ -49,7 +51,7 @@ export function TenderWorkspace({
             {tab === key && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[hsl(var(--accent))]" />}
           </button>
         ))}
-        <Link href={`/tenders/${encodeURIComponent(tender.tender_id)}/review`} className="ml-auto shrink-0 px-4 py-3 text-sm font-medium text-[hsl(var(--accent))]">Company review <span aria-hidden>↗</span></Link>
+        {role === "reviewer" && <Link href={`/tenders/${encodeURIComponent(tender.tender_id)}/review`} className="ml-auto shrink-0 px-4 py-3 text-sm font-medium text-[hsl(var(--accent))]">Company review <span aria-hidden>↗</span></Link>}
       </div>
 
       <div className="pt-7">

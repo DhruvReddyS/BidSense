@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.api.quality import quality_for, provider_label
-from app.api.deps import get_db, require_notification, require_submission, current_user, reviewer_user, ensure_submission_access
+from app.api.deps import get_db, require_notification, require_submission, current_user, reviewer_user, ensure_submission_access, ensure_notification_access
 from app.api import jobs as job_runner
 from app.api.schemas import (
     AskRequest,
@@ -99,7 +99,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # tender PDFs are large but not unbounded
-_notification_cache: dict[tuple[int, int], tuple[float, NotificationList]] = {}
+_notification_cache: dict[tuple[str, int, int], tuple[float, NotificationList]] = {}
 _notification_cache_lock = threading.Lock()
 _NOTIFICATION_CACHE_SECONDS = 2.0
 
@@ -501,19 +501,20 @@ async def get_notifications(
     response: Response,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    user=Depends(current_user),
 ) -> NotificationList:
-    response.headers["Cache-Control"] = "public, max-age=2, stale-while-revalidate=15"
-    key = (limit, offset)
+    response.headers["Cache-Control"] = "private, no-store"
+    key = (str(user.id), limit, offset)
     now = time.monotonic()
     cached = _notification_cache.get(key)
     if cached and now - cached[0] < _NOTIFICATION_CACHE_SECONDS:
         return cached[1]
-    return await run_in_threadpool(_refresh_notification_cache, limit, offset)
+    return await run_in_threadpool(_refresh_notification_cache, user.id, limit, offset)
 
 
-def _refresh_notification_cache(limit: int, offset: int) -> NotificationList:
+def _refresh_notification_cache(user_id, limit: int, offset: int) -> NotificationList:
     """Refresh outside the async event loop; serialize only the rare miss."""
-    key = (limit, offset)
+    key = (str(user_id), limit, offset)
 
     # Collapse a thundering herd to one three-query refresh per API replica.
     # Crucially, cache hits never acquire a database connection.
@@ -523,8 +524,13 @@ def _refresh_notification_cache(limit: int, offset: int) -> NotificationList:
         if cached and now - cached[0] < _NOTIFICATION_CACHE_SECONDS:
             return cached[1]
         with session_scope() as session:
-            rows = list_notifications(session, limit=limit, offset=offset)
-            counts = submission_counts(session, [row.id for row in rows])
+            all_rows = list_notifications(session, limit=200, offset=0)
+            accessible = [
+                row for row in all_rows
+                if row.owner_user_id == user_id
+                or any(submission.owner_user_id == user_id for submission in row.submissions)
+            ]
+            rows = accessible[offset:offset + limit]
             response = NotificationList(
                 items=[
                     NotificationSummary(
@@ -536,12 +542,15 @@ def _refresh_notification_cache(limit: int, offset: int) -> NotificationList:
                         emd_amount_inr=row.emd_amount_inr,
                         eligibility_count=len(row.eligibility_criteria),
                         document_count=len(row.mandatory_documents),
-                        submission_count=counts.get(row.id, 0),
+                        submission_count=sum(
+                            1 for submission in row.submissions
+                            if submission.owner_user_id == user_id
+                        ),
                         created_at=row.created_at,
                     )
                     for row in rows
                 ],
-                page=Page(total=count_notifications(session), limit=limit, offset=offset),
+                page=Page(total=len(accessible), limit=limit, offset=offset),
             )
         _notification_cache[key] = (now, response)
         return response
@@ -552,8 +561,13 @@ def _refresh_notification_cache(limit: int, offset: int) -> NotificationList:
 # 2024-25" -- so the path converter is required, and a greedy converter matched
 # first would swallow the "/submissions" suffix into the id.
 @router.get("/notifications/{tender_id:path}/submissions")
-def get_submissions(tender_id: str, session: Session = Depends(get_db), reviewer=Depends(reviewer_user)):
+def get_submissions(tender_id: str, session: Session = Depends(get_db), user=Depends(current_user)):
     row = require_notification(session, tender_id)
+    ensure_notification_access(user, row)
+    from app.schemas.common import UserRole
+    submissions = list_submissions(session, row.id)
+    if user.role != UserRole.REVIEWER:
+        submissions = [submission for submission in submissions if submission.owner_user_id == user.id]
     return [
         {
             "vendor_id": s.vendor_id,
@@ -562,7 +576,7 @@ def get_submissions(tender_id: str, session: Session = Depends(get_db), reviewer
             "is_blacklisted": s.is_blacklisted,
             "elimination_reason": s.elimination_reason,
         }
-        for s in list_submissions(session, row.id)
+        for s in submissions
     ]
 
 
@@ -583,6 +597,7 @@ def run_level1(
     from app.vector.qdrant import retag_status
 
     notification_row = require_notification(session, request.tender_id)
+    ensure_notification_access(_reviewer, notification_row)
     notification = to_notification_schema(notification_row)
     rows = list_submissions(session, notification_row.id)
     results: list[Level1VendorResult] = []
@@ -640,6 +655,7 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
     from app.vector.qdrant import retag_status
 
     notification_row = require_notification(session, request.tender_id)
+    ensure_notification_access(_reviewer, notification_row)
     rows = list_submissions(session, notification_row.id)
     eligible_rows = [row for row in rows if row.status != VendorStatus.ELIMINATED]
     candidates = [build_candidate(row) for row in eligible_rows]
@@ -710,6 +726,7 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
 def query_vendor_pool(request: PoolQueryRequest, session: Session = Depends(get_db), _reviewer=Depends(reviewer_user)) -> PoolQueryResponse:
     """Route audit/structured questions to SQL facts and narrative questions to Qdrant."""
     notification_row = require_notification(session, request.tender_id)
+    ensure_notification_access(_reviewer, notification_row)
     rows = list_submissions(session, notification_row.id)
     candidates = [build_candidate(row) for row in rows]
     statuses = {row.vendor_id: row.status.value for row in rows}
@@ -767,6 +784,7 @@ def committee_report(
     from app.review.export import export_docx, export_pdf
 
     notification_row = require_notification(session, tender_id)
+    ensure_notification_access(_reviewer, notification_row)
     notification = to_notification_schema(notification_row)
     rows = list_submissions(session, notification_row.id)
     body = export_pdf(notification, rows) if fmt == "pdf" else export_docx(notification, rows)
@@ -821,9 +839,11 @@ def _field_label(field_path: str) -> str:
 # Declared last: {tender_id:path} matches anything, including the paths of the
 # more specific routes above.
 @router.get("/notifications/{tender_id:path}")
-def get_notification(tender_id: str, session: Session = Depends(get_db)):
+def get_notification(tender_id: str, session: Session = Depends(get_db), user=Depends(current_user)):
     """Full extracted Section 6 notification, provenance included."""
-    return to_notification_schema(require_notification(session, tender_id))
+    row = require_notification(session, tender_id)
+    ensure_notification_access(user, row)
+    return to_notification_schema(row)
 
 
 # --------------------------------------------------------------------------- #

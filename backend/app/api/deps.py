@@ -40,10 +40,21 @@ def reviewer_user(user=Depends(current_user)):
 def ensure_submission_access(user, submission) -> None:
     from app.schemas.common import UserRole
     if user.role == UserRole.REVIEWER:
-        return
+        if submission.notification and submission.notification.owner_user_id == user.id:
+            return
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Submission not found")
     if submission.owner_user_id != user.id:
         # 404 avoids confirming that a competing bidder's record exists.
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Submission not found")
+
+
+def ensure_notification_access(user, notification) -> None:
+    if notification.owner_user_id == user.id:
+        return
+    if any(submission.owner_user_id == user.id for submission in notification.submissions):
+        return
+    # Do not disclose that another account's tender exists.
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Tender not found")
 
 
 def require_notification(session: Session, tender_id: str):
