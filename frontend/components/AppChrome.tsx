@@ -8,6 +8,7 @@ import { LogoMark } from "./Logo";
 import { ThemeToggle } from "./Theme";
 import { HealthPill } from "./HealthPill";
 import { api } from "@/lib/api";
+import { companySubmissionLabel } from "@/lib/submission-labels";
 
 export function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -39,7 +40,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         href: role === "reviewer" ? `/tenders/${encodeURIComponent(tender.tender_id)}/review` : `/tenders/${encodeURIComponent(tender.tender_id)}`,
         bids: bids.map(bid => ({
           href: `/tenders/${encodeURIComponent(tender.tender_id)}/bids/${encodeURIComponent(bid.vendor_id)}`,
-          label: bid.vendor_name || bid.vendor_id,
+          label: role === "reviewer" ? companySubmissionLabel(bid.vendor_id, bid.vendor_name) : (bid.vendor_name || bid.vendor_id),
           meta: role === "reviewer" ? (bid.status === "eliminated" ? "Eliminated" : bid.status === "shortlisted" ? "Shortlisted" : "Cleared") : `${bid.completion_satisfied ?? 0}/${bid.completion_total ?? 0} checks`,
           timestamp: bid.last_checked_at || bid.uploaded_at,
         })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),

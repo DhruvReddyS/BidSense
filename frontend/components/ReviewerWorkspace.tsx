@@ -7,6 +7,7 @@ import type { Level1Result, PoolQueryResponse, ReviewLevel1Response, ReviewLevel
 import { PALETTE_EVENT, type Command } from "./CommandPalette";
 import { DocumentProcess } from "./DocumentProcess";
 import { BulkBidUpload } from "./BulkBidUpload";
+import { companySubmissionLabel } from "@/lib/submission-labels";
 
 type Filter = "all" | "pending" | "eliminated" | "debarred";
 const FILTER_LABEL: Record<Filter, string> = {
@@ -29,7 +30,7 @@ export function ReviewerWorkspace({
 }) {
   const [results, setResults] = useState<Level1Result[]>(() => initialBids.map(bid => ({
     vendor_id: bid.vendor_id,
-    vendor_name: bid.vendor_name,
+    vendor_name: companySubmissionLabel(bid.vendor_id, bid.vendor_name),
     status: bid.status === "eliminated" ? "eliminated" : "pending",
     elimination_reason: bid.elimination_reason,
     clause_ref: bid.elimination_clause_ref,
@@ -73,7 +74,7 @@ export function ReviewerWorkspace({
         new Promise(resolve => window.setTimeout(resolve, 900)),
       ]);
       const blacklist = new Map(initialBids.map(bid => [bid.vendor_id, bid.is_blacklisted]));
-      setResults(response.results.map(result => ({ ...result, is_blacklisted: blacklist.get(result.vendor_id) ?? false })));
+      setResults(response.results.map(result => ({ ...result, vendor_name: companySubmissionLabel(result.vendor_id, result.vendor_name), is_blacklisted: blacklist.get(result.vendor_id) ?? false })));
       setRan(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Level 1 evaluation could not be completed.");
@@ -146,7 +147,7 @@ export function ReviewerWorkspace({
         <p className="decision-caveat">No rank or winner is produced. Membership is grounded in the factors selected above.</p>
       </div>
       {shortlisting && <div className="stage-processing"><DocumentProcess label="Forming the qualified pool" detail="Reading comparable facts without scoring prose fluency" /></div>}
-      {shortlist && <div className="shortlist-result"><div className="shortlist-result-head"><span>{shortlist.shortlisted} candidates</span><p>{shortlist.caveat}</p></div>{shortlist.candidates.map(candidate => <article key={candidate.vendor_id}><div><p className="eyebrow">Qualified candidate</p><h3>{candidate.vendor_name}</h3><span className="ref">{candidate.vendor_id}</span></div><p>{candidate.summary}</p><ul>{candidate.evidence.map(item => <li key={item}>{item}</li>)}</ul></article>)}</div>}
+      {shortlist && <div className="shortlist-result"><div className="shortlist-result-head"><span>{shortlist.shortlisted} candidates</span><p>{shortlist.caveat}</p></div>{shortlist.candidates.map(candidate => <article key={candidate.vendor_id}><div><p className="eyebrow">Qualified candidate</p><h3>{companySubmissionLabel(candidate.vendor_id, candidate.vendor_name)}</h3><span className="ref">{candidate.vendor_id}</span></div><p>{candidate.summary}</p><ul>{candidate.evidence.map(item => <li key={item}>{item}</li>)}</ul></article>)}</div>}
     </section>}
 
     {stage === "level3" && <section id="level-3" className="review-stage query-stage">
