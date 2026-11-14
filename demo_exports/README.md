@@ -2,7 +2,8 @@
 
 `bidsense_demo_2026-11-14.dump` is a PostgreSQL 16 custom-format backup containing
 the prepared vendor and company demo accounts, future-dated tenders, submissions,
-and saved review decisions.
+and saved review decisions. The Solar company demo includes nine submissions,
+six Level-1-qualified bidders, and a persisted three-place ranked shortlist.
 
 ## Restore into an empty database
 
@@ -30,5 +31,5 @@ keys are intentionally not included.
 SHA-256:
 
 ```text
-11555dd03f407ce93fb1b0afb8304336571deb701fc0a89005c8974e9e18374c
+ad4281956ff874fd81baa0b841b7beae9289aafba32fb227f4886d9de291a940
 ```

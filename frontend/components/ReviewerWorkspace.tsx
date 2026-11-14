@@ -21,11 +21,13 @@ export function ReviewerWorkspace({
   tenderId,
   tenderTitle,
   initialBids,
+  initialShortlist,
   initialStage = "level1",
 }: {
   tenderId: string;
   tenderTitle: string;
   initialBids: VendorSubmissionSummary[];
+  initialShortlist?: ReviewLevel2Response | null;
   initialStage?: "level1" | "level2" | "level3";
 }) {
   const [results, setResults] = useState<Level1Result[]>(() => initialBids.map(bid => ({
@@ -42,9 +44,9 @@ export function ReviewerWorkspace({
   const [running, setRunning] = useState(false);
   const [ran, setRan] = useState(initialBids.some(bid => bid.status === "eliminated"));
   const [error, setError] = useState("");
-  const [targetCount, setTargetCount] = useState(Math.min(3, Math.max(1, initialBids.filter(bid => bid.status !== "eliminated").length)));
-  const [factors, setFactors] = useState<Record<string, boolean>>({ experience: true, project_scale: true, technical_approach: true, pricing: false });
-  const [shortlist, setShortlist] = useState<ReviewLevel2Response | null>(null);
+  const [targetCount, setTargetCount] = useState(initialShortlist?.requested ?? Math.min(3, Math.max(1, initialBids.filter(bid => bid.status !== "eliminated").length)));
+  const [factors, setFactors] = useState<Record<string, boolean>>(() => initialShortlist ? Object.fromEntries(["experience", "project_scale", "technical_approach", "pricing"].map(key => [key, (initialShortlist.factor_weights[key] ?? 0) > 0])) : { experience: true, project_scale: true, technical_approach: true, pricing: false });
+  const [shortlist, setShortlist] = useState<ReviewLevel2Response | null>(initialShortlist ?? null);
   const [shortlisting, setShortlisting] = useState(false);
   const [question, setQuestion] = useState("");
   const [queryResult, setQueryResult] = useState<PoolQueryResponse | null>(null);
@@ -111,7 +113,7 @@ export function ReviewerWorkspace({
   }, [counts, ran, runEvaluation]);
 
   return <div className="reviewer-workspace">
-    <section className="mb-5 flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between"><div className="min-w-0"><p className="eyebrow">Company review</p><h1 className="font-display mt-1 text-3xl font-medium">{stage === "level1" ? "Eligibility register" : stage === "level2" ? "Qualified pool" : "Evidence assistant"}</h1><p className="mt-1 truncate text-sm text-[hsl(var(--fg-muted))]">{tenderTitle}</p></div><div className="flex flex-wrap gap-2"><button className="btn btn-primary" disabled={running || !initialBids.length} onClick={() => void runEvaluation()}>{running ? "Evaluating…" : ran ? "Re-run Level 1" : "Run Level 1"}</button><button className="btn btn-subtle" disabled={exporting} onClick={async () => { setExporting(true); setError(""); try { await api.exportCommitteeReport(tenderId); } catch (e) { setError(e instanceof Error ? e.message : "Committee report could not be exported."); } finally { setExporting(false); } }}>{exporting ? "Preparing…" : "Committee PDF"}</button><Link className="btn btn-subtle" href={`/tenders/${encodeURIComponent(tenderId)}`}>Tender</Link></div></section>
+    <section className="mb-5 flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between"><div className="min-w-0"><p className="eyebrow">Company review</p><h1 className="font-display mt-1 text-3xl font-medium">{stage === "level1" ? "Eligibility register" : stage === "level2" ? "Ranked shortlist" : "Evidence assistant"}</h1><p className="mt-1 truncate text-sm text-[hsl(var(--fg-muted))]">{tenderTitle}</p></div><div className="flex flex-wrap gap-2"><button className="btn btn-primary" disabled={running || !initialBids.length} onClick={() => void runEvaluation()}>{running ? "Evaluating…" : ran ? "Re-run Level 1" : "Run Level 1"}</button><button className="btn btn-subtle" disabled={exporting} onClick={async () => { setExporting(true); setError(""); try { await api.exportCommitteeReport(tenderId); } catch (e) { setError(e instanceof Error ? e.message : "Committee report could not be exported."); } finally { setExporting(false); } }}>{exporting ? "Preparing…" : "Committee PDF"}</button><Link className="btn btn-subtle" href={`/tenders/${encodeURIComponent(tenderId)}`}>Tender</Link></div></section>
     <nav className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border bg-[hsl(var(--surface))]" aria-label="Company review pages">{([['level1','01','Eligibility',`${counts.pending} cleared · ${counts.eliminated} out`,''],['level2','02','Shortlist',`${counts.pending} candidates`,'shortlist'],['level3','03','Ask evidence','Cited answers','evidence']] as const).map(([key,no,label,note,param]) => <Link key={key} href={`/tenders/${encodeURIComponent(tenderId)}/review${param ? `?stage=${param}` : ""}`} className={`border-r px-3 py-3 text-left last:border-r-0 ${stage === key ? "bg-[hsl(var(--fg))] text-[hsl(var(--surface))]" : "hover:bg-[hsl(var(--surface-2))]"}`}><span className="text-[10px] font-semibold opacity-60">{no}</span><strong className="ml-2 text-sm">{label}</strong><small className="mt-1 hidden text-[10px] opacity-65 sm:block">{note}</small></Link>)}</nav>
 
     {running && <div className="reviewer-processing"><DocumentProcess label="Checking every submission" detail="Comparing extracted facts with mandatory tender clauses" /></div>}
@@ -139,15 +141,15 @@ export function ReviewerWorkspace({
     </section>}
 
     {stage === "level2" && <section id="level-2" className="review-stage">
-      <div className="review-stage-intro"><p className="eyebrow">Level 2 / Qualified pool</p><h2>Reduce the room,<br/>without inventing a rank.</h2><p>Choose the evidence that matters for this review. BidSense forms a manageable pool from recorded facts; the candidates are deliberately shown alphabetically.</p></div>
+      <div className="review-stage-intro"><p className="eyebrow">Level 2 / Ranked shortlist</p><h2>From qualified pool<br/>to a defensible shortlist.</h2><p>Choose any shortlist size and the evidence that matters. BidSense saves ranks #1 through the selected count; the committee retains the final decision.</p></div>
       <div className="shortlist-control">
         <label className="target-control"><span>Target pool size</span><input type="number" min={1} max={Math.max(1, counts.pending)} value={targetCount} onChange={event => setTargetCount(Math.max(1, Number(event.target.value)))} /><small>From {counts.pending} Level 1-cleared submissions</small></label>
         <fieldset><legend>Factors to consider</legend>{Object.entries({ experience: "Relevant experience", project_scale: "Past project scale", technical_approach: "Technical approach", pricing: "Pricing competitiveness" }).map(([key, label]) => <label key={key}><input type="checkbox" checked={factors[key]} onChange={event => setFactors(current => ({ ...current, [key]: event.target.checked }))}/><span>{label}</span></label>)}</fieldset>
         <button className="btn btn-primary" disabled={shortlisting || counts.pending === 0 || !Object.values(factors).some(Boolean)} onClick={() => void runShortlist()}>{shortlisting ? "Building qualified pool…" : "Prepare qualified pool"}</button>
-        <p className="decision-caveat">No rank or winner is produced. Membership is grounded in the factors selected above.</p>
+        <p className="decision-caveat">Changing the pool size or factors and preparing again replaces the saved shortlist.</p>
       </div>
       {shortlisting && <div className="stage-processing"><DocumentProcess label="Forming the qualified pool" detail="Reading comparable facts without scoring prose fluency" /></div>}
-      {shortlist && <div className="shortlist-result"><div className="shortlist-result-head"><span>{shortlist.shortlisted} candidates</span><p>{shortlist.caveat}</p></div>{shortlist.candidates.map(candidate => <article key={candidate.vendor_id}><div><p className="eyebrow">Qualified candidate</p><h3>{companySubmissionLabel(candidate.vendor_id, candidate.vendor_name)}</h3><span className="ref">{candidate.vendor_id}</span></div><p>{candidate.summary}</p><ul>{candidate.evidence.map(item => <li key={item}>{item}</li>)}</ul></article>)}</div>}
+      {shortlist && <div className="shortlist-result"><div className="shortlist-result-head"><span>Saved shortlist · {shortlist.shortlisted} ranked</span><p>{shortlist.caveat}</p></div>{shortlist.candidates.map(candidate => <article key={candidate.vendor_id}><div><p className="eyebrow">Rank #{candidate.rank}{candidate.score !== null ? ` · ${candidate.score}% evidence score` : ""}</p><h3>{companySubmissionLabel(candidate.vendor_id, candidate.vendor_name)}</h3><span className="ref">{candidate.vendor_id}</span></div><p>{candidate.summary}</p><ul>{candidate.evidence.map(item => <li key={item}>{item}</li>)}</ul></article>)}</div>}
     </section>}
 
     {stage === "level3" && <section id="level-3" className="review-stage query-stage">

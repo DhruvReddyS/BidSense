@@ -670,7 +670,7 @@ def run_level1(
 
 @router.post("/review/level2", response_model=Level2RunResponse)
 def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _reviewer=Depends(reviewer_user)) -> Level2RunResponse:
-    """Create a reviewer-sized qualified pool without publishing a ranking."""
+    """Create and persist an evidence-based reviewer shortlist."""
     from app.vector.qdrant import retag_status
 
     notification_row = require_notification(session, request.tender_id)
@@ -679,7 +679,8 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
     eligible_rows = [row for row in rows if row.status != VendorStatus.ELIMINATED]
     candidates = [build_candidate(row) for row in eligible_rows]
     selected = shortlist_with_basis(candidates, min(request.target_count, len(candidates)), request.factor_weights)
-    selected_ids = {entry.candidate.vendor_id for entry in selected}
+    ranked = sorted(selected, key=lambda entry: (entry.score is None, -(entry.score or 0.0), entry.candidate.vendor_name.casefold()))[:request.target_count]
+    selected_ids = {entry.candidate.vendor_id for entry in ranked}
     originals = [(row, row.status) for row in eligible_rows]
     retagged: list[tuple[str, VendorStatus]] = []
     try:
@@ -700,7 +701,7 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
         raise
 
     output = []
-    for entry in selected:
+    for rank, entry in enumerate(ranked, start=1):
         candidate = entry.candidate
         # "not stated" rather than "0 years" -- a field we could not read is
         # reported as unread, never as a zero that reads like a real finding.
@@ -721,24 +722,42 @@ def run_level2(request: Level2RunRequest, session: Session = Depends(get_db), _r
         evidence.append(entry.basis)
         if entry.tied_at_cutoff:
             evidence.append(
-                "Tied with another candidate at the cut-off; both included "
-                "rather than separated arbitrarily."
+                "Tied at the cut-off; displayed in a stable order for committee review."
             )
         output.append(ShortlistCandidateOut(
             vendor_id=candidate.vendor_id,
             vendor_name=candidate.vendor_name,
             status=VendorStatus.SHORTLISTED.value,
-            summary="Selected into the qualified pool from the reviewer-chosen factors and recorded bid facts.",
+            rank=rank,
+            score=round(entry.score * 100, 1) if entry.score is not None else None,
+            summary="Ranked from the reviewer-chosen factors and recorded bid facts.",
             evidence=evidence,
         ))
-    return Level2RunResponse(
+    response = Level2RunResponse(
         tender_id=request.tender_id,
         eligible=len(candidates),
         shortlisted=len(output),
         requested=request.target_count,
         factors=list(request.factor_weights) or ["experience", "project_scale", "technical_approach", "pricing"],
+        factor_weights=request.factor_weights,
         candidates=output,
     )
+    metadata = dict(notification_row.extraction_metadata or {})
+    metadata["saved_level2"] = response.model_dump(mode="json")
+    notification_row.extraction_metadata = metadata
+    session.commit()
+    return response
+
+
+@router.get("/review/level2", response_model=Level2RunResponse)
+def get_saved_level2(tender_id: str, session: Session = Depends(get_db), _reviewer=Depends(reviewer_user)) -> Level2RunResponse:
+    """Return the last saved shortlist and its parameters."""
+    notification_row = require_notification(session, tender_id)
+    ensure_notification_access(_reviewer, notification_row)
+    saved = (notification_row.extraction_metadata or {}).get("saved_level2")
+    if not saved:
+        raise HTTPException(status_code=404, detail="No saved shortlist yet")
+    return Level2RunResponse.model_validate(saved)
 
 
 @router.post("/review/query", response_model=PoolQueryResponse)

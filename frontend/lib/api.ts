@@ -199,6 +199,7 @@ export const api = {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tender_id: tenderId, target_count: targetCount, factor_weights: factorWeights }),
   }),
+  savedReviewLevel2: (tenderId: string) => request<ReviewLevel2Response>(`/api/review/level2?tender_id=${encodeURIComponent(tenderId)}`),
 
   queryPool: (tenderId: string, question: string) => request<PoolQueryResponse>("/api/review/query", {
     method: "POST",

@@ -201,6 +201,8 @@ class ShortlistCandidateOut(BaseModel):
     vendor_id: str
     vendor_name: str
     status: str
+    rank: int
+    score: float | None = None
     summary: str
     evidence: list[str] = Field(default_factory=list)
 
@@ -211,8 +213,9 @@ class Level2RunResponse(BaseModel):
     shortlisted: int
     requested: int
     factors: list[str]
+    factor_weights: dict[str, float] = Field(default_factory=dict)
     candidates: list[ShortlistCandidateOut]
-    caveat: str = "Qualified pool, not a ranking. Final selection remains with the evaluation committee."
+    caveat: str = "Evidence-based recommendation order. Final selection remains with the evaluation committee."
 
 
 class PoolQueryRequest(BaseModel):

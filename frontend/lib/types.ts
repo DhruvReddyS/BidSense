@@ -254,6 +254,8 @@ export interface ShortlistCandidate {
   vendor_id: string;
   vendor_name: string;
   status: "shortlisted";
+  rank: number;
+  score: number | null;
   summary: string;
   evidence: string[];
 }
@@ -264,6 +266,7 @@ export interface ReviewLevel2Response {
   shortlisted: number;
   requested: number;
   factors: string[];
+  factor_weights: Record<string, number>;
   candidates: ShortlistCandidate[];
   caveat: string;
 }
