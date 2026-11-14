@@ -3,12 +3,18 @@ import { api, ApiError } from "@/lib/api";
 import { ReviewerLoader } from "@/components/ReviewerLoader";
 import { ErrorNote } from "@/components/ui";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReviewerPage({ params, searchParams }: { params: { tenderId: string }; searchParams: { stage?: string } }) {
   const tenderId = decodeURIComponent(params.tenderId);
   const token = cookies().get("bidsense_token")?.value;
+  const identity = await api.me(token).catch(() => null);
+
+  if (identity?.role === "vendor") {
+    redirect(`/tenders/${encodeURIComponent(tenderId)}`);
+  }
   try {
     const tender = await api.notification(tenderId, token);
     const initialStage = searchParams.stage === "shortlist" ? "level2" : searchParams.stage === "evidence" ? "level3" : "level1";

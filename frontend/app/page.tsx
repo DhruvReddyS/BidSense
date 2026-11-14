@@ -67,7 +67,7 @@ export default async function Home() {
               <span className="label">Tender</span><span className="label">Deadline</span><span className="label">EMD</span><span className="label">Bids</span><span />
             </div>
             <div className="divide-y">
-              {tenders.map((tender) => <TenderRow key={tender.tender_id} tender={tender} />)}
+              {tenders.map((tender) => <TenderRow key={tender.tender_id} tender={tender} role={role} />)}
             </div>
           </div>
         </section>
@@ -86,14 +86,14 @@ function Summary({ label, value, note, accent = false }: { label: string; value:
   );
 }
 
-function TenderRow({ tender }: { tender: NotificationSummary }) {
+function TenderRow({ tender, role }: { tender: NotificationSummary; role: "vendor" | "reviewer" }) {
   const deadline = tender.submission_deadline;
   const daysLeft = deadline ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000) : null;
   const closed = daysLeft !== null && daysLeft < 0;
   const urgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 14;
 
   return (
-    <Link href={`/tenders/${encodeURIComponent(tender.tender_id)}`} className="group grid gap-4 px-5 py-5 transition-colors hover:bg-[hsl(var(--surface-2))] lg:grid-cols-[minmax(0,1fr)_8rem_7rem_7rem_2rem] lg:items-center lg:gap-5">
+    <Link href={`/tenders/${encodeURIComponent(tender.tender_id)}${role === "reviewer" ? "/review" : ""}`} className="group grid gap-4 px-5 py-5 transition-colors hover:bg-[hsl(var(--surface-2))] lg:grid-cols-[minmax(0,1fr)_8rem_7rem_7rem_2rem] lg:items-center lg:gap-5">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           {closed ? <Chip>Closed</Chip> : urgent ? <Chip tone="warn">Closing soon</Chip> : <Chip tone="ok">Active</Chip>}

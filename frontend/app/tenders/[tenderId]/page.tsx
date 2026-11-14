@@ -4,6 +4,7 @@ import { TenderWorkspace } from "@/components/TenderWorkspace";
 import { ErrorNote, formatDate, formatInr } from "@/components/ui";
 import type { TenderDetail } from "@/lib/types";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,11 @@ export default async function TenderPage({
 }) {
   const tenderId = decodeURIComponent(params.tenderId);
   const token = cookies().get("bidsense_token")?.value;
+  const identity = await api.me(token).catch(() => null);
+
+  if (identity?.role === "reviewer") {
+    redirect(`/tenders/${encodeURIComponent(tenderId)}/review`);
+  }
 
   let tender: TenderDetail | null = null;
   let bids: Awaited<ReturnType<typeof api.submissions>> = [];
@@ -106,7 +112,7 @@ export default async function TenderPage({
         />
       </div>
 
-      <TenderWorkspace tender={tender} bids={bids} role={(await api.me(token)).role} />
+      <TenderWorkspace tender={tender} bids={bids} role="vendor" />
     </div>
   );
 }
