@@ -45,27 +45,27 @@ export default async function TenderPage({
     : null;
 
   return (
-    <div className="space-y-8">
-      <div className="border-b pb-7">
+    <div className="space-y-5">
+      <div className="border-b pb-4">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[.1em] text-[hsl(var(--fg-muted))] transition-colors hover:text-[hsl(var(--accent))]"
         >
           <span aria-hidden>←</span> All tenders
         </Link>
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {daysLeft !== null && daysLeft < 0 ? <span className="chip bg-[hsl(var(--neutral-soft))] text-[hsl(var(--fg-muted))]">Closed</span> : daysLeft !== null ? <span className="chip bg-[hsl(var(--warn-soft))] text-[hsl(var(--warn))]">{daysLeft} days remaining</span> : null}
           {tender.sector && <span className="chip capitalize bg-[hsl(var(--accent-soft))] text-[hsl(var(--accent))]">{tender.sector}</span>}
         </div>
-        <h1 className="font-display text-balance mt-4 max-w-5xl break-anywhere text-3xl font-medium leading-[1.08] tracking-[-.025em] sm:text-5xl">
+        <h1 className="font-display text-balance mt-3 max-w-5xl break-anywhere text-2xl font-medium leading-tight tracking-[-.02em] sm:text-3xl">
           {tender.title}
         </h1>
-        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
           <span className="text-[hsl(var(--fg-muted))]">
             {tender.issuing_authority ?? "Issuing authority not stated"}
           </span>
         </div>
-        <p className="mt-3 inline-flex max-w-full break-anywhere rounded-md bg-[hsl(var(--surface-2))] px-2 py-1 font-mono text-[10px] text-[hsl(var(--fg-subtle))]">
+        <p className="mt-2 inline-flex max-w-full break-anywhere rounded-md bg-[hsl(var(--surface-2))] px-2 py-1 font-mono text-[9px] text-[hsl(var(--fg-subtle))]">
           {tender.tender_id}
         </p>
       </div>
@@ -123,10 +123,10 @@ function Stat({
   urgent?: boolean;
 }) {
   return (
-    <div className="relative border-b border-r px-3 py-5 even:border-r-0 sm:px-5 lg:border-b-0 lg:even:border-r lg:last:border-r-0">
+    <div className="relative border-b border-r px-3 py-3 even:border-r-0 sm:px-4 lg:border-b-0 lg:even:border-r lg:last:border-r-0">
       <p className="label">{label}</p>
       <p
-        className={`font-display tnum mt-2 break-anywhere text-2xl font-medium leading-tight ${
+        className={`font-display tnum mt-1 break-anywhere text-lg font-medium leading-tight ${
           urgent ? "text-[hsl(var(--warn))]" : ""
         }`}
       >

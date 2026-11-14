@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { Level1Result, PerformanceSummary, PoolQueryResponse, ReviewLevel1Response, ReviewLevel2Response, VendorSubmissionSummary } from "@/lib/types";
+import type { Level1Result, PoolQueryResponse, ReviewLevel1Response, ReviewLevel2Response, VendorSubmissionSummary } from "@/lib/types";
 import { PALETTE_EVENT, type Command } from "./CommandPalette";
 import { DocumentProcess } from "./DocumentProcess";
 import { BulkBidUpload } from "./BulkBidUpload";
@@ -47,7 +47,7 @@ export function ReviewerWorkspace({
   const [queryResult, setQueryResult] = useState<PoolQueryResponse | null>(null);
   const [asking, setAsking] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [performance, setPerformance] = useState<PerformanceSummary | null>(null);
+  const [stage, setStage] = useState<"level1" | "level2" | "level3">("level1");
   const search = useRef<HTMLInputElement>(null);
 
   const counts = useMemo(() => ({
@@ -96,10 +96,6 @@ export function ReviewerWorkspace({
   }, [question, tenderId]);
 
   useEffect(() => {
-    api.reviewPerformance().then(setPerformance).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     const commands: Command[] = [
       { id: "review-run", label: ran ? "Run Level 1 again" : "Run Level 1 elimination", detail: "Apply mandatory rules to every submission", group: "Company review", run: () => void runEvaluation() },
       { id: "review-find", label: "Find a bidder", detail: "Search the Level 1 register", group: "Company review", run: () => search.current?.focus() },
@@ -111,36 +107,14 @@ export function ReviewerWorkspace({
   }, [counts, ran, runEvaluation]);
 
   return <div className="reviewer-workspace">
-    <nav className="reviewer-steps" aria-label="Company review stages"><a href="#level-1"><b>01</b><span>Eliminate</span><small>Mandatory rules</small></a><a href="#level-2"><b>02</b><span>Shortlist</span><small>Qualified pool</small></a><a href="#level-3"><b>03</b><span>Interrogate</span><small>Evidence assistant</small></a></nav>
-    <section className="reviewer-hero">
-      <div>
-        <p className="eyebrow">Company review / Level 1</p>
-        <h1>Elimination,<br/>with a reason.</h1>
-        <p><span className="reviewer-tender-title">{tenderTitle}</span> Mandatory eligibility rules are applied deterministically across every submission. No ranking and no LLM judgment enters this decision.</p>
-        <div className="reviewer-actions">
-          <button className="btn btn-primary" disabled={running || !initialBids.length} onClick={() => void runEvaluation()}>{running ? "Evaluating…" : ran ? "Run evaluation again" : "Run Level 1 evaluation"}</button>
-          <button className="btn btn-subtle" disabled={exporting} onClick={async () => { setExporting(true); setError(""); try { await api.exportCommitteeReport(tenderId); } catch (e) { setError(e instanceof Error ? e.message : "Committee report could not be exported."); } finally { setExporting(false); } }}>{exporting ? "Preparing report…" : "Committee PDF"}</button>
-          <Link className="btn btn-subtle" href={`/tenders/${encodeURIComponent(tenderId)}`}>Tender workspace</Link>
-        </div>
-      </div>
-      <aside className="reviewer-principle"><span className="ref">DECISION RULE / 01</span><p>Only a failed mandatory criterion can eliminate a bidder.</p><small>Every eliminated row keeps the exact reason and source reference for committee review.</small></aside>
-    </section>
+    <section className="mb-5 flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between"><div className="min-w-0"><p className="eyebrow">Company review</p><h1 className="font-display mt-1 text-3xl font-medium">{stage === "level1" ? "Eligibility register" : stage === "level2" ? "Qualified pool" : "Evidence assistant"}</h1><p className="mt-1 truncate text-sm text-[hsl(var(--fg-muted))]">{tenderTitle}</p></div><div className="flex flex-wrap gap-2"><button className="btn btn-primary" disabled={running || !initialBids.length} onClick={() => void runEvaluation()}>{running ? "Evaluating…" : ran ? "Re-run Level 1" : "Run Level 1"}</button><button className="btn btn-subtle" disabled={exporting} onClick={async () => { setExporting(true); setError(""); try { await api.exportCommitteeReport(tenderId); } catch (e) { setError(e instanceof Error ? e.message : "Committee report could not be exported."); } finally { setExporting(false); } }}>{exporting ? "Preparing…" : "Committee PDF"}</button><Link className="btn btn-subtle" href={`/tenders/${encodeURIComponent(tenderId)}`}>Tender</Link></div></section>
+    <nav className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border bg-[hsl(var(--surface))]" aria-label="Company review stages">{([['level1','01','Eligibility',`${counts.pending} cleared · ${counts.eliminated} out`],['level2','02','Shortlist',`${counts.pending} candidates`],['level3','03','Ask evidence','Cited answers']] as const).map(([key,no,label,note]) => <button key={key} onClick={() => setStage(key)} className={`border-r px-3 py-3 text-left last:border-r-0 ${stage === key ? "bg-[hsl(var(--fg))] text-[hsl(var(--surface))]" : "hover:bg-[hsl(var(--surface-2))]"}`}><span className="text-[10px] font-semibold opacity-60">{no}</span><strong className="ml-2 text-sm">{label}</strong><small className="mt-1 hidden text-[10px] opacity-65 sm:block">{note}</small></button>)}</nav>
 
     {running && <div className="reviewer-processing"><DocumentProcess label="Checking every submission" detail="Comparing extracted facts with mandatory tender clauses" /></div>}
     {error && <p className="review-error" role="alert">{error}</p>}
-    <BulkBidUpload tenderId={tenderId} />
+    {stage === "level1" && <BulkBidUpload tenderId={tenderId} />}
 
-    {performance && <section className="performance-pulse" aria-label="Recent processing performance">
-      <div><p className="eyebrow">Operational pulse</p><h2>Fast is useful.<br/>Visible is trustworthy.</h2><p>Decision-ready latency is measured separately from background evidence indexing. Figures use the latest {performance.completed_jobs} completed jobs.</p></div>
-      <dl>
-        <ReviewMetric label="Median" value={performance.median_seconds ?? 0} note="seconds to structured result" />
-        <ReviewMetric label="P95" value={performance.p95_seconds ?? 0} note="slow-tail latency, seconds" />
-        <ReviewMetric label="Cache reuse" value={performance.cache_reuse_percent} note="percent skipping model calls" />
-        <ReviewMetric label="Throughput" value={performance.pages_per_second ?? 0} note="pages per second" />
-      </dl>
-    </section>}
-
-    <section id="level-1" className="reviewer-register" aria-labelledby="level1-register-title">
+    {stage === "level1" && <section id="level-1" className="reviewer-register" aria-labelledby="level1-register-title">
       <div className="reviewer-register-head"><div><p className="eyebrow">Evaluation register</p><h2 id="level1-register-title">Level 1 outcomes</h2></div><p>{ran ? "Evaluation recorded" : "Ready to evaluate"}<span className={`marker ${ran ? "marker-met" : "marker-outstanding"}`} aria-hidden /></p></div>
       <dl className="reviewer-metrics">
         <ReviewMetric label="Submissions" value={counts.all} note="in this tender" />
@@ -158,9 +132,9 @@ export function ReviewerWorkspace({
       </article>)}</div>
       {!visible.length && <div className="register-empty"><h3>No matching submissions.</h3><p>Clear the search or choose another decision state.</p><button className="btn btn-subtle" onClick={() => { setFilter("all"); setQuery(""); }}>Show all submissions</button></div>}
       <footer className="reviewer-foot"><span className="ref">{visible.length} of {results.length} submissions</span><span>Final selection remains with the evaluation committee.</span></footer>
-    </section>
+    </section>}
 
-    <section id="level-2" className="review-stage">
+    {stage === "level2" && <section id="level-2" className="review-stage">
       <div className="review-stage-intro"><p className="eyebrow">Level 2 / Qualified pool</p><h2>Reduce the room,<br/>without inventing a rank.</h2><p>Choose the evidence that matters for this review. BidSense forms a manageable pool from recorded facts; the candidates are deliberately shown alphabetically.</p></div>
       <div className="shortlist-control">
         <label className="target-control"><span>Target pool size</span><input type="number" min={1} max={Math.max(1, counts.pending)} value={targetCount} onChange={event => setTargetCount(Math.max(1, Number(event.target.value)))} /><small>From {counts.pending} Level 1-cleared submissions</small></label>
@@ -170,14 +144,14 @@ export function ReviewerWorkspace({
       </div>
       {shortlisting && <div className="stage-processing"><DocumentProcess label="Forming the qualified pool" detail="Reading comparable facts without scoring prose fluency" /></div>}
       {shortlist && <div className="shortlist-result"><div className="shortlist-result-head"><span>{shortlist.shortlisted} candidates</span><p>{shortlist.caveat}</p></div>{shortlist.candidates.map(candidate => <article key={candidate.vendor_id}><div><p className="eyebrow">Qualified candidate</p><h3>{candidate.vendor_name}</h3><span className="ref">{candidate.vendor_id}</span></div><p>{candidate.summary}</p><ul>{candidate.evidence.map(item => <li key={item}>{item}</li>)}</ul></article>)}</div>}
-    </section>
+    </section>}
 
-    <section id="level-3" className="review-stage query-stage">
+    {stage === "level3" && <section id="level-3" className="review-stage query-stage">
       <div className="review-stage-intro"><p className="eyebrow">Level 3 / Evidence assistant</p><h2>Ask across<br/>the whole record.</h2><p>Structured questions use stored facts. Narrative questions use scoped retrieval. Audit questions preserve eliminated bids and their reasons.</p></div>
       <div className="pool-query"><div className="query-suggestions">{["Why was VedaGrid Electricals Private Limited eliminated?", "Compare shortlisted vendors on experience and project value", "Which approach discusses execution methodology?"].map(prompt => <button key={prompt} onClick={() => setQuestion(prompt)}>{prompt}</button>)}</div><label><span className="sr-only">Question about vendor pool</span><textarea value={question} onChange={event => setQuestion(event.target.value)} placeholder="Ask about status, experience, project scale, pricing or technical approach…" /></label><button className="btn btn-primary" disabled={asking || question.trim().length < 3} onClick={() => void askPool()}>{asking ? "Routing question…" : "Ask the evidence"}</button></div>
       {asking && <div className="stage-processing"><DocumentProcess label="Routing the question" detail="Choosing structured facts, narrative evidence, or both" /></div>}
       {queryResult && <article className="query-answer" aria-live="polite"><header><span className="eyebrow">{queryResult.route} route</span><small>Assistance, not adjudication</small></header><p>{queryResult.answer}</p>{queryResult.citations.length > 0 && <details><summary>Evidence used · {queryResult.citations.length}</summary>{queryResult.citations.map((citation, index) => <blockquote key={`${citation.vendor_id}-${index}`}><span className="ref">{citation.vendor_id || citation.source_file || "Tender record"}{citation.source_page ? ` · page ${citation.source_page}` : ""}{citation.clause_ref ? ` · clause ${citation.clause_ref}` : ""}</span>{citation.snippet}</blockquote>)}</details>}<footer>{queryResult.caveat}</footer></article>}
-    </section>
+    </section>}
   </div>;
 }
 

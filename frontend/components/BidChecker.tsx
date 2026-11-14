@@ -89,10 +89,10 @@ export function BidChecker({
   return (
     <div className="space-y-6">
       <Card className="p-5">
-        <SectionTitle
-          title="Check a bid"
-          hint="Upload your draft bid to see what is missing while you can still fix it."
-        />
+        <details className="mb-5 rounded-xl border bg-[hsl(var(--surface-2))] p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-[hsl(var(--accent))]">＋ Check another bid</summary>
+          <div className="mt-4">
+            <SectionTitle title="Upload a bid" hint="Add a new draft only when you need another compliance check." />
 
         <div className="grid gap-4 sm:grid-cols-[1fr_220px]">
           <FileDrop
@@ -136,22 +136,24 @@ export function BidChecker({
             <JobProgress jobId={jobId} onDone={onJobDone} />
           </div>
         )}
+          </div>
+        </details>
 
         {history.length > 0 && (
-          <div className="mt-5 border-t pt-4">
+          <div>
             <p className="label">Bid check history</p>
             <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">Every uploaded version and result is retained. Compare completion to confirm whether the bid is improving.</p>
-            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+            <div className="mt-3 overflow-x-auto rounded-xl border">
+              <div className="hidden min-w-[820px] grid-cols-[3rem_minmax(15rem,1fr)_6rem_7rem_7rem_9rem_12rem] gap-3 border-b bg-[hsl(var(--surface-2))] px-4 py-2 lg:grid"><span className="label">No.</span><span className="label">Bid</span><span className="label">Completed</span><span className="label">Change</span><span className="label">Open</span><span className="label">Checked</span><span className="label">Actions</span></div>
               {history.map((bid, index) => {
                 const previous = history[index - 1];
                 const score = bid.completion_satisfied ?? null;
                 const previousScore = previous?.completion_satisfied ?? null;
                 const delta = score !== null && previousScore !== null ? score - previousScore : null;
-                return <article key={bid.vendor_id} className={`rounded-xl border p-4 ${report?.report.vendor_id === bid.vendor_id ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))]" : "bg-[hsl(var(--surface))]"}`}>
-                  <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Version {index + 1}</p><h3 className="mt-1 break-anywhere text-sm font-semibold">{bid.vendor_name || bid.vendor_id}</h3><p className="mt-1 font-mono text-[10px] text-[hsl(var(--fg-subtle))]">{bid.vendor_id}</p></div><Chip tone={bid.verdict === "not_compliant" ? "warn" : "ok"}>{bid.verdict === "not_compliant" ? "Needs work" : "Checked"}</Chip></div>
-                  <dl className="mt-4 grid grid-cols-3 gap-2 text-xs"><div><dt className="label">Completed</dt><dd className="tnum mt-1 font-semibold">{score ?? "—"}/{bid.completion_total ?? "—"}</dd></div><div><dt className="label">Change</dt><dd className={`tnum mt-1 font-semibold ${delta !== null && delta > 0 ? "text-[hsl(var(--ok))]" : delta !== null && delta < 0 ? "text-[hsl(var(--danger))]" : ""}`}>{delta === null ? "Baseline" : delta > 0 ? `+${delta} better` : delta < 0 ? `${delta} worse` : "No change"}</dd></div><div><dt className="label">Outstanding</dt><dd className="tnum mt-1 font-semibold">{bid.outstanding_count ?? "—"}</dd></div></dl>
-                  <p className="mt-3 text-[11px] text-[hsl(var(--fg-subtle))]">{bid.last_checked_at ? `Checked ${new Date(bid.last_checked_at).toLocaleString()}` : "Saved — open to run the check"}{bid.source_file ? ` · ${bid.source_file.split(/[\\/]/).pop()}` : ""}</p>
-                  <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => check(bid.vendor_id)} disabled={checking !== null} className="btn btn-subtle">{checking === bid.vendor_id ? "Opening…" : "Open result"}</button>{bid.content_hash && <a className="btn btn-subtle" href={api.documentUrl(bid.content_hash)} target="_blank" rel="noreferrer">Bid document ↗</a>}</div>
+                return <article key={bid.vendor_id} className="grid gap-3 border-b px-4 py-3 last:border-b-0 lg:min-w-[820px] lg:grid-cols-[3rem_minmax(15rem,1fr)_6rem_7rem_7rem_9rem_12rem] lg:items-center">
+                  <span className="eyebrow">{String(index + 1).padStart(2, "0")}</span><div className="min-w-0"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-semibold">{bid.vendor_name || bid.vendor_id}</h3><Chip tone={bid.verdict === "not_compliant" ? "warn" : "ok"}>{bid.verdict === "not_compliant" ? "Needs work" : "Checked"}</Chip></div><p className="mt-1 truncate font-mono text-[10px] text-[hsl(var(--fg-subtle))]">{bid.vendor_id}{bid.source_file ? ` · ${bid.source_file.split(/[\\/]/).pop()}` : ""}</p></div>
+                  <div><span className="label lg:hidden">Completed</span><p className="tnum text-sm font-semibold">{score ?? "—"}/{bid.completion_total ?? "—"}</p></div><div><span className="label lg:hidden">Change</span><p className={`tnum text-xs font-semibold ${delta !== null && delta > 0 ? "text-[hsl(var(--ok))]" : delta !== null && delta < 0 ? "text-[hsl(var(--danger))]" : ""}`}>{delta === null ? "Baseline" : delta > 0 ? `+${delta} better` : delta < 0 ? `${delta} worse` : "No change"}</p></div><div><span className="label lg:hidden">Outstanding</span><p className="tnum text-sm font-semibold">{bid.outstanding_count ?? "—"}</p></div><p className="text-[11px] text-[hsl(var(--fg-subtle))]">{bid.last_checked_at ? new Date(bid.last_checked_at).toLocaleDateString() : "Not opened"}</p>
+                  <div className="flex gap-2"><Link href={`/tenders/${encodeURIComponent(tenderId)}/bids/${encodeURIComponent(bid.vendor_id)}`} className="btn btn-subtle">Result</Link>{bid.content_hash && <a className="btn btn-subtle" href={api.documentUrl(bid.content_hash)} target="_blank" rel="noreferrer">Document</a>}</div>
                 </article>;
               })}
             </div>
