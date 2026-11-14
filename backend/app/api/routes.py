@@ -509,10 +509,10 @@ async def get_notifications(
     cached = _notification_cache.get(key)
     if cached and now - cached[0] < _NOTIFICATION_CACHE_SECONDS:
         return cached[1]
-    return await run_in_threadpool(_refresh_notification_cache, user.id, limit, offset)
+    return await run_in_threadpool(_refresh_notification_cache, user.id, user.role.value, limit, offset)
 
 
-def _refresh_notification_cache(user_id, limit: int, offset: int) -> NotificationList:
+def _refresh_notification_cache(user_id, user_role: str, limit: int, offset: int) -> NotificationList:
     """Refresh outside the async event loop; serialize only the rare miss."""
     key = (str(user_id), limit, offset)
 
@@ -542,9 +542,10 @@ def _refresh_notification_cache(user_id, limit: int, offset: int) -> Notificatio
                         emd_amount_inr=row.emd_amount_inr,
                         eligibility_count=len(row.eligibility_criteria),
                         document_count=len(row.mandatory_documents),
-                        submission_count=sum(
-                            1 for submission in row.submissions
-                            if submission.owner_user_id == user_id
+                        submission_count=(
+                            len(row.submissions)
+                            if user_role == "reviewer"
+                            else sum(1 for submission in row.submissions if submission.owner_user_id == user_id)
                         ),
                         created_at=row.created_at,
                     )

@@ -20,10 +20,12 @@ export function ReviewerWorkspace({
   tenderId,
   tenderTitle,
   initialBids,
+  initialStage = "level1",
 }: {
   tenderId: string;
   tenderTitle: string;
   initialBids: VendorSubmissionSummary[];
+  initialStage?: "level1" | "level2" | "level3";
 }) {
   const [results, setResults] = useState<Level1Result[]>(() => initialBids.map(bid => ({
     vendor_id: bid.vendor_id,
@@ -47,8 +49,9 @@ export function ReviewerWorkspace({
   const [queryResult, setQueryResult] = useState<PoolQueryResponse | null>(null);
   const [asking, setAsking] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [stage, setStage] = useState<"level1" | "level2" | "level3">("level1");
+  const [stage, setStage] = useState<"level1" | "level2" | "level3">(initialStage);
   const search = useRef<HTMLInputElement>(null);
+  useEffect(() => setStage(initialStage), [initialStage]);
 
   const counts = useMemo(() => ({
     all: results.length,
@@ -108,7 +111,7 @@ export function ReviewerWorkspace({
 
   return <div className="reviewer-workspace">
     <section className="mb-5 flex flex-col gap-4 border-b pb-5 lg:flex-row lg:items-end lg:justify-between"><div className="min-w-0"><p className="eyebrow">Company review</p><h1 className="font-display mt-1 text-3xl font-medium">{stage === "level1" ? "Eligibility register" : stage === "level2" ? "Qualified pool" : "Evidence assistant"}</h1><p className="mt-1 truncate text-sm text-[hsl(var(--fg-muted))]">{tenderTitle}</p></div><div className="flex flex-wrap gap-2"><button className="btn btn-primary" disabled={running || !initialBids.length} onClick={() => void runEvaluation()}>{running ? "Evaluating…" : ran ? "Re-run Level 1" : "Run Level 1"}</button><button className="btn btn-subtle" disabled={exporting} onClick={async () => { setExporting(true); setError(""); try { await api.exportCommitteeReport(tenderId); } catch (e) { setError(e instanceof Error ? e.message : "Committee report could not be exported."); } finally { setExporting(false); } }}>{exporting ? "Preparing…" : "Committee PDF"}</button><Link className="btn btn-subtle" href={`/tenders/${encodeURIComponent(tenderId)}`}>Tender</Link></div></section>
-    <nav className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border bg-[hsl(var(--surface))]" aria-label="Company review stages">{([['level1','01','Eligibility',`${counts.pending} cleared · ${counts.eliminated} out`],['level2','02','Shortlist',`${counts.pending} candidates`],['level3','03','Ask evidence','Cited answers']] as const).map(([key,no,label,note]) => <button key={key} onClick={() => setStage(key)} className={`border-r px-3 py-3 text-left last:border-r-0 ${stage === key ? "bg-[hsl(var(--fg))] text-[hsl(var(--surface))]" : "hover:bg-[hsl(var(--surface-2))]"}`}><span className="text-[10px] font-semibold opacity-60">{no}</span><strong className="ml-2 text-sm">{label}</strong><small className="mt-1 hidden text-[10px] opacity-65 sm:block">{note}</small></button>)}</nav>
+    <nav className="mb-5 grid grid-cols-3 overflow-hidden rounded-xl border bg-[hsl(var(--surface))]" aria-label="Company review pages">{([['level1','01','Eligibility',`${counts.pending} cleared · ${counts.eliminated} out`,''],['level2','02','Shortlist',`${counts.pending} candidates`,'shortlist'],['level3','03','Ask evidence','Cited answers','evidence']] as const).map(([key,no,label,note,param]) => <Link key={key} href={`/tenders/${encodeURIComponent(tenderId)}/review${param ? `?stage=${param}` : ""}`} className={`border-r px-3 py-3 text-left last:border-r-0 ${stage === key ? "bg-[hsl(var(--fg))] text-[hsl(var(--surface))]" : "hover:bg-[hsl(var(--surface-2))]"}`}><span className="text-[10px] font-semibold opacity-60">{no}</span><strong className="ml-2 text-sm">{label}</strong><small className="mt-1 hidden text-[10px] opacity-65 sm:block">{note}</small></Link>)}</nav>
 
     {running && <div className="reviewer-processing"><DocumentProcess label="Checking every submission" detail="Comparing extracted facts with mandatory tender clauses" /></div>}
     {error && <p className="review-error" role="alert">{error}</p>}

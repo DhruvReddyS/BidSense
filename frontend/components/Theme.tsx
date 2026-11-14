@@ -23,17 +23,17 @@ function apply(mode: Mode) {
  * document head, before React hydrates.
  */
 export function ThemeScript() {
-  const code = `(function(){try{var m=localStorage.getItem(${JSON.stringify(KEY)})||"system";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}})()`;
+  const code = `(function(){try{var m=localStorage.getItem(${JSON.stringify(KEY)})||"light";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.dataset.theme=d?"dark":"light"}catch(e){document.documentElement.dataset.theme="light"}})()`;
   return <script dangerouslySetInnerHTML={{ __html: code }} />;
 }
 
 export function ThemeToggle() {
-  const [mode, setMode] = useState<Mode>("system");
+  const [mode, setMode] = useState<Mode>("light");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    let stored: Mode = "system";
-    try { const value = localStorage.getItem(KEY); if (value === "light" || value === "dark") stored = value; } catch {}
+    let stored: Mode = "light";
+    try { const value = localStorage.getItem(KEY); if (value === "light" || value === "dark" || value === "system") stored = value; } catch {}
     setMode(stored);
     setReady(true);
 

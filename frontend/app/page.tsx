@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const token = cookies().get("bidsense_token")?.value;
   let data: NotificationList | null = null;
+  let role: "vendor" | "reviewer" = "vendor";
   let error: string | null = null;
-  try { data = await api.listNotifications(50, 0, token); }
+  try { [data, { role }] = await Promise.all([api.listNotifications(50, 0, token), api.me(token)]); }
   catch (e) { error = e instanceof ApiError ? e.message : "Could not load tenders."; }
 
   const tenders = data?.items ?? [];
@@ -24,10 +25,10 @@ export default async function Home() {
     <div className="space-y-9">
       <section className="lux-hero flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="eyebrow">Intelligence workspace</p>
-          <h1 className="font-display mt-2 text-4xl font-medium tracking-[-.025em] sm:text-5xl">Tenders</h1>
+          <p className="eyebrow">{role === "reviewer" ? "Company evaluation" : "Vendor workspace"}</p>
+          <h1 className="font-display mt-2 text-4xl font-medium tracking-[-.025em] sm:text-5xl">{role === "reviewer" ? "Company tenders" : "My tenders"}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[hsl(var(--fg-muted))]">
-            Review tender requirements, check draft bids, and keep every decision connected to its source clause.
+            {role === "reviewer" ? "Review submissions, record defensible decisions, and keep every outcome connected to its source." : "Check each bid version, fix compliance gaps, and track improvement before submission."}
           </p>
         </div>
         <div className="lux-hero-actions"><span><i /> Audit-grade evidence</span><Link href="/upload" className="btn btn-primary shrink-0">Add tender <b>↗</b></Link></div>
