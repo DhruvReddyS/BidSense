@@ -30,8 +30,8 @@ export function ReviewerWorkspace({
     vendor_name: bid.vendor_name,
     status: bid.status === "eliminated" ? "eliminated" : "pending",
     elimination_reason: bid.elimination_reason,
-    clause_ref: null,
-    source_page: null,
+    clause_ref: bid.elimination_clause_ref,
+    source_page: bid.elimination_source_page,
     is_blacklisted: bid.is_blacklisted,
   })));
   const [filter, setFilter] = useState<Filter>("all");

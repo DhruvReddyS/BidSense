@@ -16,6 +16,15 @@ interface Bid {
   status: string;
   is_blacklisted: boolean;
   elimination_reason: string | null;
+  source_file?: string | null;
+  content_hash?: string | null;
+  uploaded_at?: string;
+  last_checked_at?: string | null;
+  verdict?: string | null;
+  completion_satisfied?: number | null;
+  completion_total?: number | null;
+  completion_undetermined?: number | null;
+  outstanding_count?: number | null;
 }
 
 /**
@@ -40,6 +49,7 @@ export function BidChecker({
   const [checking, setChecking] = useState<string | null>(null);
   const [report, setReport] = useState<GapReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const history = [...bids].sort((a, b) => new Date(a.uploaded_at || 0).getTime() - new Date(b.uploaded_at || 0).getTime());
 
   async function upload() {
     if (!file || !vendorId.trim()) return;
@@ -127,26 +137,23 @@ export function BidChecker({
           </div>
         )}
 
-        {bids.length > 0 && (
+        {history.length > 0 && (
           <div className="mt-5 border-t pt-4">
-            <p className="label">Bids already checked</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {bids.map((bid) => (
-                <button
-                  key={bid.vendor_id}
-                  onClick={() => check(bid.vendor_id)}
-                  disabled={checking !== null}
-                  className={`chip transition-colors ${
-                    report?.report.vendor_id === bid.vendor_id
-                      ? "border-transparent bg-[hsl(var(--fg))] text-[hsl(var(--surface))]"
-                      : "bg-[hsl(var(--surface))] hover:bg-[hsl(var(--surface-2))]"
-                  }`}
-                  title={bid.vendor_name}
-                >
-                  {checking === bid.vendor_id ? "Checking…" : bid.vendor_name || bid.vendor_id}
-                  {bid.is_blacklisted && <Chip tone="bad">debarred</Chip>}
-                </button>
-              ))}
+            <p className="label">Bid check history</p>
+            <p className="mt-1 text-xs text-[hsl(var(--fg-muted))]">Every uploaded version and result is retained. Compare completion to confirm whether the bid is improving.</p>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {history.map((bid, index) => {
+                const previous = history[index - 1];
+                const score = bid.completion_satisfied ?? null;
+                const previousScore = previous?.completion_satisfied ?? null;
+                const delta = score !== null && previousScore !== null ? score - previousScore : null;
+                return <article key={bid.vendor_id} className={`rounded-xl border p-4 ${report?.report.vendor_id === bid.vendor_id ? "border-[hsl(var(--accent))] bg-[hsl(var(--accent-soft))]" : "bg-[hsl(var(--surface))]"}`}>
+                  <div className="flex items-start justify-between gap-3"><div><p className="eyebrow">Version {index + 1}</p><h3 className="mt-1 break-anywhere text-sm font-semibold">{bid.vendor_name || bid.vendor_id}</h3><p className="mt-1 font-mono text-[10px] text-[hsl(var(--fg-subtle))]">{bid.vendor_id}</p></div><Chip tone={bid.verdict === "not_compliant" ? "warn" : "ok"}>{bid.verdict === "not_compliant" ? "Needs work" : "Checked"}</Chip></div>
+                  <dl className="mt-4 grid grid-cols-3 gap-2 text-xs"><div><dt className="label">Completed</dt><dd className="tnum mt-1 font-semibold">{score ?? "—"}/{bid.completion_total ?? "—"}</dd></div><div><dt className="label">Change</dt><dd className={`tnum mt-1 font-semibold ${delta !== null && delta > 0 ? "text-[hsl(var(--ok))]" : delta !== null && delta < 0 ? "text-[hsl(var(--danger))]" : ""}`}>{delta === null ? "Baseline" : delta > 0 ? `+${delta} better` : delta < 0 ? `${delta} worse` : "No change"}</dd></div><div><dt className="label">Outstanding</dt><dd className="tnum mt-1 font-semibold">{bid.outstanding_count ?? "—"}</dd></div></dl>
+                  <p className="mt-3 text-[11px] text-[hsl(var(--fg-subtle))]">{bid.last_checked_at ? `Checked ${new Date(bid.last_checked_at).toLocaleString()}` : "Saved — open to run the check"}{bid.source_file ? ` · ${bid.source_file.split(/[\\/]/).pop()}` : ""}</p>
+                  <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => check(bid.vendor_id)} disabled={checking !== null} className="btn btn-subtle">{checking === bid.vendor_id ? "Opening…" : "Open result"}</button>{bid.content_hash && <a className="btn btn-subtle" href={api.documentUrl(bid.content_hash)} target="_blank" rel="noreferrer">Bid document ↗</a>}</div>
+                </article>;
+              })}
             </div>
           </div>
         )}

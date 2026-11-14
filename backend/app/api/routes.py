@@ -568,16 +568,34 @@ def get_submissions(tender_id: str, session: Session = Depends(get_db), user=Dep
     submissions = list_submissions(session, row.id)
     if user.role != UserRole.REVIEWER:
         submissions = [submission for submission in submissions if submission.owner_user_id == user.id]
-    return [
-        {
+    notification = to_notification_schema(row)
+    output = []
+    for s in submissions:
+        summary = {
             "vendor_id": s.vendor_id,
             "vendor_name": s.vendor_name,
             "status": s.status,
             "is_blacklisted": s.is_blacklisted,
             "elimination_reason": s.elimination_reason,
+            "elimination_clause_ref": s.elimination_clause_ref,
+            "elimination_source_page": s.elimination_source_page,
+            "elimination_source_snippet": s.elimination_source_snippet,
+            "source_file": s.source_file,
+            "content_hash": s.content_hash,
+            "uploaded_at": s.created_at,
+            "last_checked_at": s.last_gap_report_at,
         }
-        for s in submissions
-    ]
+        if user.role != UserRole.REVIEWER:
+            report = build_gap_report(notification, to_submission_schema(s))
+            summary.update({
+                "verdict": report.verdict,
+                "completion_satisfied": report.completion.satisfied,
+                "completion_total": report.completion.total,
+                "completion_undetermined": report.completion.undetermined,
+                "outstanding_count": report.counts.get("missing", 0),
+            })
+        output.append(summary)
+    return output
 
 
 # --------------------------------------------------------------------------- #

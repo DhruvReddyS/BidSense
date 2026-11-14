@@ -209,6 +209,18 @@ export interface VendorSubmissionSummary {
   status: string;
   is_blacklisted: boolean;
   elimination_reason: string | null;
+  elimination_clause_ref: string | null;
+  elimination_source_page: number | null;
+  elimination_source_snippet: string | null;
+  source_file: string | null;
+  content_hash: string | null;
+  uploaded_at: string;
+  last_checked_at: string | null;
+  verdict?: Verdict | null;
+  completion_satisfied?: number | null;
+  completion_total?: number | null;
+  completion_undetermined?: number | null;
+  outstanding_count?: number | null;
 }
 
 export interface Level1Result {
